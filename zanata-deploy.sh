@@ -43,6 +43,8 @@ source $HOME/.config/zanata-deploy.conf
 BUILD_TAG=${BUILD_TAG-<unknown build>}
 JOB_NAME=${JOB_NAME-<unknown job>}
 WARNING_EMAIL=${WARNING_EMAIL-test@example.com}
+JBOSS_HOME=${JBOSS_HOME-/opt/jboss-ewp-5.1/jboss-as-web}
+JBOSS_PROFILE=${JBOSS_PROFILE-production}
 ssh=${ssh-ssh}
 scp=${scp-scp}
 mail=${mail-mail}
@@ -135,7 +137,7 @@ do
 
       targetfile=$(arrayGet targetfile ${ver}_${auth})
       if [[ -z $targetfile ]]; then
-         targetfile=/opt/jboss-ewp-5.1/jboss-as-web/server/production/deploy/ROOT.war
+         targetfile=$JBOSS_HOME/server/$JBOSS_PROFILE/deploy/ROOT.war
       fi
 
       if [[ $targetfile =~ (.*)/deploy/.* ]]; then
@@ -158,6 +160,9 @@ do
          then echo "$server stop failed (server not running?); ignoring error"
       fi
       set +x
+
+      # tmp dir will grow forever otherwise:
+      rm -fr $JBOSS_HOME/server/$JBOSS_PROFILE/tmp/
 
       warfile=${srcdir}/zanata-*-$buildType.war
 
