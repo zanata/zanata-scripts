@@ -1,7 +1,7 @@
 #!/bin/bash -e
 
 # Script: zanata-deploy.sh
-# Author: sflaniga@redhat.com
+# Authors: sflaniga@redhat.com, camunoz@redhat.com
 
 # This script deploys zanata.war from the local Maven repo
 # to a target machine, based on a Jenkins job name
@@ -182,34 +182,38 @@ do
 
    host=$(arrayGet host ${ver}_${buildType})
 
-   echo "=================================================================================="
-   echo "Checking host: $host"
-   echo "=================================================================================="
+   if [[ -z $host ]]; then
+     warn "no host configured for version $ver, type $buildType, and build $BUILD_TAG"
 
-   url=$(arrayGet url ${ver}_${auth})
-   if [[ -z $url ]]; then
-      url=http://$host:8080/
-   fi
+   elif [[ "$host" != "skip" ]]; then
+     echo "=================================================================================="
+     echo "Checking host: $host"
+     echo "=================================================================================="
 
-   user=$(arrayGet user ${ver}_${auth})
-   if [[ -z $user ]]; then
-      user=jboss
-   fi
+     url=$(arrayGet url ${ver}_${auth})
+     if [[ -z $url ]]; then
+        url=http://$host:8080/
+     fi
 
-   if [[ $targetfile =~ (.*)/deploy/.* ]]; then
-      logfile=${BASH_REMATCH[1]}/log/server.log
-   else
-      logfile=/dev/null
-   fi
+     user=$(arrayGet user ${ver}_${auth})
+     if [[ -z $user ]]; then
+        user=jboss
+     fi
+
+     if [[ $targetfile =~ (.*)/deploy/.* ]]; then
+        logfile=${BASH_REMATCH[1]}/log/server.log
+     else
+        logfile=/dev/null
+     fi
 
    
-   if $DIR/is_server_up.sh $url ; then
-      echo "$url has started up; log tail follows:"
-      ssh $user@$host tail $logfile
-   else
-      echo "$url has failed to start; log tail follows:"
-      ssh $user@$host tail -400 $logfile
-      exit 1
+     if $DIR/is_server_up.sh $url ; then
+        echo "$url has started up; log tail follows:"
+        ssh $user@$host tail $logfile
+     else
+        echo "$url has failed to start; log tail follows:"
+        ssh $user@$host tail -400 $logfile
+        exit 1
+     fi
    fi
-
 done
