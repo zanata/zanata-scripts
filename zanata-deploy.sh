@@ -154,24 +154,20 @@ do
       echo "targetfile: $targetfile"
       echo "logfile: $logfile"
 
-      set -x
       echo "stopping app server on $host:"
       if ! $ssh $user@$host $service stop
          then echo "$server stop failed (server not running?); ignoring error"
       fi
-      set +x
 
       # tmp dir will grow forever otherwise:
       rm -fr $JBOSS_HOME/server/$JBOSS_PROFILE/tmp/
 
       warfile=${srcdir}/zanata-*-$buildType.war
 
-      set -x
       echo "copying $warfile to $host:$targetfile"
       $scp $warfile $user@$host:$targetfile
       echo "starting app server on $host"
       $ssh $user@$host $service start
-      set +x
 
    fi
 done
