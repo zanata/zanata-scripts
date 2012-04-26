@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/bash -ex
 
 # Script: zanata-deploy.sh
 # Authors: sflaniga@redhat.com, camunoz@redhat.com
