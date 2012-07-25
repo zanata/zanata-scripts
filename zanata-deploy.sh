@@ -162,7 +162,7 @@ do
       # tmp dir will grow forever otherwise:
       rm -fr $JBOSS_HOME/server/$JBOSS_PROFILE/tmp/
 
-      warfile=${srcdir}/zanata-*-$buildType.war
+      warfile=${srcdir}/zanata-war-*.war
 
       echo "copying $warfile to $host:$targetfile"
       $scp $warfile $user@$host:$targetfile
