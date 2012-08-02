@@ -160,7 +160,7 @@ do
       fi
 
       # tmp dir will grow forever otherwise:
-      rm -fr $JBOSS_HOME/server/$JBOSS_PROFILE/tmp/
+      $ssh $user@$host rm -fr $JBOSS_HOME/server/$JBOSS_PROFILE/tmp/
 
       warfile=${srcdir}/zanata-war-*.war
 
