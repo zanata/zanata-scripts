@@ -146,17 +146,24 @@ do
          logfile=/dev/null
       fi
 
+      post_stop=$(arrayGet post_stop ${ver}_${auth})
+
 
       echo "host: $host"
       echo "url: $url"
       echo "user: $user"
       echo "service: $service"
       echo "targetfile: $targetfile"
+      echo "post_stop: $post_stop"
       echo "logfile: $logfile"
 
       echo "stopping app server on $host:"
       if ! $ssh $user@$host $service stop
          then echo "$server stop failed (server not running?); ignoring error"
+      fi
+
+      if [[ -n $post_stop ]]; then
+         $ssh $user@$host $post_stop
       fi
 
       # tmp dir will grow forever otherwise:
