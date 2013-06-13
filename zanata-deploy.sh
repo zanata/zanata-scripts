@@ -120,22 +120,22 @@ do
       echo "Deploying: version $ver type $buildType"
       echo "=================================================================================="
 
-      url=$(arrayGet url ${ver}_${auth})
+      url=$(arrayGet url ${ver}_${buildType})
       if [[ -z $url ]]; then
          url=http://$host:8080/
       fi
 
-      user=$(arrayGet user ${ver}_${auth})
+      user=$(arrayGet user ${ver}_${buildType})
       if [[ -z $user ]]; then
          user=jboss
       fi
 
-      service=$(arrayGet service ${ver}_${auth})
+      service=$(arrayGet service ${ver}_${buildType})
       if [[ -z $service ]]; then
          service="JBOSS_USER=RUNASIS /etc/init.d/jbossas"
       fi
 
-      targetfile=$(arrayGet targetfile ${ver}_${auth})
+      targetfile=$(arrayGet targetfile ${ver}_${buildType})
       if [[ -z $targetfile ]]; then
          targetfile=$JBOSS_HOME/standalone/deployments/ROOT.war
       fi
@@ -146,7 +146,7 @@ do
          logfile=/dev/null
       fi
 
-      post_stop=$(arrayGet post_stop ${ver}_${auth})
+      post_stop=$(arrayGet post_stop ${ver}_${buildType})
 
 
       echo "host: $host"
@@ -193,12 +193,12 @@ do
      echo "Checking host: $host"
      echo "=================================================================================="
 
-     url=$(arrayGet url ${ver}_${auth})
+     url=$(arrayGet url ${ver}_${buildType})
      if [[ -z $url ]]; then
         url=http://$host:8080/
      fi
 
-     user=$(arrayGet user ${ver}_${auth})
+     user=$(arrayGet user ${ver}_${buildType})
      if [[ -z $user ]]; then
         user=jboss
      fi
