@@ -43,8 +43,8 @@ source $HOME/.config/zanata-deploy.conf
 BUILD_TAG=${BUILD_TAG-<unknown build>}
 JOB_NAME=${JOB_NAME-<unknown job>}
 WARNING_EMAIL=${WARNING_EMAIL-test@example.com}
-JBOSS_HOME=${JBOSS_HOME-/opt/jboss-ewp-5.1/jboss-as-web}
-JBOSS_PROFILE=${JBOSS_PROFILE-production}
+JBOSS_HOME=${JBOSS_HOME-/usr/share/jbossas/}
+#JBOSS_PROFILE=${JBOSS_PROFILE-production}
 ssh=${ssh-ssh}
 scp=${scp-scp}
 mail=${mail-mail}
@@ -132,15 +132,15 @@ do
 
       service=$(arrayGet service ${ver}_${auth})
       if [[ -z $service ]]; then
-         service="JBOSS_USER=RUNASIS /etc/init.d/jbossewp5"
+         service="JBOSS_USER=RUNASIS /etc/init.d/jbossas"
       fi
 
       targetfile=$(arrayGet targetfile ${ver}_${auth})
       if [[ -z $targetfile ]]; then
-         targetfile=$JBOSS_HOME/server/$JBOSS_PROFILE/deploy/ROOT.war
+         targetfile=$JBOSS_HOME/standalone/deployments/ROOT.war
       fi
 
-      if [[ $targetfile =~ (.*)/deploy/.* ]]; then
+      if [[ $targetfile =~ (.*)/deployments/.* ]]; then
          logfile=${BASH_REMATCH[1]}/log/server.log
       else
          logfile=/dev/null
@@ -167,7 +167,7 @@ do
       fi
 
       # tmp dir will grow forever otherwise:
-      $ssh $user@$host rm -fr $JBOSS_HOME/server/$JBOSS_PROFILE/tmp/
+      $ssh $user@$host rm -fr $JBOSS_HOME/standalone/tmp/
 
       warfile=${srcdir}/zanata-war-*.war
 
@@ -203,7 +203,7 @@ do
         user=jboss
      fi
 
-     if [[ $targetfile =~ (.*)/deploy/.* ]]; then
+     if [[ $targetfile =~ (.*)/deployments/.* ]]; then
         logfile=${BASH_REMATCH[1]}/log/server.log
      else
         logfile=/dev/null
