@@ -132,7 +132,8 @@ do
 
       service=$(arrayGet service ${ver}_${buildType})
       if [[ -z $service ]]; then
-         service="JBOSS_USER=RUNASIS /etc/init.d/jbossas"
+#         service="JBOSS_USER=RUNASIS /etc/init.d/jbossas"
+	service="service jbossas"
       fi
 
       targetfile=$(arrayGet targetfile ${ver}_${buildType})
