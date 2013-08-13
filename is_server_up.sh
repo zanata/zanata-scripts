@@ -54,7 +54,7 @@ function check_connection(){
     return 0;
 }
 
-UP_PATTERN="id=\"Projects\""
+UP_PATTERN="Projects"
 
 # Retry interval: Default: 30 sec
 INTERVAL=30
