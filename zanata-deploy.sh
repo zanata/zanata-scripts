@@ -49,7 +49,7 @@ ssh=${ssh-ssh}
 scp=${scp-scp}
 mail=${mail-mail}
 m2repo=${m2repo-$HOME/.m2/repository}
-BUILD_TYPES=(autotest internal kerberos fedora jaas)
+BUILD_TYPES=(autotest kerberos fedora jaas)
 
 # functions:
 
