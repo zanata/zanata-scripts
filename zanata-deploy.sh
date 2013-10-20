@@ -167,6 +167,10 @@ do
          $ssh $user@$host $post_stop
       fi
 
+      skipdeployfile=$JBOSS_HOME/standalone/deployments/ROOT.war.skipdeploy
+      echo "create $skipdeployfile in $host"
+      $ssh $user@$host touch $skipdeployfile
+      
       # tmp dir will grow forever otherwise:
       $ssh $user@$host rm -fr $JBOSS_HOME/standalone/tmp/
 
@@ -174,6 +178,10 @@ do
 
       echo "copying $warfile to $host:$targetfile"
       $scp $warfile $user@$host:$targetfile
+      
+      echo "remove $skipdeployfile in $host"
+      $ssh $user@$host rm -rf $skipdeployfile
+      
       echo "starting app server on $host"
       $ssh $user@$host $service start
 
