@@ -50,7 +50,6 @@ scp=${scp-scp}
 mail=${mail-mail}
 m2repo=${m2repo-$HOME/.m2/repository}
 BUILD_TYPES=(autotest kerberos fedora jaas)
-CRON_SERVICE=/etc/init.d/crond
 
 # functions:
 
@@ -159,8 +158,9 @@ do
       echo "post_stop: $post_stop"
       echo "logfile: $logfile"
 
-      echo "stopping $CRON_SERVICE on $host"
-      $ssh $user@$host $CRON_SERVICE stop
+      skipdeployfile=${targetfile}.skipdeploy
+      echo "create $skipdeployfile in $host"
+      $ssh $user@$host touch $skipdeployfile
       
       echo "stopping app server on $host:"
       if ! $ssh $user@$host $service stop
@@ -179,11 +179,12 @@ do
       echo "copying $warfile to $host:$targetfile"
       $scp $warfile $user@$host:$targetfile
       
+      echo "remove $skipdeployfile in $host"
+      $ssh $user@$host rm -rf $skipdeployfile
+      
       echo "starting app server on $host"
       $ssh $user@$host $service start
       
-      echo "starting $CRON_SERVICE on $host"
-      $ssh $user@$host $CRON_SERVICE start
    fi
 done
 
