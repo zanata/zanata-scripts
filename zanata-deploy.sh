@@ -171,6 +171,9 @@ do
          $ssh $user@$host $post_stop
       fi
 
+      echo "removing previous file/dir $targetfile on $host"
+      $ssh $user@$host rm -rf $targetfile
+
       # tmp dir will grow forever otherwise:
       $ssh $user@$host rm -fr $JBOSS_HOME/standalone/tmp/
 
