@@ -43,7 +43,7 @@ source $HOME/.config/zanata-deploy.conf
 BUILD_TAG=${BUILD_TAG-<unknown build>}
 JOB_NAME=${JOB_NAME-<unknown job>}
 WARNING_EMAIL=${WARNING_EMAIL-test@example.com}
-JBOSS_HOME=${JBOSS_HOME-/usr/share/jbossas/}
+JBOSS_HOME=${JBOSS_HOME-/opt/jbossas/}
 #JBOSS_PROFILE=${JBOSS_PROFILE-production}
 ssh=${ssh-ssh}
 scp=${scp-scp}
