@@ -122,7 +122,7 @@ do
 
       url=$(arrayGet url ${ver}_${buildType})
       if [[ -z $url ]]; then
-         url=http://$host:8080/
+         url=https://$host/
       fi
 
       user=$(arrayGet user ${ver}_${buildType})
@@ -207,7 +207,7 @@ do
 
      url=$(arrayGet url ${ver}_${buildType})
      if [[ -z $url ]]; then
-        url=http://$host:8080/
+        url=https://$host/
      fi
 
      user=$(arrayGet user ${ver}_${buildType})
