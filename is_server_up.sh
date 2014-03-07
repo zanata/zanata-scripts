@@ -27,14 +27,14 @@ END
 }
 
 function check_connection(){
-    DOWNLOAD_FILE=index.html.tmp
+    DOWNLOAD_FILE=$(mktemp)
     if [ $VERBOSE -lt 3 ]; then
 	QUIET="-q"
     else
 	QUIET=""
     fi
     wget --no-check-certificate ${QUIET} -O $DOWNLOAD_FILE $ZANATA_SERVER_URL
-    if grep -e "$UP_PATTERN" $DOWNLOAD_FILE; then
+    if grep -q -e "$UP_PATTERN" $DOWNLOAD_FILE; then
 	UP=1
 	if [ $VERBOSE -ge 1 ]; then
 	    echo "Zanata server on $ZANATA_SERVER_URL is [UP]"
@@ -92,7 +92,6 @@ if [ -z $ZANATA_SERVER_URL ]; then
     exit -1
 fi
 
-DOWNLOAD_FILE=index.html.tmp
 
 if check_connection; then
     exit 0;
