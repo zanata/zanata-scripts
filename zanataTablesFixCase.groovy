@@ -86,7 +86,12 @@ System.in.eachLine() { line ->
             System.exit 1
         }
     }
-    names.each { lower, orig -> line = line.replace(lower, orig) }
-    println "$line"
+    if (line.startsWith('CREATE DATABASE ') || line.startsWith('USE `')) {
+        // comment out, so that we can use any database name
+        println "-- $line"
+    } else {
+        names.each { lower, orig -> line = line.replace(lower, orig) }
+        println "$line"
+    }
 }
 null
