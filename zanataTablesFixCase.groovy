@@ -59,6 +59,7 @@ HTextFlowTarget
 HTextFlowTargetContentHistory
 HTextFlowTargetHistory
 HTextFlowTargetReviewComment
+IterationGroup_Locale
 TransMemory
 TransMemoryUnit
 TransMemoryUnitVariant
