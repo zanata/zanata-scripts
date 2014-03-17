@@ -6,12 +6,12 @@ package org.zanata.adhoc
 import groovyx.net.http.RESTClient
 
 def cli = new CliBuilder(usage:'get translation from zanata (sort of load testing)')
-cli.help('print help')
-cli.h(longOpt: 'host', 'zanata host (default http://localhost:8080/zanata)')
-cli.p(longOpt: 'project', 'targeting project (default skynet-topics)')
-cli.i(longOpt: 'iteration', 'targeting project iteration (default 1)')
-cli.u(longOpt: 'username', 'username (default admin)')
-cli.k(longOpt: 'apiKey', 'API key (default b6d7044e9ee3b2447c28fb7c50d86d98)')
+cli.h(longOpt: 'help', 'print help')
+cli._(longOpt: 'url', args: 1, 'zanata url (default http://localhost:8080/zanata)')
+cli.p(longOpt: 'project', args: 1, 'targeting project (default skynet-topics)')
+cli.i(longOpt: 'project-version', args: 1, 'targeting project version (default 1)')
+cli.u(longOpt: 'username', args: 1, 'username (default admin)')
+cli.k(longOpt: 'apiKey', args: 1, 'API key (default b6d7044e9ee3b2447c28fb7c50d86d98)')
 
 def options = cli.parse(args)
 
@@ -20,7 +20,7 @@ if (options.help) {
     System.exit(1)
 }
 
-def zanataInstance = options.h ? options.h : "http://localhost:8080/zanata"
+def zanataInstance = options.url ?: "http://localhost:8080/zanata"
 def zanataRestUrl = "$zanataInstance/rest/"
 
 def zanataRestClient = new RESTClient(zanataRestUrl, "application/xml")
@@ -28,8 +28,8 @@ zanataRestClient.handler.failure = {
     it
 }
 
-def projectSlug = options.p ? options.p : 'skynet-topics'
-def versionSlug = options.i ? options.i : '1'
+def projectSlug = options.p ?: 'skynet-topics'
+def versionSlug = options.i ?: '1'
 def authHeaders = ['X-Auth-User': "admin", 'X-Auth-Token': "b6d7044e9ee3b2447c28fb7c50d86d98"]
 
 // get all resource names
