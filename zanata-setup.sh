@@ -1,8 +1,8 @@
 #!/bin/bash
 
 ### :author: Ding-Yi Chen
-### :revdate: 2014-03-12
-### :revnumber: 4
+### :revdate: 2014-03-18
+### :revnumber: 5
 ### :numbered:
 ### :toc2:
 
@@ -166,7 +166,7 @@ sudo mysql -u root -e "GRANT ALL ON zanata.* TO '$ZANATA_DB_USER'@'localhost'" m
 ###
 ### To store multilingual text, Zanata database should be capable of dealing with UTF8 ### 
 ### [source,sh]
-sudo mysql -u $ZANATA_DB_USER -e 'CREATE DATABASE zanata /**!40100 DEFAULT CHARACTER SET utf8 **/;'
+sudo mysql -u $ZANATA_DB_USER -p$ZANATA_DB_PASS -e "CREATE DATABASE zanata DEFAULT CHARACTER SET='utf8';"
 ###
 ### === Configure JBoss
 ### For quick setup, download  following example configuration files:
