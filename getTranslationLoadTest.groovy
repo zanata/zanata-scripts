@@ -1,5 +1,4 @@
 #!/usr/bin/env groovy
-package org.zanata.adhoc
 
 @Grab(group='org.codehaus.groovy.modules.http-builder', module='http-builder', version='0.7')
 
@@ -12,12 +11,21 @@ cli.p(longOpt: 'project', args: 1, 'targeting project (default skynet-topics)')
 cli.i(longOpt: 'project-version', args: 1, 'targeting project version (default 1)')
 cli.u(longOpt: 'username', args: 1, 'username (default admin)')
 cli.k(longOpt: 'apiKey', args: 1, 'API key (default b6d7044e9ee3b2447c28fb7c50d86d98)')
+cli.v(longOpt: 'verbose', 'whether you want verbose logging')
 
 def options = cli.parse(args)
 
 if (options.help) {
     cli.usage()
     System.exit(1)
+}
+
+def verbose = options.v
+
+def printIfVerbose = {
+    if (verbose) {
+        println it;
+    }
 }
 
 def zanataInstance = options.url ?: "http://localhost:8080/zanata"
@@ -43,7 +51,7 @@ def names = resources.'resource-meta'.collect {
     it.name
 }
 
-println "resource names: $names"
+printIfVerbose "resource names: $names"
 
 // get all available locales
 def statsResponse = zanataRestClient.get(headers: authHeaders, path: "stats/proj/$projectSlug/iter/$versionSlug")
@@ -53,15 +61,16 @@ def locales = statsResponse.data.declareNamespace(namespaces).stats.stat.'@local
     it
 }
 
-println "locales: $locales"
+printIfVerbose "locales: $locales"
 
 // get translations
-println "getting translations for all these locales and resources"
+printIfVerbose "getting translations for all these locales and resources"
 locales.each { locale ->
     names.each { resId ->
         def msg = "getting translation for $resId for locale $locale"
         def resp = zanataRestClient.get(headers: authHeaders, path: "$resourcePath/$resId/translations/$locale")
         // we don't really care the response content
-        println "$msg -> $resp.status"
+        printIfVerbose "$msg -> $resp.status"
     }
 }
+println "=== Get translation done (project: $projectSlug version: $versionSlug) ==="
