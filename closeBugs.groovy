@@ -29,19 +29,25 @@ if (opts.help) {
     cli.usage()
     System.exit(0)
 }
-
+boolean dryRun = opts.dryRun
 String user = opts.username ?: null
 if (!user) {
     user = System.console().readLine("Please enter Bugzilla username: ")
 }
-println "Username: $user"
-String pass = opts.password ?: null
-if (!pass) {
-    def p = System.console().readPassword("Please enter Bugzilla password: ")
-    if (!p) throw new Exception("password required")
-    pass = new String(p)
+if (user == 'none')
+    user = null
+if (user) {
+    println "Username: $user"
+    String pass = opts.password ?: null
+    if (!pass) {
+        def p = System.console().readPassword("Please enter Bugzilla password: ")
+        if (!p) throw new Exception("password required")
+        pass = new String(p)
+    }
+} else {
+    println "Running in anonymous mode.  Only public bugs will be listed; no changes will be made."
+    dryRun = true
 }
-boolean dryRun = opts.dryRun
 println "Dry run: $dryRun"
 if (opts.dir) gitDir = opts.dir // else default above
 println "Git dir: $gitDir"
@@ -61,8 +67,9 @@ String bugzillaUrl = 'https://bugzilla.redhat.com/'
 @Field
 BugzillaConnector conn = new BugzillaConnector();
 conn.connectTo(bugzillaUrl);
-conn.executeMethod(new LogIn(user, pass));
-
+if (user) {
+    conn.executeMethod(new LogIn(user, pass));
+}
 def statuses
 if (checkingReleaseBranch) {
     statuses = ['VERIFIED']
