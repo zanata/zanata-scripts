@@ -34,7 +34,7 @@ Preconditions.checkArgument(numOfThreads > 0, "number of threads must be greater
 String script = options.s
 String[] scriptAndArgs = script.split(/\s/)
 File scriptFile = new File(scriptAndArgs[0])
-String[] scriptArgs = Arrays.copyOfRange(scriptAndArgs, 1, scriptAndArgs.size())
+String[] scriptArgs = scriptAndArgs.size() > 1 ? Arrays.copyOfRange(scriptAndArgs, 1, scriptAndArgs.size()) : []
 
 Preconditions.checkArgument(scriptFile.exists(), "script does not exist at %s", scriptFile.absolutePath)
 Preconditions.checkArgument(scriptFile.canExecute(), "script %s is not executable", scriptFile.name)
