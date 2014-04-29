@@ -7,7 +7,7 @@
 import org.jboss.seam.security.management.PasswordHash
 
 if (args.length != 2) {
-	println "Usage: ${this.class.name} <username> <password>"
+	println "Usage: ${this.class.name}.groovy <username> <password>"
 	return 1
 }
 
@@ -17,7 +17,5 @@ def salt = username
 
 def hash = new PasswordHash().generateSaltedHash(password, salt, 'MD5')
 
+println "To set the password for '$username', please execute the following SQL against Zanata's mysql database:\n"
 println "UPDATE HAccount SET passwordHash = '${hash}' WHERE username='${username}';"
-println "INSERT IGNORE INTO HAccountMembership (accountId, memberOf)\n"+
-	"  VALUES ((select id from HAccount where username='sflaniga'), "+
-		"(select id from HAccountRole where name='admin'));"
