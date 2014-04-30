@@ -1,8 +1,6 @@
 @Grab(group='com.redhat.victims', module='victims-lib', version='1.3.2')
-@Grab(group='com.redhat.victims', module='victims-client', version='1.0-SNAPSHOT')
 import com.redhat.victims.*
 import com.redhat.victims.database.*
-import com.redhat.victims.cli.commands.*
 import java.security.MessageDigest
 import static groovy.io.FileType.FILES
 
@@ -20,19 +18,10 @@ def db = VictimsDB.db()
 def cache = new VictimsResultCache()
 def dir = new File('./zanata-war/target/zanata/WEB-INF/lib')
 
-//println(new ScanFileCommand().execute(dir.listFiles().collect{it.path}).verboseOutput)
-
 dir.traverse(type: FILES) { f ->
-
-//    println(new ScanFileCommand().execute([f.path]).verboseOutput)
-//    return
-
     String key = checksum(f)
-    //println("new key: $key")
-    //println("old key: ${checksum0(f)}")
     HashSet<String> cves
     if (cache.exists(key)) {
-        //println "found"
         cves = cache.get(key)
     } else {
         ArrayList<VictimsRecord> records = new ArrayList()
@@ -48,5 +37,6 @@ dir.traverse(type: FILES) { f ->
         println "$f OK"
     }
 }
-println(System.currentTimeMillis() - time)
+long timeTaken = System.currentTimeMillis() - time
+println("Processing took $timeTaken ms.")
 return
