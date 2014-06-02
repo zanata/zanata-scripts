@@ -2,7 +2,7 @@
 
 ### :author: Ding-Yi Chen
 ### :revdate: 2014-06-02
-### :revnumber: 7
+### :revnumber: 8
 ### :numbered:
 ### :toc2:
 
@@ -16,7 +16,7 @@ function default_environment_variables(){ cat <<"NOT_IN_DOC"
 ### :ZANATA_HOME: /var/lib/zanata
 ### :ZANATA_DB_USER: zanata
 ### :ZANATA_DB_PASS: zanata
-### :ZANATA_ECACHE_DIR: {ZANATA_HOME}/ehcache
+### :ZANATA_EHCACHE_DIR: {ZANATA_HOME}/ehcache
 ### :ZANATA_WAR_DOWNLOAD_URL: http://sourceforge.net/projects/zanata/files/latest/download?source=files
 NOT_IN_DOC
 } # NOT_IN_DOC
@@ -37,9 +37,9 @@ if [ "$1" = "--asciidoc" ]; then # NOT_IN_DOC
     exit 0  # NOT_IN_DOC
 fi # NOT_IN_DOC
 
-for n in JBOSS_STANDALONE_DIR STANDALONE_XML DEPLOYMENTS_DIR ZANATA_DS_XML \
-  JBOSS_HOME MODULE_XML ZANATA_HOME ZANATA_DB_USER ZANATA_DB_PASS \
-   ZANATA_ECACHE_DIR ZANATA_WAR_DOWNLOAD_URL
+for n in JBOSS_STANDALONE_DIR STANDALONE_XML DEPLOYMENTS_DIR \ # NOT_IN_DOC
+  ZANATA_DS_XML JBOSS_HOME MODULE_XML ZANATA_HOME ZANATA_DB_USER \ # NOT_IN_DOC
+  ZANATA_DB_PASS ZANATA_EHCACHE_DIR ZANATA_WAR_DOWNLOAD_URL # NOT_IN_DOC
 do # NOT_IN_DOC
     v=$(eval echo "$`echo $n`") # NOT_IN_DOC
     if [ -z "$v" ];then # NOT_IN_DOC
@@ -85,6 +85,8 @@ fi
 ### ZANATA_DB_USER={zanata_db_user}
 ### ZANATA_DB_PASS={zanata_db_pass}
 ### ZANATA_HOME={zanata_home}
+### ZANATA_EHCACHE_DIR={zanata_ehcache_dir}
+### ZANATA_WAR_DOWNLOAD_URL={zanata_war_download_url}
 ### ----
 ###
 ### === Install MySQL and driver
