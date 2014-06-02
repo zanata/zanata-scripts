@@ -1,8 +1,8 @@
-#!/bin/bash
+#!/bin/bash -x
 
 ### :author: Ding-Yi Chen
-### :revdate: 2014-03-18
-### :revnumber: 5
+### :revdate: 2014-06-02
+### :revnumber: 6
 ### :numbered:
 ### :toc2:
 
@@ -16,6 +16,8 @@ function default_environment_variables(){ cat <<"NOT_IN_DOC"
 ### :ZANATA_HOME: /var/lib/zanata
 ### :ZANATA_DB_USER: zanata
 ### :ZANATA_DB_PASS: zanata
+### :ZANATA_ECACHE_DIR: {ZANATA_HOME}/ehcache
+### :ZANATA_WAR_DOWNLOAD_URL: http://sourceforge.net/projects/zanata/files/latest/download?source=files
 NOT_IN_DOC
 } # NOT_IN_DOC
 
@@ -35,7 +37,10 @@ if [ "$1" = "--asciidoc" ]; then # NOT_IN_DOC
     exit 0  # NOT_IN_DOC
 fi # NOT_IN_DOC
 
-for n in JBOSS_STANDALONE_DIR STANDALONE_XML DEPLOYMENTS_DIR ZANATA_DS_XML JBOSS_HOME MODULE_XML ZANATA_HOME ZANATA_DB_USER ZANATA_DB_PASS;do # NOT_IN_DOC
+for n in JBOSS_STANDALONE_DIR STANDALONE_XML DEPLOYMENTS_DIR ZANATA_DS_XML \
+  JBOSS_HOME MODULE_XML ZANATA_HOME ZANATA_DB_USER ZANATA_DB_PASS \
+   ZANATA_ECACHE_DIR ZANATA_WAR_DOWNLOAD_URL
+do # NOT_IN_DOC
     v=$(eval echo "$`echo $n`") # NOT_IN_DOC
     if [ -z "$v" ];then # NOT_IN_DOC
 	eval "$n=`get_default_environment_variable $n`" # NOT_IN_DOC
@@ -78,7 +83,7 @@ fi
 ### MODULE_XML={module_xml}
 ### STANDALONE_XML={standalone_xml}
 ### ZANATA_DB_USER={zanata_db_user}
-### ZANATA_DB_USER={zanata_db_pass}
+### ZANATA_DB_PASS={zanata_db_pass}
 ### ZANATA_HOME={zanata_home}
 ### ----
 ###
@@ -169,6 +174,15 @@ sudo mysql -u root -e "GRANT ALL ON zanata.* TO '$ZANATA_DB_USER'@'localhost'" m
 sudo mysql -u $ZANATA_DB_USER -p$ZANATA_DB_PASS -e "CREATE DATABASE zanata DEFAULT CHARACTER SET='utf8';"
 ###
 ### === Configure JBoss
+### Prior configure JBoss, especially modifing +{standalone_xml}+ it is recommend to stop the jboss service by
+### [source,sh]
+### ----
+if sudo bash -c "service jbossas status"; then 
+    sudo bash -c "service jbossas stop"
+fi
+### ----
+### Otherwise, JBoss might overwrite +{standalone_xml}+ with existing settings.
+####
 ### For quick setup, download  following example configuration files:
 ### 
 ### * https://raw.github.com/wiki/zanata/zanata-server/standalone-zanata-release-openid.xml[standalone.xml]: Example of JBoss setting for internal and openid authentication. 
@@ -249,7 +263,7 @@ sudo chown jboss:jboss $MODULE_XML
 ### .. Click *Connection*
 ### .. Click *Test Connection*
 ###
-### ===== Edit standalone.xml
+### ==== Edit standalone.xml
 ### In +{standalone_xml}+, search subsystem `<datasources>` and inserts the following after that tag:
 ### [source,xml]
 ### <datasource jta="false" jndi-name="java:jboss/datasources/zanataDatasource" pool-name="zanataDatasource" enabled="true" use-java-context="true" use-ccm="false">
@@ -296,21 +310,28 @@ sudo chown jboss:jboss $MODULE_XML
 ### https://github.com/zanata/zanata-server/blob/master/zanata-war/src/main/java/org/zanata/config/JndiBackedConfig.java[org.zanata.config.JndiBackedConfig].
 ### for other JDNI configuration options.
 ###
+### ==== System properties
+### In +{standalone_xml}+, insert following after +'</extenstion>'
+### <system-properties>
+###     <property name="hibernate.search.default.indexBase" value="${user.home}/indexes"/>
+###     <property name="ehcache.disk.store.dir" value="/var/lib/zanata/ehcache"/>
+### </system-properties>
+###
 ### ==== JavaMelody
 ### JavaMelody is for monitoring Java or Java EE application servers.
 ###
-### In +{standalone_xml}+, insert following after +'</extenstion>'
+### In section +<system-properties>+ in +{standalone_xml}+, insert following:
 ### [source,xml]
 ### <system-properties>
+###        ...
 ###     <property name="javamelody.storage-directory" value="${user.home}/stats"/>
-###     <property name="hibernate.search.default.indexBase" value="${user.home}/indexes"/>
 ### </system-properties>
 ###
 ### Also insert the following immediately after +<paths>+
 ### [source,xml]
 ### <path name="com/sun/management"/>
 ###
-### ===== Security Domains
+### ==== Security Domains
 ### Insert following under element +<security-domains>+:
 ### [source,xml]
 ### <security-domains>
@@ -337,7 +358,7 @@ sudo chown jboss:jboss $MODULE_XML
 ### http://sourceforge.net/projects/zanata/Download zanata.war[Download zanata.war], then copy it to `/etc/jbossas/deployments/zanata.war`. Such as:
 ### [source,sh]
 ### ----
-wget -c -O /tmp/zanata-latest.war http://sourceforge.net/projects/zanata/files/latest/download
+wget -c -O /tmp/zanata-latest.war $ZANATA_WAR_DOWNLOAD_URL
 sudo cp /tmp/zanata-latest.war $DEPLOYMENTS_DIR/zanata.war
 ### ----
 ###
@@ -349,14 +370,10 @@ sudo cp /tmp/zanata-latest.war $DEPLOYMENTS_DIR/zanata.war
 ### +http://<zanataHost>:8080+
 ### 
 ### == Run Zanata Server
-### Start the zanata server by either start or restart the jbossas services:
+### Start the zanata server by start the jbossas services:
 ### [source,sh]
 ### ----
-if sudo bash -c "service jbossas status"; then 
-    sudo bash -c "service jbossas restart"
-else
-    sudo bash -c "service jbossas start"
-fi
+sudo bash -c "service jbossas start"
 ### ----
 ### 
 ### If zanata server start successfully, Zanata server home page is at:
