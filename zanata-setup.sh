@@ -1,8 +1,8 @@
-#!/bin/bash -x
+#!/bin/bash
 
 ### :author: Ding-Yi Chen
 ### :revdate: 2014-06-02
-### :revnumber: 6
+### :revnumber: 7
 ### :numbered:
 ### :toc2:
 
