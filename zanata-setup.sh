@@ -1,8 +1,8 @@
 #!/bin/bash
 
 ### :author: Ding-Yi Chen
-### :revdate: 2014-06-02
-### :revnumber: 8
+### :revdate: 2014-09-29
+### :revnumber: 9
 ### :numbered:
 ### :toc2:
 
@@ -14,6 +14,7 @@ function default_environment_variables(){ cat <<"NOT_IN_DOC"
 ### :JBOSS_HOME: /usr/share/jbossas
 ### :MODULE_XML: {JBOSS_HOME}/modules/system/layers/base/sun/jdk/main/module.xml
 ### :ZANATA_HOME: /var/lib/zanata
+### :ZANATA_DOCUMENT_STORAGE_DIRECTORY: {ZANATA_HOME}/documents
 ### :ZANATA_DB_USER: zanata
 ### :ZANATA_DB_PASS: zanata
 ### :ZANATA_EHCACHE_DIR: {ZANATA_HOME}/ehcache
@@ -302,7 +303,7 @@ sudo chown jboss:jboss $MODULE_XML
 ###   <remote-naming/>
 ### </subsystem>
 ### 
-### <1> Replace +/example/path+ with the absolute path to the directory for document storage.
+### <1> https://github.com/zanata/zanata-server/wiki/Document-Storage-Directory[Document storage directory]
 ### <2> Remove this line to disable internal authentication.
 ### <2> Remove this line to disable OpenId authentication.
 ### <4> Replace +admin+ with the lists of users that will become the admin once they finished registration. Use with care!
