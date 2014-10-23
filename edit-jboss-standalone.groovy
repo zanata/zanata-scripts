@@ -58,9 +58,9 @@ def md5(Element el) {
 def oldMD5 = md5(root)
 //println oldMD5.encodeHex()
 use(DOMCategory) {
-    
+
     def subsys = root.profile.subsystem
-    
+
     // Enable connection debugging
     // https://community.jboss.org/wiki/DetectingAndClosingLeakedConnectionsInJBoss71
     def jca = subsys.find{ it.'@xmlns'.startsWith('urn:jboss:domain:jca:') }
