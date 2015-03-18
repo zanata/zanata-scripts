@@ -64,6 +64,7 @@ TransMemory
 TransMemoryUnit
 TransMemoryUnitVariant
 TransMemory_Metadata
+WebHook
 """
 
 // sort tables by descending length
