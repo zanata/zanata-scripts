@@ -67,31 +67,48 @@ TransMemory_Metadata
 WebHook
 """
 
-// sort tables by descending length
-def tables = tableNames.split('\n').collect { it.trim() } .sort { -it.size() }
+def tables = tableNames.split('\n').collect { it.trim() }
 
-// map from lower case name to original case name
-def names = [:]
-// populate names map
-tables.each { table -> if (table) names.put(table.toLowerCase(), table) }
+def lowerNames = new HashSet()
 
+// map from back-quoted lower case name to back-quoted original case name
+def quotedNames = [:]
+
+// populate lowerNames, quotedNames
+tables.each {
+    table ->
+    // skip any empty lines
+    if (table) {
+        def lowerTable = table.toLowerCase()
+        lowerNames.add(lowerTable)
+        quotedNames.put("`"+lowerTable+"`", "`"+table+"`")
+    }
+}
+
+def foundTables = new HashSet()
 // process stdin, replacing lower-case table names with original case
 System.in.eachLine() { line ->
     def tableRegex = /(DROP|CREATE) TABLE (IF EXISTS )?`([^`]+)`/
     def tableMatcher = line =~ tableRegex
     tableMatcher.each {
         def table = it[3]
-        if (!names[table]) {
-            System.err.println "Unexpected table: " + table
-            System.err.println "Please update this script."
-            System.exit 1
+        if (!foundTables.contains(table)) {
+            if (!table.toLowerCase().equals(table)) {
+                System.err.println "WARNING: table is already mixed case: " + table
+                System.err.println "Are you sure you need to run this script?"
+            } else if (!lowerNames.contains(table)) {
+                System.err.println "ERROR: Unexpected table: " + table
+                System.err.println "Please update this script."
+                System.exit 1
+            }
+            foundTables.add(table)
         }
     }
     if (line.startsWith('CREATE DATABASE ') || line.startsWith('USE `')) {
         // comment out, so that we can use any database name
         println "-- $line"
     } else {
-        names.each { lower, orig -> line = line.replace(lower, orig) }
+        quotedNames.each { lower, orig -> line = line.replace(lower, orig) }
         println "$line"
     }
 }
