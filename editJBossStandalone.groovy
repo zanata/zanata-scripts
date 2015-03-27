@@ -1,5 +1,16 @@
 #!/bin/env groovy
 
+/*
+ * WARNING WARNING WARNING WARNING WARNING WARNING WARNING WARNING
+ *
+ * Please note that this script is not remotely finished!
+ *
+ * WARNING WARNING WARNING WARNING WARNING WARNING WARNING WARNING
+ */
+
+
+
+import groovy.util.XmlParser
 import groovy.xml.XmlUtil
 import groovy.xml.dom.DOMCategory
 import groovy.xml.DOMBuilder
@@ -8,9 +19,14 @@ import java.security.MessageDigest
 import org.w3c.dom.Element
 
 
+// TODO make these configurable
 String fqdn = 'zanata-master-kerberos.lab.eng.bne.redhat.com'
 String krbDomain = 'REDHAT.COM'
-
+String javamelodyDir = '/var/lib/zanata/stats'
+String hibernateSearchDir = '/var/lib/zanata/index'
+String docsDir = '/var/lib/zanata/documents'
+String adminUsers = 'admin'
+String authEnableKerberos = true
 
 //def scriptDir = new File("${System.properties.'user.home'}/src/zanata-configure-container")
 def scriptDir = new File('.')
@@ -19,6 +35,7 @@ def input = new File(scriptDir, 'standalone.xml').getText('UTF-8')
 def reader = new StringReader(input)
 def doc = DOMBuilder.parse(reader)
 def root = doc.documentElement
+//def root = new XmlParser().parseText(input)
 
 def firstElement(parent) {
     def el = parent.firstChild
@@ -58,9 +75,9 @@ def md5(Element el) {
 def oldMD5 = md5(root)
 //println oldMD5.encodeHex()
 use(DOMCategory) {
-    
+
     def subsys = root.profile.subsystem
-    
+
     // Enable connection debugging
     // https://community.jboss.org/wiki/DetectingAndClosingLeakedConnectionsInJBoss71
     def jca = subsys.find{ it.'@xmlns'.startsWith('urn:jboss:domain:jca:') }
@@ -171,13 +188,16 @@ use(DOMCategory) {
 
 }
 
-println root
+//println root
 
 def newMD5 = md5(root)
 def changed = !(oldMD5 == newMD5)
 println "Changed: " + changed
-if (false && changed) {
-    def result = XmlUtil.serialize(root)
-    println(result)
+if (changed) {
+    String pretty = XmlUtil.serialize(root)
+    String prettier = pretty.replaceFirst(
+        /<\?xml(.*)\?><server/,
+        '<?xml$1?>\n\n<server')
+    println(prettier)
 }
 null
