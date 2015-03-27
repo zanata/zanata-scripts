@@ -7,17 +7,19 @@
 ### :toc2:
 
 function default_environment_variables(){ cat <<"NOT_IN_DOC"
-### :JBOSS_STANDALONE_DIR: /var/lib/jbossas/standalone
+### :JBOSS_IS: jbossas
+### :JBOSS_STANDALONE_DIR: /var/lib/{JBOSS_IS}/standalone
 ### :STANDALONE_XML: {JBOSS_STANDALONE_DIR}/configuration/standalone.xml
 ### :DEPLOYMENTS_DIR: {JBOSS_STANDALONE_DIR}/deployments
 ### :ZANATA_DS_XML: {DEPLOYMENTS_DIR}/zanata-ds.xml
-### :JBOSS_HOME: /usr/share/jbossas
+### :JBOSS_HOME: /usr/share/{JBOSS_IS}
 ### :MODULE_XML: {JBOSS_HOME}/modules/system/layers/base/sun/jdk/main/module.xml
 ### :ZANATA_HOME: /var/lib/zanata
 ### :ZANATA_DB_USER: zanata
 ### :ZANATA_DB_PASS: zanata
 ### :ZANATA_EHCACHE_DIR: {ZANATA_HOME}/ehcache
 ### :ZANATA_WAR_DOWNLOAD_URL: http://sourceforge.net/projects/zanata/files/latest/download?source=files
+### :DB_IS
 NOT_IN_DOC
 } # NOT_IN_DOC
 
@@ -37,16 +39,26 @@ if [ "$1" = "--asciidoc" ]; then # NOT_IN_DOC
     exit 0  # NOT_IN_DOC
 fi # NOT_IN_DOC
 
-for n in JBOSS_STANDALONE_DIR STANDALONE_XML DEPLOYMENTS_DIR \ # NOT_IN_DOC
-  ZANATA_DS_XML JBOSS_HOME MODULE_XML ZANATA_HOME ZANATA_DB_USER \ # NOT_IN_DOC
-  ZANATA_DB_PASS ZANATA_EHCACHE_DIR ZANATA_WAR_DOWNLOAD_URL # NOT_IN_DOC
-do # NOT_IN_DOC
+ZANATA_VARIABLES=(JBOSS_STANDALONE_DIR STANDALONE_XML DEPLOYMENTS_DIR) # NOT_IN_DOC
+ZANATA_VARIABLES+=(ZANATA_DS_XML JBOSS_HOME MODULE_XML ZANATA_HOME ZANATA_DB_USER) # NOT_IN_DOC
+ZANATA_VARIABLES+=(ZANATA_DB_PASS ZANATA_EHCACHE_DIR ZANATA_WAR_DOWNLOAD_URL) # NOT_IN_DOC
+
+for n in "${ZANATA_VARIABLES[@]}";do # NOT_IN_DOC
     v=$(eval echo "$`echo $n`") # NOT_IN_DOC
     if [ -z "$v" ];then # NOT_IN_DOC
 	eval "$n=`get_default_environment_variable $n`" # NOT_IN_DOC
     fi # NOT_IN_DOC
     echo "$n=$(eval echo \"$`echo $n`\")" # NOT_IN_DOC
 done # NOT_IN_DOC
+
+if [ "${JBOSS_IS}" = "wildfly" ];then
+    JBOSS_USER=root
+    JBOSS_GROUP=wildfly
+else 
+    JBOSS_USER=jboss
+    JBOSS_GROUP=jboss
+fi
+
 
 ### = Installation Guide
 ###
@@ -56,6 +68,8 @@ done # NOT_IN_DOC
 ### JBoss Enterprise Application Platform (EAP) 6.2.X,
 ### MySQL, and
 ### Red Hat Enterprise Linux (RHEL) 6.X. 
+### 
+### Or wildfly-8.X with Fedora-2X.
 ### Please make corresponding changes for other configuration.
 ### 
 ### == Preparation
@@ -64,7 +78,11 @@ done # NOT_IN_DOC
 ### [source,sh]
 ### ----
 if [ ! -e $JBOSS_HOME ];then
-    sudo yum -y groupinstall jboss-eap6
+    if [ "JBOSS_IS" = "wildfly" ];then
+        sudo yum -y install wildfly
+    else
+        sudo yum -y groupinstall jboss-eap6
+    fi
 fi
 ### ----
 ###
@@ -79,6 +97,7 @@ fi
 ### [source,sh]
 ### [subs="attributes"]
 ### ----
+### JBOSS_IS={jboss_is}
 ### DEPLOYMENTS_DIR={deployments_dir}
 ### MODULE_XML={module_xml}
 ### STANDALONE_XML={standalone_xml}
@@ -153,7 +172,7 @@ install_missing cjkuni-ukai-fonts cjkuni-uming-fonts
 ### [source,sh]
 ### ----
 sudo mkdir -p $ZANATA_HOME
-sudo chown -R jboss:jboss $ZANATA_HOME
+sudo chown -R ${JBOSS_USER}:${JBOSS_GROUP} $ZANATA_HOME
 ### ----
 ### === Configure Database
 ### Ensure MySQL is started.
@@ -179,8 +198,8 @@ sudo mysql -u $ZANATA_DB_USER -p$ZANATA_DB_PASS -e "CREATE DATABASE zanata DEFAU
 ### Prior configure JBoss, especially modifing +{standalone_xml}+ it is recommend to stop the jboss service by
 ### [source,sh]
 ### ----
-if sudo bash -c "service jbossas status"; then 
-    sudo bash -c "service jbossas stop"
+if sudo bash -c "service ${JBOSS_IS} status"; then 
+    sudo bash -c "service ${JBOSS_IS} stop"
 fi
 ### ----
 ### Otherwise, JBoss might overwrite +{standalone_xml}+ with existing settings.
@@ -199,13 +218,13 @@ fi
 ### ----
 wget -c -O /tmp/standalone-zanata-release-openid.xml https://raw.github.com/wiki/zanata/zanata-server/standalone-zanata-release-openid.xml
 sudo bash -c "sed -e \"s|/var/lib/zanata|$ZANATA_HOME|\" /tmp/standalone-zanata-release-openid.xml  > $STANDALONE_XML"
-sudo chown jboss:jboss $STANDALONE_XML
+sudo chown ${JBOSS_USER}:${JBOSS_GROUP} $STANDALONE_XML
 wget -c -O /tmp/zanata-ds.xml https://raw.github.com/wiki/zanata/zanata-server/zanata-ds.xml
 sudo bash -c "sed -e \"s/ZANATA_DB_USER/$ZANATA_DB_USER/\" /tmp/zanata-ds.xml | sed -e \"s/ZANATA_DB_PASS/$ZANATA_DB_PASS/\" > $ZANATA_DS_XML"
-sudo chown jboss:jboss $ZANATA_DS_XML
+sudo chown ${JBOSS_USER}:${JBOSS_GROUP} $ZANATA_DS_XML
 wget -c -O /tmp/module-javamelody.xml https://raw.github.com/wiki/zanata/zanata-server/module-javamelody.xml
 sudo cp /tmp/module-javamelody.xml $MODULE_XML
-sudo chown jboss:jboss $MODULE_XML
+sudo chown ${JBOSS_USER}:${JBOSS_GROUP} $MODULE_XML
 ### ----
 ###
 ### ==== Configure Data Source
@@ -357,7 +376,7 @@ sudo chown jboss:jboss $MODULE_XML
 ### </security-domains>
 ###
 ### === Install zanata.war
-### http://sourceforge.net/projects/zanata/Download zanata.war[Download zanata.war], then copy it to `/etc/jbossas/deployments/zanata.war`. Such as:
+### http://sourceforge.net/projects/zanata/Download zanata.war[Download zanata.war], then copy it to `/etc/{JBOSS_IS}/deployments/zanata.war`. Such as:
 ### [source,sh]
 ### ----
 wget -c -O /tmp/zanata-latest.war $ZANATA_WAR_DOWNLOAD_URL
@@ -372,10 +391,10 @@ sudo cp /tmp/zanata-latest.war $DEPLOYMENTS_DIR/zanata.war
 ### +http://<zanataHost>:8080+
 ### 
 ### == Run Zanata Server
-### Start the zanata server by start the jbossas services:
+### Start the zanata server by start the {JBOSS_IS} services:
 ### [source,sh]
 ### ----
-sudo bash -c "service jbossas start"
+sudo bash -c "service ${JBOSS_IS} start"
 ### ----
 ### 
 ### If zanata server start successfully, Zanata server home page is at:
@@ -410,7 +429,7 @@ sudo bash -c "service jbossas start"
 ### === JBoss Administration Console
 ### . To create an JBoss Admin user, run following command and follow the instruction:
 ### [source,sh]
-### /usr/share/jbossas/bin/add-user.sh
+### /usr/share/{JBOSS_IS}/bin/add-user.sh
 ###
 ### . To login the JBoss Administration Console, use the following URL:
 ### [source]
