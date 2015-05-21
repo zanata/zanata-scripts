@@ -1,0 +1,103 @@
+#!/bin/bash
+
+function print_usage(){
+    cat <<END
+NAME
+    $0 - Build pull request
+
+SYNOPSIS
+    $0 <repo> -p <GitHubPullRequestNumber>
+
+OPTIONS
+    repo
+        Repository to build
+	E.g. zanata-client
+
+    -p GitHubPullRequestNumber
+        GitHub Pull Request Number
+	E.g. -p 45
+
+DESCRIPTION
+    This script checkout the corresponding branch,
+then run 
+    
+    mvn -e clean install
+
+ENVIRONMENT
+    ZANATA_CHECKOUT_PARENT_DIR
+        Parent Directory for zanata checkout.
+	Default: ${HOME}/zanata
+
+EXIT STATUS
+    ${EXIT_CODE_OK} if sucessfully.
+    ${EXIT_CODE_INVALID_ARGUMENTS} invalid or missing arguments
+    ${EXIT_CODE_ERROR} no such pull request or other error.
+END
+}
+
+function get_branch_from_pr(){
+    local urlPrefix=$1
+    local repo=$2
+    local pr=$3
+    local url=${urlPrefix}${repo}/pull/$pr
+
+    local tmpFile=$(mktemp --tmpdir zanata.XXXXXX)
+    curl -s -S $url > $tmpFile
+    sed -n  -e '/data-channel.*branch/ s/\s*data-channel.*:branch:\(.*\)"/\1/ p' $tmpFile  | head -n 1
+    rm -f $tmpFile
+}
+
+### Variable definition
+export EXIT_CODE_OK=0
+export EXIT_CODE_INVALID_ARGUMENTS=3
+export EXIT_CODE_ERROR=5
+export ZANATA_GIT_URL_PREFIX=https://github.com/zanata/
+
+
+### Get arguments
+if [[ $# -ne 3 ]];then
+    print_usage > /dev/stderr
+    exit ${EXIT_CODE_INVALID_ARGUMENTS}
+fi
+
+REPO=$1
+shift
+while getopts "p:" opt;do
+    case $opt in
+	p )
+	    PULL_REQUEST=$OPTARG
+	    ;;
+	* )
+	    echo "Invalid option $opt" > /dev/stderr
+	    print_usage > /dev/stderr
+	    exit ${EXIT_CODE_INVALID_ARGUMENTS}
+	    ;;
+    esac
+done
+shift $((OPTIND-1))
+
+### Create the repo if it is not there
+if [[ ! -d "${ZANATA_CHECKOUT_PARENT_DIR}" ]];then
+    mkdir -p "${ZANATA_CHECKOUT_PARENT_DIR}"
+fi
+
+cd ${ZANATA_CHECKOUT_PARENT_DIR}
+
+
+if [[ ! -d "$REPO" ]];then
+    git clone ${ZANATA_GIT_URL_PREFIX}/${REPO}.git
+fi
+
+### Get Branch
+BRANCH=$(get_branch_from_pr ${ZANATA_GIT_URL_PREFIX} ${REPO} ${PULL_REQUEST})
+
+echo "BRANCH is $BRANCH"
+
+### Checkout the pull request
+cd ${REPO}
+
+git fetch origin pull/${PULL_REQUEST}/head:${BRANCH}
+git checkout ${BRANCH}
+
+### Build
+mvn clean install
