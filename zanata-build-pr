@@ -1,12 +1,15 @@
 #!/bin/bash
+PROG_NAME=zanata-build-pr
 
 function print_usage(){
     cat <<END
 NAME
-    $0 - Build pull request
+    $PROG_NAME - Build pull request
+    zanata-client-build-pr - Build zanata-client pull request
 
 SYNOPSIS
-    $0 <repo> -p <GitHubPullRequestNumber>
+    $PROG_NAME <repo> -p <GitHubPullRequestNumber>
+    zanata-client-build-pr -p <GitHubPullRequestNumber>
 
 OPTIONS
     repo
@@ -18,10 +21,14 @@ OPTIONS
 	E.g. -p 45
 
 DESCRIPTION
-    This script checkout the corresponding branch,
-then run 
+    zanata-build-br checkouts the corresponding branch in 
+given branch, then run:
     
-    mvn -e clean install
+  mvn -e clean install
+
+    zanata-client-build-br is esentially 
+
+  zanata-build-pr zanata-client -p <GitHubPullRequestNumber>
 
 ENVIRONMENT
     ZANATA_CHECKOUT_PARENT_DIR
@@ -53,15 +60,28 @@ export EXIT_CODE_INVALID_ARGUMENTS=3
 export EXIT_CODE_ERROR=5
 export ZANATA_GIT_URL_PREFIX=https://github.com/zanata/
 
-
 ### Get arguments
-if [[ $# -ne 3 ]];then
+case $0 in
+    *zanata-client* )
+	REPO=zanata-client
+        ;;
+    * )
+        REPO=$1
+        shift
+        ;;
+esac
+
+if [[ -z "$REPO" ]];then
+    echo "Please specify repo" > /dev/stderr
     print_usage > /dev/stderr
     exit ${EXIT_CODE_INVALID_ARGUMENTS}
 fi
 
-REPO=$1
-shift
+if [[ $# -ne 2 ]];then
+    print_usage > /dev/stderr
+    exit ${EXIT_CODE_INVALID_ARGUMENTS}
+fi
+
 while getopts "p:" opt;do
     case $opt in
 	p )
