@@ -1,0 +1,174 @@
+#!/bin/bash
+
+function print_usage(){
+    cat <<-END
+	== SYNOPSIS
+	zanata-nexus-staging [options] <PROJECT>
+	zanata-nexus-staging-tennera   [options]
+	zanata-nexus-staging-openprops [options]
+	zanata-nexus-staging-parent    [options]
+	zanata-nexus-staging-api       [options]
+	zanata-nexus-staging-common    [options]
+	
+	== OPTIONS
+	-r: Skip release plugin
+	
+	== Environment Variables
+	
+	=== BRANCH
+	We assume to work on release branch
+	Specify BRANCH=integration/master  if you want integration/master instead
+	
+	=== WORK_ROOT
+	The base directory for repository checkout
+	As maven release plugin generally require a clean git working tree
+	This script will clean it for you.
+	Thus it is better not use normal working directory.
+	
+	=== REPO_LOCAL_DIR (Optional)
+	The directory for maven repo
+	This should NOT be your normal work maven repo
+	
+	=== EXIT_STATUS
+	EXIT_INVALID_OPTIONS=3
+	EXIT_FAIL_TO_CLONE=4
+	EXIT_RELEASE_GOAL_FAIL=5
+	END
+}
+
+: ${BRANCH:=release}
+: ${WORK_ROOT:=/tmp/zanata}
+: ${REPO_LOCAL_DIR:=/tmp/maven-central-release-repo}
+
+EXIT_INVALID_OPTIONS=3
+EXIT_FAIL_TO_CLONE=4
+EXIT_RELEASE_GOAL_FAIL=5
+
+
+while getopts "r" opt;do
+    case $opt in
+	r )
+	    SKIP_RELEASE_PLUGIN=1
+	    ;;
+	* )
+	    echo "Invalid option $opt" > /dev/stderr
+	    exit ${EXIT_INVALID_OPTIONS}
+	    ;;
+    esac
+done
+
+shift $((OPTIND-1))
+if [ -n "$1" ];then
+    PROJECT="$1"
+fi
+
+case $0 in
+    *-tennera)
+	PROJECT=tennera
+        ;;
+    *-openprops)
+	PROJECT=openprops
+	;;
+    *-parent)
+	PROJECT=zanata-parent
+	;;
+    *-api)
+	PROJECT=zanata-api
+	;;
+    *-common)
+	PROJECT=zanata-common
+	;;
+    *-client)
+	PROJECT=zanata-client
+	;;
+    *)
+	if [ -z "$PROJECT" ]; then
+	    print_usage
+	    exit ${EXIT_INVALID_OPTIONS}
+	fi
+	;;
+esac
+
+GIT_REPO_URL=git@github.com:zanata/${PROJECT}.git
+
+if [ ! -d ${WORK_ROOT} ];then
+    mkdir -p ${WORK_ROOT}
+fi
+
+cd ${WORK_ROOT}
+if [ ! -d ${PROJECT} ];then
+    git clone ${GIT_REPO_URL}
+    if [ $? -ne 0 ];then
+	echo "[ERROR] Failed to clone ${GIT_REPO_URL}" >/dev/stderr
+	exit ${EXIT_FAIL_TO_CLONE}
+    fi
+fi
+
+cd ${PROJECT}
+git pull
+
+###== release_perform
+### Do the step required by maven release plugin
+function release_perform(){
+    if [ -z "${SKIP_RELEASE_PLUGIN}" ];then
+	git clean -f -d
+	mvn -Dmaven.repo.local=$REPO_LOCAL_DIR -Dgpg.useagent release:clean release:prepare release:perform
+	if [ $? -ne 0 ];then
+	    echo "[ERROR]: release goals failed" >/dev/stderr
+	    exit ${EXIT_RELEASE_GOAL_FAIL}
+	fi
+    fi
+    return 0
+}
+
+case $PROJECT in
+    zanata-parent | zanata-api | zanata-common )
+	### zanata-parent has only master
+	if [ "${PROJECT}" != "zanata-parent" ];then
+	    git checkout $BRANCH
+	fi
+	release_perform
+	mvn nexus-staging:close nexus-staging:release -Psonatype-oss-release \
+	    -DstagingRepositoryId=$(grep -oP '^stagingRepository\.id=\K.*' target/checkout/target/nexus-staging/staging/*.properties)
+	;;
+    zanata-client )
+	### auto nexus-staging does not seem to work with zanata-client
+	### Need to use manual bundle jars
+	git checkout $BRANCH
+	release_perform
+
+        ### Create and sign the artifacts
+	mvn clean deploy source:jar javadoc:jar jar:jar gpg:sign -Dgpg.useagent -DskipTests=true -DskipArqTests=true -Dfindbugs.skip=true 
+
+	### make bundles for each submodules:
+	SUBMODULES=(. zanata-cli zanata-client-commands zanata-maven-plugin zanata-rest-client)
+	BUNDLE_JARS=()
+	for sm in "${SUBMODULES[@]}"; do
+	    pushd ${sm}/target
+	    jar cvf bundle.jar $(for i in `LANG=C find . -name  "*.asc" | sed -e 's/.asc$//' | xargs`;do echo -n $i $i.asc " ";done)
+	    BUNDLE_JARS+="${sm}/target/bundle.jar"
+	    popd
+	done
+
+	### Notify user to upload bundles
+	cat <<-END
+	Please:
+	1. Login to oss.sonatype.org
+	2. On Left panel, under Build Promotion section, click Staging Upload
+	3. Upload following files:
+	END
+
+	for bj in "${BUNDLE_JARS[@]}"; do
+	    echo "$bj"
+	done
+	;;
+
+    * )
+	### Project like tennera or openprops
+	### These have only master
+	release_perform
+	mvn nexus-staging:close nexus-staging:release
+	;;
+esac
+
+
