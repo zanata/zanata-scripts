@@ -1,66 +1,180 @@
 #!/bin/bash
 
-### :author: Ding-Yi Chen
-### :revdate: 2014-09-29
-### :revnumber: 9
-### :numbered:
-### :toc2:
+set -e 
+set -o pipefail
 
-function default_environment_variables(){ cat <<"NOT_IN_DOC"
-### :JBOSS_IS: jbossas
-### :JBOSS_STANDALONE_DIR: /var/lib/{JBOSS_IS}/standalone
+function print_usage(){
+    cat <<END
+    $0 -  Test the Installation Guide for Java Client
+SYNOPSIS
+---------
+    $0 [--asciidoc]
+
+DESCRIPTION
+------------
+    Following the Installation Guide and do the smoke test.
+
+EXIT STATUS
+------------
+    ${EXIT_CODE_OK} if all tests passed
+    ${EXIT_CODE_INVALID_ARGUMENTS} invalid or missing arguments
+    ${EXIT_CODE_FAILED} at least one of test not passed
+
+ENVIRONMENT
+------------
+END
+    print_variables usage $0
+}
+
+function def_var(){
+    if [[ -z $(eval echo \$$1) ]];then
+        if [[ -z "$2" ]];then
+            export $1=
+        else
+            export $1="$2"
+        fi
+    fi
+}
+
+
+#### Start Var
+def_var author "Ding-Yi Chen"
+def_var revdate 2015-05-14
+def_var revnumber 3
+def_var numbered
+def_var toc2
+def_var ext-relative adoc
+
+### The command for package management system
+def_var PACKAGE_SYSTEM_COMMAND yum
+
+### The command to install a package in updates-testing
+def_var PACKAGE_INSTALL_UPDATE_REPO_COMMAND "${PACKAGE_SYSTEM_COMMAND} -y install --enablerepo=updates-testing"
+
+### The JBoss stanalone dir
+def_var JBOSS_STANDALONE_DIR /var/lib/jbossas/standalone
+
 ### :STANDALONE_XML: {JBOSS_STANDALONE_DIR}/configuration/standalone.xml
+def_var STANDALONE_XML "${JBOSS_STANDALONE_DIR}/configuration/standalone.xml"
+
 ### :DEPLOYMENTS_DIR: {JBOSS_STANDALONE_DIR}/deployments
+def_var DEPLOYMENTS_DIR "${JBOSS_STANDALONE_DIR}/deployments"
+
 ### :ZANATA_DS_XML: {DEPLOYMENTS_DIR}/zanata-ds.xml
-### :JBOSS_HOME: /usr/share/{JBOSS_IS}
+def_var ZANATA_DS_XML "${DEPLOYMENTS_DIR}/zanata-ds.xml"
+
+### :JBOSS_HOME: /usr/share/jbossas
+def_var JBOSS_HOME /usr/share/jbossas
+
 ### :MODULE_XML: {JBOSS_HOME}/modules/system/layers/base/sun/jdk/main/module.xml
+def_var MODULE_XML "${JBOSS_HOME}/modules/system/layers/base/sun/jdk/main/module.xml"
+
 ### :ZANATA_HOME: /var/lib/zanata
+def_var ZANATA_HOME /var/lib/zanata
+
 ### :ZANATA_DOCUMENT_STORAGE_DIRECTORY: {ZANATA_HOME}/documents
+def_var ZANATA_DOCUMENT_STORAGE_DIRECTORY "${ZANATA_HOME}/documents"
+
 ### :ZANATA_DB_USER: zanata
+def_var ZANATA_DB_USER "${ZANATA_DB_USER}/documents"
+
 ### :ZANATA_DB_PASS: zanata
+def_var ZANATA_DB_PASS zanata
+
 ### :ZANATA_EHCACHE_DIR: {ZANATA_HOME}/ehcache
+def_var ZANATA_EHCACHE_DIR "${ZANATA_HOME}/ehcache"
+
 ### :ZANATA_WAR_DOWNLOAD_URL: http://sourceforge.net/projects/zanata/files/latest/download?source=files
-### :DB_IS
-NOT_IN_DOC
-} # NOT_IN_DOC
+def_var ZANATA_WAR_DOWNLOAD_URL "http://sourceforge.net/projects/zanata/files/latest/download?source=files"
 
-function get_default_environment_variable(){  # NOT_IN_DOC
-    value=`default_environment_variables | grep ":$(echo $1):" | sed -e 's/^### :[^:]*: //'` # NOT_IN_DOC
-    inner=`echo "$value"  | sed -e 's/^[^{]*//' | sed -e 's/^{//' | sed -e 's/}.*$//'` # NOT_IN_DOC
-    if [ -n "$inner" ];then # NOT_IN_DOC
-	innerValue=$(eval echo "\$$inner") # NOT_IN_DOC
-	echo "$value" | sed -e "s|{$inner}|$innerValue|" # NOT_IN_DOC
-    else # NOT_IN_DOC
-	echo "$value" # NOT_IN_DOC
-    fi # NOT_IN_DOC
-} # NOT_IN_DOC
+#### End Var
 
-if [ "$1" = "--asciidoc" ]; then # NOT_IN_DOC
-    grep -v NOT_IN_DOC $0 | grep -v "^#!" | sed -e 's/^### //' | sed -e 's/^###//' 
-    exit 0  # NOT_IN_DOC
-fi # NOT_IN_DOC
+#===== Start Guide Functions =====
 
-ZANATA_VARIABLES=(JBOSS_STANDALONE_DIR STANDALONE_XML DEPLOYMENTS_DIR) # NOT_IN_DOC
-ZANATA_VARIABLES+=(ZANATA_DS_XML JBOSS_HOME MODULE_XML ZANATA_HOME ZANATA_DB_USER) # NOT_IN_DOC
-ZANATA_VARIABLES+=(ZANATA_DB_PASS ZANATA_EHCACHE_DIR ZANATA_WAR_DOWNLOAD_URL) # NOT_IN_DOC
-
-for n in "${ZANATA_VARIABLES[@]}";do # NOT_IN_DOC
-    v=$(eval echo "$`echo $n`") # NOT_IN_DOC
-    if [ -z "$v" ];then # NOT_IN_DOC
-	eval "$n=`get_default_environment_variable $n`" # NOT_IN_DOC
-    fi # NOT_IN_DOC
-    echo "$n=$(eval echo \"$`echo $n`\")" # NOT_IN_DOC
-done # NOT_IN_DOC
-
-if [ "${JBOSS_IS}" = "wildfly" ];then
-    JBOSS_USER=root
-    JBOSS_GROUP=wildfly
-else 
-    JBOSS_USER=jboss
-    JBOSS_GROUP=jboss
-fi
+## Exit status
+export EXIT_CODE_OK=0
+export EXIT_CODE_INVALID_ARGUMENTS=3
+export EXIT_CODE_DEPENDENCY_MISSING=4
+export EXIT_CODE_ERROR=5
+export EXIT_CODE_FAILED=6
+export EXIT_CODE_SKIPPED=7
+export EXIT_CODE_FATAL=125
 
 
+function extract_variable(){
+    local file=$1
+    local nameFilter=$2
+    awk -v nameFilter="$nameFilter" \
+	'BEGIN {FPAT = "(\"[^\"]+\")|(\\(.+\\))|([^ ]+)"; start=0; descr=""} \
+	/^#### End Var/ { start=0} \
+	(start==1 && /^[^#]/ && $2 ~ nameFilter) { sub(/^\"/, "", $3); sub(/\"$/, "", $3); print $2 "\t" $3 "\t" descr ; descr="";} \
+	(start==1 && /^###/) { gsub("^###[ ]?","", $0) ; descr=$0} \
+	/^#### Start Var/ { start=1; } ' $file
+}
+
+function print_variables(){
+    local format=$1
+    local file=$2
+    case $format in
+	asciidoc )
+	    extract_variable $file | awk -F '\\t' 'BEGIN { done=0 } \
+		$2 ~ /^\$\{.*:[=-]/ { ret=gensub(/^\$\{.*:[=-](.+)\}/, "\\1", "g", $2) ; print ":" $1 ": " ret; done=1 }\
+		done==0  {print ":" $1 ": " $2 ; done=1 }\
+		done==1  {done=0}'
+	    ;;
+	bash )
+	    extract_variable $file "^[A-Z]" | awk -F '\\t' \
+		'$2 ~ /[^\)]$/ {print "export " $1 "=\""$2"\"" ;} \
+		$2 ~ /\)$/ {print "export " $1 "="$2 ;} '
+	    ;;
+	usage )
+	    extract_variable $file "^[A-Z]" | awk -F '\\t' '{print $1 "::"; \
+		if ( $3 != "" ) {print "    " $3  }; \
+		print "    Default: " $2 "\n"}'
+	    ;;	    
+	* )
+	    ;;
+    esac
+}
+
+function to_asciidoc(){  
+    print_variables asciidoc $0
+    # Extract variable
+
+    awk 'BEGIN {start=0;sh_start=0; in_list=0} \
+	/^#### End Doc/ { start=0} \
+	(start==1 && /^[^#]/ ) { if (sh_start==0) {sh_start=1; if (in_list ==1 ) {print "+"}; print "[source,sh]"; print "----"} print $0;} \
+	(start==1 && /^### \./ ) { in_list=1 } \
+	(start==1 && /^###/ ) { if (sh_start==1) {sh_start=0; print "----"} gsub("^###[ ]?","", $0) ; print $0;} \
+	/^#### Start Doc/ { start=1; } ' $0
+    echo "== Default Environment Variables"
+    echo "[source,sh]"
+    echo "----"
+    # Extract variable
+    print_variables bash $0
+    echo "----"
+}
+
+while [ -n "$1" ];do
+    case $1 in
+	--asciidoc )
+	    to_asciidoc
+	    exit 0
+	    ;;
+	--help | -h )
+	    print_usage
+	    exit 0
+	    ;;
+	* )
+	    echo "Invalid argument $1" > /dev/stderr
+	    exit ${EXIT_CODE_INVALID_ARGUMENTS}
+	    ;;
+    esac
+    shift
+done
+#===== End Guide Functions =====
+
+#### Start Doc
 ### = Installation Guide
 ###
 ### Version {revnumber},{revdate}
@@ -69,23 +183,14 @@ fi
 ### JBoss Enterprise Application Platform (EAP) 6.2.X,
 ### MySQL, and
 ### Red Hat Enterprise Linux (RHEL) 6.X. 
-### 
-### Or wildfly-8.X with Fedora-2X.
 ### Please make corresponding changes for other configuration.
 ### 
 ### == Preparation
 ### === Install JBoss
 ### You can obtain JBoss EAP from the yum repositories from RHN, 
-### [source,sh]
-### ----
 if [ ! -e $JBOSS_HOME ];then
-    if [ "JBOSS_IS" = "wildfly" ];then
-        sudo yum -y install wildfly
-    else
-        sudo yum -y groupinstall jboss-eap6
-    fi
+    sudo yum -y groupinstall jboss-eap6
 fi
-### ----
 ###
 ### or download from 
 ### http://www.jboss.org/jbossas/downloads/[JBoss Application Server 7]
@@ -98,7 +203,6 @@ fi
 ### [source,sh]
 ### [subs="attributes"]
 ### ----
-### JBOSS_IS={jboss_is}
 ### DEPLOYMENTS_DIR={deployments_dir}
 ### MODULE_XML={module_xml}
 ### STANDALONE_XML={standalone_xml}
@@ -111,8 +215,6 @@ fi
 ###
 ### === Install MySQL and driver
 ### Install MySQL server, client and java connector:
-### [source,sh]
-### ----
 function install_missing(){
     _pkg=
     for p in $@; do
@@ -126,15 +228,12 @@ function install_missing(){
 }
 install_missing mysql mysql-server mysql-connector-java
 sudo ln -sf /usr/share/java/mysql-connector-java.jar $DEPLOYMENTS_DIR/mysql-connector-java.jar
-### ----
 ###
 ### === Install Virus Scanner (Optional)
 ### To prevent virus infected document being uploaded, Zanata is capable of working with clamav.
 ### If clamav is not installed, a warning will be logged when files are uploaded.
 ### If clamav is installed but +clamd+ is not running, 
 ### Zanata may reject all uploaded files (depending on file type).  To install and run clamav:
-### [source,sh]
-### ----
 # Assuming the function install_missing() is still available
 if [ -e /usr/bin/systemctl ];then
     install_missing clamav-server clamav-scanner-systemd
@@ -147,7 +246,6 @@ else
 	sudo service clamd start
     fi
 fi
-### ----
 ###
 ### You should probably also ensure that freshclam is set to run at least once per day,
 ### to keep virus definitions up to date.
@@ -161,48 +259,38 @@ fi
 ### are partially localized, so you may need to install, 
 ### for example, Chinese fonts on server for Chinese administrators by 
 ### using following command:
-### [source,sh]
-### ----
 install_missing cjkuni-ukai-fonts cjkuni-uming-fonts
-### ----
 ###
 ### == Installation
 ### === Create Zanata Home
 ### Zanata home hosts the documents, indexes, statistics and so on.
 ### Note that it should be owned by +jboss+.
-### [source,sh]
-### ----
-sudo mkdir -p $ZANATA_HOME
-sudo chown -R ${JBOSS_USER}:${JBOSS_GROUP} $ZANATA_HOME
-### ----
+sudo mkdir -p ${ZANATA_HOME}
+sudo chown -R jboss:jboss ${ZANATA_HOME}
 ### === Configure Database
 ### Ensure MySQL is started.
-### [source,sh]
-### ----
 if ! sudo bash -c "service mysqld status"; then 
     sudo bash -c "service mysqld start"
 fi
-### ----
 ###
 ### You may want to use user +{zanata_db_user}+  to access Zanata.
-### [source,sh]
-### ----
-sudo mysql -u root -e "CREATE USER '$ZANATA_DB_USER'@'localhost' IDENTIFIED BY '$ZANATA_DB_PASS'" mysql
-sudo mysql -u root -e "GRANT ALL ON zanata.* TO '$ZANATA_DB_USER'@'localhost'" mysql
-### ----
+if [ "${ZANATA_DB_USER}" == "$(sudo mysql -B -N  -u root -e "SELECT User FROM mysql.user WHERE User='$ZANATA_DB_USER'")" ];then
+    echo "[mysql] User ${ZANATA_DB_USER} is already created." > /dev/stderr
+else
+    sudo mysql -u root -e "CREATE USER '$ZANATA_DB_USER'@'localhost' IDENTIFIED BY '$ZANATA_DB_PASS'" mysql
+    sudo mysql -u root -e "GRANT ALL ON zanata.* TO '$ZANATA_DB_USER'@'localhost'" mysql
+fi
+
+
 ###
 ### To store multilingual text, Zanata database should be capable of dealing with UTF8 ### 
-### [source,sh]
 sudo mysql -u $ZANATA_DB_USER -p$ZANATA_DB_PASS -e "CREATE DATABASE zanata DEFAULT CHARACTER SET='utf8';"
 ###
 ### === Configure JBoss
 ### Prior configure JBoss, especially modifing +{standalone_xml}+ it is recommend to stop the jboss service by
-### [source,sh]
-### ----
-if sudo bash -c "service ${JBOSS_IS} status"; then 
-    sudo bash -c "service ${JBOSS_IS} stop"
+if sudo bash -c "service jbossas status"; then 
+    sudo bash -c "service jbossas stop"
 fi
-### ----
 ### Otherwise, JBoss might overwrite +{standalone_xml}+ with existing settings.
 ####
 ### For quick setup, download  following example configuration files:
@@ -215,18 +303,15 @@ fi
 ###   Copy this to +{module_xml}+
 ###
 ### Scripts to achieve above:
-### [source,sh]
-### ----
 wget -c -O /tmp/standalone-zanata-release-openid.xml https://raw.github.com/wiki/zanata/zanata-server/standalone-zanata-release-openid.xml
 sudo bash -c "sed -e \"s|/var/lib/zanata|$ZANATA_HOME|\" /tmp/standalone-zanata-release-openid.xml  > $STANDALONE_XML"
-sudo chown ${JBOSS_USER}:${JBOSS_GROUP} $STANDALONE_XML
+sudo chown jboss:jboss $STANDALONE_XML
 wget -c -O /tmp/zanata-ds.xml https://raw.github.com/wiki/zanata/zanata-server/zanata-ds.xml
 sudo bash -c "sed -e \"s/ZANATA_DB_USER/$ZANATA_DB_USER/\" /tmp/zanata-ds.xml | sed -e \"s/ZANATA_DB_PASS/$ZANATA_DB_PASS/\" > $ZANATA_DS_XML"
-sudo chown ${JBOSS_USER}:${JBOSS_GROUP} $ZANATA_DS_XML
+sudo chown jboss:jboss $ZANATA_DS_XML
 wget -c -O /tmp/module-javamelody.xml https://raw.github.com/wiki/zanata/zanata-server/module-javamelody.xml
 sudo cp /tmp/module-javamelody.xml $MODULE_XML
-sudo chown ${JBOSS_USER}:${JBOSS_GROUP} $MODULE_XML
-### ----
+sudo chown jboss:jboss $MODULE_XML
 ###
 ### ==== Configure Data Source
 ### This can be done by either one of following methods:
@@ -313,7 +398,7 @@ sudo chown ${JBOSS_USER}:${JBOSS_GROUP} $MODULE_XML
 ### [source,xml]
 ### <subsystem xmlns="urn:jboss:domain:naming:{namingVer}">
 ###   <bindings>           
-###     <simple name="java:global/zanata/files/document-storage-directory" value="/var/lib/zanata/documents"/> # <1>
+###     <simple name="java:global/zanata/files/document-storage-directory" value="{ZANATA_DOCUMENT_STORAGE_DIRECTORY}"/> # <1>
 ###     <simple name="java:global/zanata/security/auth-policy-names/internal" value="zanata.internal"/>        # <2> 
 ###     <simple name="java:global/zanata/security/auth-policy-names/openid" value="zanata.openid"/>            # <3>
 ###     <simple name="java:global/zanata/security/admin-users" value="admin"/>                                 # <4>
@@ -322,9 +407,9 @@ sudo chown ${JBOSS_USER}:${JBOSS_GROUP} $MODULE_XML
 ###   <remote-naming/>
 ### </subsystem>
 ### 
-### <1> https://github.com/zanata/zanata-server/wiki/Document-Storage-Directory[Document storage directory]
+### <1> link:Document-Storage-Directory{ext-relative}[]
 ### <2> Remove this line to disable internal authentication.
-### <2> Remove this line to disable OpenId authentication.
+### <3> Remove this line to disable OpenId authentication.
 ### <4> Replace +admin+ with the lists of users that will become the admin once they finished registration. Use with care!
 ### <5> Replace +no-reply@zanata.org+ with the email address you want your user to see as "From:".
 ###
@@ -377,12 +462,9 @@ sudo chown ${JBOSS_USER}:${JBOSS_GROUP} $MODULE_XML
 ### </security-domains>
 ###
 ### === Install zanata.war
-### http://sourceforge.net/projects/zanata/Download zanata.war[Download zanata.war], then copy it to `/etc/{JBOSS_IS}/deployments/zanata.war`. Such as:
-### [source,sh]
-### ----
+### http://sourceforge.net/projects/zanata/Download zanata.war[Download zanata.war], then copy it to `/etc/jbossas/deployments/zanata.war`. Such as:
 wget -c -O /tmp/zanata-latest.war $ZANATA_WAR_DOWNLOAD_URL
 sudo cp /tmp/zanata-latest.war $DEPLOYMENTS_DIR/zanata.war
-### ----
 ###
 ### [NOTE]
 ### By default, the filename of the war file in {deployments_dir} determines the URL of your zanata server.
@@ -392,24 +474,21 @@ sudo cp /tmp/zanata-latest.war $DEPLOYMENTS_DIR/zanata.war
 ### +http://<zanataHost>:8080+
 ### 
 ### == Run Zanata Server
-### Start the zanata server by start the {JBOSS_IS} services:
-### [source,sh]
-### ----
-sudo bash -c "service ${JBOSS_IS} start"
-### ----
+### Start the zanata server by start the jbossas services:
+sudo bash -c "service jbossas start"
 ### 
 ### If zanata server start successfully, Zanata server home page is at:
-### ----
-### http://<zanataHost>:8080/zanata
-### ----
+http://<zanataHost>:8080/zanata
 ### 
 ### == Other Things That Might Help
-### ==== zanata-setup.sh
+### === zanata-setup.sh
 ### https://raw.github.com/zanata/zanata-scripts/master/zanata-setup.sh[zanata-setup.sh] 
 ### is a script to execute the steps mentioned above.
 ### Download it and run it with user that is able to sudo:
 ### [source,sh]
+### ----
 ###  ./zanata-setup.sh
+### ----
 ###  
 ### === +{jboss_home}/bin/standalone.conf+
 ### * To increase memory for classes (and multiple redeployments), change `-XX:MaxPermSize=256m` to 
@@ -430,9 +509,9 @@ sudo bash -c "service ${JBOSS_IS} start"
 ### === JBoss Administration Console
 ### . To create an JBoss Admin user, run following command and follow the instruction:
 ### [source,sh]
-### /usr/share/{JBOSS_IS}/bin/add-user.sh
+### /usr/share/jbossas/bin/add-user.sh
 ###
 ### . To login the JBoss Administration Console, use the following URL:
-### [source]
-### http://<Host>:9990/
-
+http://<Host>:9990/
+###
+#### End Doc
