@@ -12,6 +12,7 @@ SYNOPSIS
     zanata-nexus-staging-client    [options]
 
 OPTIONS
+    -h: Show this help
     -b: Bump the version in integration/master as well
         (e.g. when releasing from 3.7.X -> 3.8.0).
         If not specified, only the default branch will be touch
@@ -25,8 +26,23 @@ OPTIONS
 
 DESCRIPTION
     This program perform the release and push the relese with nexus.
-     
-	
+It can do following tasks:
+
+ * For making a X release (e.g. 3.Y.Z -> 4.0.0) or 
+   Y release: (e.g. 3.7.Z -> 3.8.0 ), run:
+
+   zanata-nexus-staging-<module> -b
+
+ * For making a Z release (e.g. 3.7.0 -> 3.7.1 ), run 
+
+   zanata-nexus-staging-<module>
+
+ * If tag is made but release failed, and you fixed it without changing 
+   the source, You can resume the release process with 
+  
+   zanata-nexus-staging-<module> -r
+
+
 ENVIRONMENT
     DEFAULT_BRANCH
       Branch is automatically determined by PROJECT.
@@ -63,8 +79,12 @@ EXIT_RELEASE_GOAL_FAIL=5
 BUMP_INTEGRATION_MASTER=
 SKIP_RELEASE_PLUGIN=
 
-while getopts "br" opt;do
+while getopts "brh" opt;do
     case $opt in
+	h )
+	    pring_usage
+	    exit 0
+	    ;;
         b )
 	    BUMP_INTEGRATION_MASTER=1
 	    ;;
