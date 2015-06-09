@@ -2,48 +2,45 @@
 
 function print_usage(){
     cat <<-END
-	== SYNOPSIS
-	zanata-nexus-staging [options] <PROJECT>
-	zanata-nexus-staging-tennera   [options]
-	zanata-nexus-staging-openprops [options]
-	zanata-nexus-staging-parent    [options]
-	zanata-nexus-staging-api       [options]
-	zanata-nexus-staging-common    [options]
+SYNOPSIS
+    zanata-nexus-staging [options] <PROJECT>
+    zanata-nexus-staging-tennera   [options]
+    zanata-nexus-staging-openprops [options]
+    zanata-nexus-staging-parent    [options]
+    zanata-nexus-staging-api       [options]
+    zanata-nexus-staging-common    [options]
+
+OPTIONS
+    -r: Skip release plugin
 	
-	== OPTIONS
-	-r: Skip release plugin
+Environment Variables
+  BRANCH
+    Branch is automatically determined by PROJECT.
+    Specify Environment BRANCH to override.
 	
-	== Environment Variables
+  WORK_ROOT
+    The base directory for repository checkout
+    As maven release plugin generally require a clean git working tree
+    This script will clean it for you.
+    Thus it is better not use normal working directory.
 	
-	=== BRANCH
-        Branch is automatically determined by PROJECT.
-        Specify Environment BRANCH to override.
+  REPO_LOCAL_DIR (Optional)
+    The directory for maven repo
+    This should NOT be your normal work maven repo
 	
-	=== WORK_ROOT
-	The base directory for repository checkout
-	As maven release plugin generally require a clean git working tree
-	This script will clean it for you.
-	Thus it is better not use normal working directory.
-	
-	=== REPO_LOCAL_DIR (Optional)
-	The directory for maven repo
-	This should NOT be your normal work maven repo
-	
-	=== EXIT_STATUS
-	EXIT_INVALID_OPTIONS=3
-	EXIT_FAIL_TO_CLONE=4
-	EXIT_RELEASE_GOAL_FAIL=5
-	END
+  EXIT_STATUS
+    EXIT_INVALID_OPTIONS=3
+    EXIT_FAIL_TO_CLONE=4
+    EXIT_RELEASE_GOAL_FAIL=5
+END
 }
 
 : ${WORK_ROOT:=/tmp/zanata}
 : ${REPO_LOCAL_DIR:=/tmp/maven-central-release-repo}
 
-
 EXIT_INVALID_OPTIONS=3
 EXIT_FAIL_TO_CLONE=4
 EXIT_RELEASE_GOAL_FAIL=5
-
 
 while getopts "r" opt;do
     case $opt in
@@ -183,5 +180,4 @@ case $PROJECT in
 	mvn -e nexus-staging:close nexus-staging:release
 	;;
 esac
-
 
