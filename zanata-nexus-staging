@@ -9,30 +9,48 @@ SYNOPSIS
     zanata-nexus-staging-parent    [options]
     zanata-nexus-staging-api       [options]
     zanata-nexus-staging-common    [options]
+    zanata-nexus-staging-client    [options]
 
 OPTIONS
+    -b: Bump the version in integration/master as well
+        (e.g. when releasing from 3.7.X -> 3.8.0).
+        If not specified, only the default branch will be touch
+        (e.g. when releasing from 3.7.0 -> 3.7.1 ).
+	Default branch is:
+	  release if it has release; otherwise
+	  integration/master if it has release; otherwise
+	  master.
+
     -r: Skip release plugin
+
+DESCRIPTION
+    This program perform the release and push the relese with nexus.
+     
 	
-Environment Variables
-  BRANCH
-    Branch is automatically determined by PROJECT.
-    Specify Environment BRANCH to override.
+ENVIRONMENT
+    DEFAULT_BRANCH
+      Branch is automatically determined by PROJECT.
+      Specify Environment DEFAULT_BRANCH to override.
 	
-  WORK_ROOT
-    The base directory for repository checkout
-    As maven release plugin generally require a clean git working tree
-    This script will clean it for you.
-    Thus it is better not use normal working directory.
+    WORK_ROOT
+      The base directory for repository checkout
+      As maven release plugin generally require a clean git working tree
+      This script will clean it for you.
+      Thus it is better not use normal working directory.
 	
-  REPO_LOCAL_DIR (Optional)
-    The directory for maven repo
-    This should NOT be your normal work maven repo
+    REPO_LOCAL_DIR (Optional)
+      The directory for maven repo
+      This should NOT be your normal work maven repo
 	
-  EXIT_STATUS
+EXIT_STATUS
     EXIT_INVALID_OPTIONS=3
     EXIT_FAIL_TO_CLONE=4
     EXIT_RELEASE_GOAL_FAIL=5
 END
+}
+
+function echo_stderr(){
+    echo "$1" > /dev/stderr
 }
 
 : ${WORK_ROOT:=/tmp/zanata}
@@ -42,8 +60,14 @@ EXIT_INVALID_OPTIONS=3
 EXIT_FAIL_TO_CLONE=4
 EXIT_RELEASE_GOAL_FAIL=5
 
-while getopts "r" opt;do
+BUMP_INTEGRATION_MASTER=
+SKIP_RELEASE_PLUGIN=
+
+while getopts "br" opt;do
     case $opt in
+        b )
+	    BUMP_INTEGRATION_MASTER=1
+	    ;;
 	r )
 	    SKIP_RELEASE_PLUGIN=1
 	    ;;
@@ -87,16 +111,16 @@ case $0 in
 esac
 
 ### Set default branches
-if [ -z "${BRANCH}" ];then
+if [ -z "${DEFAULT_BRANCH}" ];then
     case ${PROJECT} in
         tennera | openprops )
-	    BRANCH=master
+	    DEFAULT_BRANCH=master
             ;;
         zanata-parent )
-	    BRANCH=integration/master
+	    DEFAULT_BRANCH=integration/master
             ;;
         zanata-api | zanata-common | zanata-client)
-	    BRANCH=release
+	    DEFAULT_BRANCH=release
             ;;
     esac
 fi
@@ -117,28 +141,64 @@ if [ ! -d ${PROJECT} ];then
 fi
 
 cd ${PROJECT}
-git checkout $BRANCH
-git pull
+git fetch
 
-###== release_perform
-### Do the step required by maven release plugin
+### Does it has release branch?
+if git rev-parse --verify origin/release ;then
+    HAS_RELEASE_BRANCH=1
+else
+    HAS_RELEASE_BRANCH=
+fi
+
+### Does it has integration/master branch?
+if git rev-parse --verify origin/integration/master ;then
+    HAS_INTEGRATION_MASTER_BRANCH=1
+else
+    HAS_INTEGRATION_MASTER_BRANCH=
+fi
+
+### Update release branch if it it exists
+if [ -n "$HAS_RELEASE_BRANCH" ];then
+    echo_stderr "[pre-release] Updating release branch"
+    git checkout release
+    git merge origin/release --ff-only --quiet
+    git merge origin/master --ff-only --quiet
+    echo_stderr "[pre-release] release branch updated"
+fi
+
+### Update integration/master branch if it exists
+if [ -n "${BUMP_INTEGRATION_MASTER}" -a -n "$HAS_INTEGRATION_MASTER_BRANCH" ];then
+    echo_stderr "[pre-release] Updating integration/master branch"
+    git checkout integration/master
+    git merge origin/integration/master --ff-only --quiet
+    mvn -e release:update-versions -DautoVersionSubmodules=true
+    git commit pom.xml */pom.xml -m "prepare for next development iteration"
+    git push origin integration/master
+    echo_stderr "[pre-release] integration/master branch updated"
+fi
+
+### Release process
 function release_perform(){
     if [ -z "${SKIP_RELEASE_PLUGIN}" ];then
-	git clean -f -d
-	mvn -e -Dmaven.repo.local=$REPO_LOCAL_DIR -Dgpg.useagent release:clean release:prepare release:perform
-	if [ $? -ne 0 ];then
-	    echo "[ERROR]: release goals failed" >/dev/stderr
+        git clean -f -d
+        mvn -e -Dmaven.repo.local=$REPO_LOCAL_DIR -Dgpg.useagent release:clean release:prepare release:perform
+        if [ $? -ne 0 ];then
+	    echo_stderr "[ERROR]: release goals failed"
 	    exit ${EXIT_RELEASE_GOAL_FAIL}
-	fi
+        fi
     fi
     return 0
 }
+
+echo_stderr "### Start release process"
+git checkout ${DEFAULT_BRANCH}
+git fetch --tags
+git pull
 
 case $PROJECT in
     zanata-parent | zanata-api | zanata-common )
 	### zanata-parent has only master
 	release_perform
-#	mvn -e nexus-staging:close nexus-staging:release -
 	mvn -e nexus-staging:release -Psonatype-oss-release \
 	    -DstagingRepositoryId=$(grep -oP '^stagingRepository\.id=\K.*' target/checkout/target/nexus-staging/staging/*.properties)
 	;;
