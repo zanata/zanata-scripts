@@ -16,8 +16,8 @@ function print_usage(){
 	== Environment Variables
 	
 	=== BRANCH
-	We assume to work on release branch
-	Specify BRANCH=integration/master  if you want integration/master instead
+        Branch is automatically determined by PROJECT.
+        Specify Environment BRANCH to override.
 	
 	=== WORK_ROOT
 	The base directory for repository checkout
@@ -36,9 +36,9 @@ function print_usage(){
 	END
 }
 
-: ${BRANCH:=release}
 : ${WORK_ROOT:=/tmp/zanata}
 : ${REPO_LOCAL_DIR:=/tmp/maven-central-release-repo}
+
 
 EXIT_INVALID_OPTIONS=3
 EXIT_FAIL_TO_CLONE=4
@@ -89,6 +89,21 @@ case $0 in
 	;;
 esac
 
+### Set default branches
+if [ -z "${BRANCH}" ];then
+    case ${PROJECT} in
+        tennera | openprops )
+	    BRANCH=master
+            ;;
+        zanata-parent )
+	    BRANCH=integration/master
+            ;;
+        zanata-api | zanata-common | zanata-client)
+	    BRANCH=release
+            ;;
+    esac
+fi
+
 GIT_REPO_URL=git@github.com:zanata/${PROJECT}.git
 
 if [ ! -d ${WORK_ROOT} ];then
@@ -105,6 +120,7 @@ if [ ! -d ${PROJECT} ];then
 fi
 
 cd ${PROJECT}
+git checkout $BRANCH
 git pull
 
 ###== release_perform
@@ -112,7 +128,7 @@ git pull
 function release_perform(){
     if [ -z "${SKIP_RELEASE_PLUGIN}" ];then
 	git clean -f -d
-	mvn -Dmaven.repo.local=$REPO_LOCAL_DIR -Dgpg.useagent release:clean release:prepare release:perform
+	mvn -e -Dmaven.repo.local=$REPO_LOCAL_DIR -Dgpg.useagent release:clean release:prepare release:perform
 	if [ $? -ne 0 ];then
 	    echo "[ERROR]: release goals failed" >/dev/stderr
 	    exit ${EXIT_RELEASE_GOAL_FAIL}
@@ -124,21 +140,18 @@ function release_perform(){
 case $PROJECT in
     zanata-parent | zanata-api | zanata-common )
 	### zanata-parent has only master
-	if [ "${PROJECT}" != "zanata-parent" ];then
-	    git checkout $BRANCH
-	fi
 	release_perform
-	mvn nexus-staging:close nexus-staging:release -Psonatype-oss-release \
+#	mvn -e nexus-staging:close nexus-staging:release -
+	mvn -e nexus-staging:release -Psonatype-oss-release \
 	    -DstagingRepositoryId=$(grep -oP '^stagingRepository\.id=\K.*' target/checkout/target/nexus-staging/staging/*.properties)
 	;;
     zanata-client )
 	### auto nexus-staging does not seem to work with zanata-client
 	### Need to use manual bundle jars
-	git checkout $BRANCH
 	release_perform
 
         ### Create and sign the artifacts
-	mvn clean deploy source:jar javadoc:jar jar:jar gpg:sign -Dgpg.useagent -DskipTests=true -DskipArqTests=true -Dfindbugs.skip=true 
+	mvn -e clean deploy source:jar javadoc:jar jar:jar gpg:sign -Dgpg.useagent -DskipTests=true -DskipArqTests=true -Dfindbugs.skip=true 
 
 	### make bundles for each submodules:
 	SUBMODULES=(. zanata-cli zanata-client-commands zanata-maven-plugin zanata-rest-client)
@@ -167,7 +180,7 @@ case $PROJECT in
 	### Project like tennera or openprops
 	### These have only master
 	release_perform
-	mvn nexus-staging:close nexus-staging:release
+	mvn -e nexus-staging:close nexus-staging:release
 	;;
 esac
 
