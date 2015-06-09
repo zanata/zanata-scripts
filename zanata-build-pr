@@ -20,6 +20,10 @@ OPTIONS
         GitHub Pull Request Number
 	E.g. -p 45
 
+    -r Branch name
+        Branch name
+	E.g. master
+
 DESCRIPTION
     zanata-build-br checkouts the corresponding branch in 
 given branch, then run:
@@ -61,6 +65,7 @@ export EXIT_CODE_ERROR=5
 export ZANATA_GIT_URL_PREFIX=https://github.com/zanata/
 
 ### Get arguments
+BRANCH=
 case $0 in
     *zanata-client* )
 	REPO=zanata-client
@@ -87,6 +92,9 @@ while getopts "p:" opt;do
 	p )
 	    PULL_REQUEST=$OPTARG
 	    ;;
+	r )
+	    BRANCH=$OPTARG
+	    ;;
 	* )
 	    echo "Invalid option $opt" > /dev/stderr
 	    print_usage > /dev/stderr
@@ -105,11 +113,13 @@ cd ${ZANATA_CHECKOUT_PARENT_DIR}
 
 
 if [[ ! -d "$REPO" ]];then
-    git clone ${ZANATA_GIT_URL_PREFIX}/${REPO}.git
+    git clone ${ZANATA_GIT_URL_PREFIX}${REPO}.git
 fi
 
 ### Get Branch
-BRANCH=$(get_branch_from_pr ${ZANATA_GIT_URL_PREFIX} ${REPO} ${PULL_REQUEST})
+if [ -z "$BRANCH" ];then
+    BRANCH=$(get_branch_from_pr ${ZANATA_GIT_URL_PREFIX} ${REPO} ${PULL_REQUEST})
+fi
 
 echo "BRANCH is $BRANCH"
 
