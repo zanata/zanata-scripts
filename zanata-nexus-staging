@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 function print_usage(){
     cat <<-END
 SYNOPSIS
@@ -13,7 +15,8 @@ SYNOPSIS
 
 OPTIONS
     -h: Show this help
-    -b: Bump the version in integration/master as well
+    -b: Big release.
+        Integration/master need to be updated.
         (e.g. when releasing from 3.7.X -> 3.8.0).
         If not specified, only the default branch will be touch
         (e.g. when releasing from 3.7.0 -> 3.7.1 ).
@@ -69,6 +72,34 @@ function echo_stderr(){
     echo "$1" > /dev/stderr
 }
 
+function ensure_repo(){
+    echo "### Ensure the repo $prj is at ${WORK_ROOT}/${prj}"
+    local prj=$1
+    local git_repo_url="git@github.com:zanata/${prj}.git"
+    pushd ${WORK_ROOT}
+    if [ ! -d ${prj} ];then
+        git clone ${git_repo_url}
+        if [ $? -ne 0 ];then
+	    echo_stderr "[ERROR] Failed to clone ${git_repo_url}"
+	    exit ${EXIT_FAIL_TO_CLONE}
+       fi
+    fi
+    popd
+}
+
+function does_branch_exist(){
+    local prj=$1
+    local branch=$2
+    echo -n "### Does ${prj} has branch ${branch}?..."
+    if git rev-parse --verify ${branch} &>/dev/null;then
+        echo "yes" 
+        return 0
+    else
+        echo "no"
+        return 1 
+    fi
+}
+
 : ${WORK_ROOT:=/tmp/zanata}
 : ${REPO_LOCAL_DIR:=/tmp/maven-central-release-repo}
 
@@ -76,7 +107,7 @@ EXIT_INVALID_OPTIONS=3
 EXIT_FAIL_TO_CLONE=4
 EXIT_RELEASE_GOAL_FAIL=5
 
-BUMP_INTEGRATION_MASTER=
+BIG_RELEASE=
 SKIP_RELEASE_PLUGIN=
 
 while getopts "brh" opt;do
@@ -86,7 +117,7 @@ while getopts "brh" opt;do
 	    exit 0
 	    ;;
         b )
-	    BUMP_INTEGRATION_MASTER=1
+	    BIG_RELEASE=1
 	    ;;
 	r )
 	    SKIP_RELEASE_PLUGIN=1
@@ -144,73 +175,75 @@ if [ -z "${DEFAULT_BRANCH}" ];then
             ;;
     esac
 fi
-
-GIT_REPO_URL=git@github.com:zanata/${PROJECT}.git
+echo "### Releasing $PROJECT in branch ${DEFAULT_BRANCH}" 
 
 if [ ! -d ${WORK_ROOT} ];then
     mkdir -p ${WORK_ROOT}
 fi
 
-cd ${WORK_ROOT}
-if [ ! -d ${PROJECT} ];then
-    git clone ${GIT_REPO_URL}
-    if [ $? -ne 0 ];then
-	echo "[ERROR] Failed to clone ${GIT_REPO_URL}" >/dev/stderr
-	exit ${EXIT_FAIL_TO_CLONE}
-    fi
-fi
+ensure_repo ${PROJECT}
 
-cd ${PROJECT}
+cd ${WORK_ROOT}/${PROJECT}
 git fetch
 
-### Does it has release branch?
-if git rev-parse --verify origin/release ;then
-    HAS_RELEASE_BRANCH=1
-else
-    HAS_RELEASE_BRANCH=
-fi
+HAS_RELEASE_BRANCH=
+does_branch_exist ${PROJECT} origin/release && HAS_RELEASE_BRANCH=1
 
-### Does it has integration/master branch?
-if git rev-parse --verify origin/integration/master ;then
-    HAS_INTEGRATION_MASTER_BRANCH=1
-else
-    HAS_INTEGRATION_MASTER_BRANCH=
-fi
+HAS_INTEGRATION_MASTER_BRANCH=
+does_branch_exist ${PROJECT} origin/integration/master && 
+HAS_INTEGRATION_MASTER_BRANCH=1
 
-### Update release branch if it it exists
+### Update existing release branch
+echo "### Pre-release: update existing release branchs"
 if [ -n "$HAS_RELEASE_BRANCH" ];then
-    echo_stderr "[pre-release] Updating release branch"
     git checkout release
+
+    echo "### [pre-release] Branch release: merge origin/release"
     git merge origin/release --ff-only --quiet
-    git merge origin/master --ff-only --quiet
-    echo_stderr "[pre-release] release branch updated"
+    if [ -n "${BIG_RELEASE}" ];then
+        echo "### [pre-release] Branch release: merge origin/master as we do the big release"
+        git merge origin/master --ff-only --quiet
+    fi
+    echo "### [pre-release] Branch release: updated"
+    git push origin release
 fi
 
-### Update integration/master branch if it exists
-if [ -n "${BUMP_INTEGRATION_MASTER}" -a -n "$HAS_INTEGRATION_MASTER_BRANCH" ];then
-    echo_stderr "[pre-release] Updating integration/master branch"
+### Update existing integration/master branch on BIG_RELEASE
+echo "### Pre-release: update existing integration/master branchs"
+if [ -n "${BIG_RELEASE}" -a -n "$HAS_INTEGRATION_MASTER_BRANCH" ];then
     git checkout integration/master
+
+    echo "### [pre-release] Branch integration/master merge origin/integration/master"
     git merge origin/integration/master --ff-only --quiet
+
+    echo "### [pre-release] Branch integration/master: Create new version"
     mvn -e release:update-versions -DautoVersionSubmodules=true
+
     git commit pom.xml */pom.xml -m "prepare for next development iteration"
     git push origin integration/master
-    echo_stderr "[pre-release] integration/master branch updated"
+    echo "### [pre-release] integration/master branch updated"
 fi
 
 ### Release process
 function release_perform(){
     if [ -z "${SKIP_RELEASE_PLUGIN}" ];then
         git clean -f -d
+        if [ "$PROJECT" != "zanata-parent" ];then
+             ensure_repo zanata-parent
+        fi
+        
+        echo "### [release_perform] Start"
         mvn -e -Dmaven.repo.local=$REPO_LOCAL_DIR -Dgpg.useagent release:clean release:prepare release:perform
         if [ $? -ne 0 ];then
-	    echo_stderr "[ERROR]: release goals failed"
+	    echo_stderr "### [ERROR]: release goals failed"
 	    exit ${EXIT_RELEASE_GOAL_FAIL}
         fi
     fi
+    echo "### [release_perform] Done"
     return 0
 }
 
-echo_stderr "### Start release process"
+echo "### [release] Start"
 git checkout ${DEFAULT_BRANCH}
 git fetch --tags
 git pull
@@ -219,6 +252,8 @@ case $PROJECT in
     zanata-parent | zanata-api | zanata-common )
 	### zanata-parent has only master
 	release_perform
+
+        echo "### [release] nexus-staging:release"
 	mvn -e nexus-staging:release -Psonatype-oss-release \
 	    -DstagingRepositoryId=$(grep -oP '^stagingRepository\.id=\K.*' target/checkout/target/nexus-staging/staging/*.properties)
 	;;
@@ -228,6 +263,7 @@ case $PROJECT in
 	release_perform
 
         ### Create and sign the artifacts
+        echo "### [release] Create and sign the artifacts"
 	mvn -e clean deploy source:jar javadoc:jar jar:jar gpg:sign -Dgpg.useagent -DskipTests=true -DskipArqTests=true -Dfindbugs.skip=true 
 
 	### make bundles for each submodules:
