@@ -9,6 +9,7 @@ function print_usage(){
 	zanata-nexus-staging-parent    [options]
 	zanata-nexus-staging-api       [options]
 	zanata-nexus-staging-common    [options]
+	zanata-nexus-staging-assets    [options]
 	
 	== OPTIONS
 	-r: Skip release plugin
@@ -78,6 +79,9 @@ case $0 in
     *-common)
 	PROJECT=zanata-common
 	;;
+    *-assets)
+	PROJECT=zanata-assets
+	;;
     *-client)
 	PROJECT=zanata-client
 	;;
@@ -122,9 +126,9 @@ function release_perform(){
 }
 
 case $PROJECT in
-    zanata-parent | zanata-api | zanata-common )
+    zanata-parent | zanata-api | zanata-common | zanata-assets )
 	### zanata-parent has only master
-	if [ "${PROJECT}" != "zanata-parent" ];then
+	if [ "${PROJECT}" != "zanata-parent" ] ;then
 	    git checkout $BRANCH
 	fi
 	release_perform
