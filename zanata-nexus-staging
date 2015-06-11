@@ -12,6 +12,7 @@ SYNOPSIS
     zanata-nexus-staging-api       [options]
     zanata-nexus-staging-common    [options]
     zanata-nexus-staging-client    [options]
+    zanata-nexus-staging-assets    [options]
 
 OPTIONS
     -h: Show this help
@@ -90,7 +91,11 @@ function ensure_repo(){
 function does_branch_exist(){
     local prj=$1
     local branch=$2
+
+    ensure_repo ${prj}
+    pushd ${WORK_ROOT}/${prj}
     echo -n "### Does ${prj} has branch ${branch}?..."
+
     if git rev-parse --verify ${branch} &>/dev/null;then
         echo "yes" 
         return 0
@@ -98,6 +103,7 @@ function does_branch_exist(){
         echo "no"
         return 1 
     fi
+    popd
 }
 
 : ${WORK_ROOT:=/tmp/zanata}
@@ -150,6 +156,9 @@ case $0 in
     *-common)
 	PROJECT=zanata-common
 	;;
+    *-assets)
+	PROJECT=zanata-assets
+	;;
     *-client)
 	PROJECT=zanata-client
 	;;
@@ -161,7 +170,11 @@ case $0 in
 	;;
 esac
 
-### Set default branches
+if [ ! -d ${WORK_ROOT} ];then
+    mkdir -p ${WORK_ROOT}
+fi
+
+### Determine DEFAULT_BRANCH
 if [ -z "${DEFAULT_BRANCH}" ];then
     case ${PROJECT} in
         tennera | openprops )
@@ -170,28 +183,30 @@ if [ -z "${DEFAULT_BRANCH}" ];then
         zanata-parent )
 	    DEFAULT_BRANCH=integration/master
             ;;
-        zanata-api | zanata-common | zanata-client)
+        * )
 	    DEFAULT_BRANCH=release
             ;;
     esac
 fi
-echo "### Releasing $PROJECT in branch ${DEFAULT_BRANCH}" 
+echo "### Releasing $PROJECT in branch ${DEFAULT_BRANCH}"
 
-if [ ! -d ${WORK_ROOT} ];then
-    mkdir -p ${WORK_ROOT}
+### Determine DEVEL_BRANCH, the branch the new feature developer 
+### will normally submit. 
+### DEVEL_BRANCH is integration/master if it exist, otherwise
+### it is master
+
+if does_branch_exist ${PROJECT} origin/integration/master ;then
+    DEVEL_BRANCH=integration/master
+else
+    DEVEL_BRANCH=master
 fi
-
-ensure_repo ${PROJECT}
+echo "### DEVEL_BRANCH for $PROJECT is ${DEVEL_BRANCH}"  
 
 cd ${WORK_ROOT}/${PROJECT}
 git fetch
 
 HAS_RELEASE_BRANCH=
 does_branch_exist ${PROJECT} origin/release && HAS_RELEASE_BRANCH=1
-
-HAS_INTEGRATION_MASTER_BRANCH=
-does_branch_exist ${PROJECT} origin/integration/master && 
-HAS_INTEGRATION_MASTER_BRANCH=1
 
 ### Update existing release branch
 echo "### Pre-release: update existing release branchs"
@@ -208,31 +223,33 @@ if [ -n "$HAS_RELEASE_BRANCH" ];then
     git push origin release
 fi
 
-### Update existing integration/master branch on BIG_RELEASE
-echo "### Pre-release: update existing integration/master branchs"
-if [ -n "${BIG_RELEASE}" -a -n "$HAS_INTEGRATION_MASTER_BRANCH" ];then
-    git checkout integration/master
+### Update existing DEVEL_BRANCH on BIG_RELEASE
+echo "### Pre-release: update existing DEVEL_BRANCH (${DEVEL_BRANCH})"
+if [ -n "${BIG_RELEASE}" ]; then
+    git checkout ${DEVEL_BRANCH}
 
-    echo "### [pre-release] Branch integration/master merge origin/integration/master"
-    git merge origin/integration/master --ff-only --quiet
+    echo "### [pre-release] Branch ${DEVEL_BRANCH} merge origin/${DEVEL_BRANCH}"
+    git merge origin/${DEVEL_BRANCH} --ff-only --quiet
 
-    echo "### [pre-release] Branch integration/master: Create new version"
+    echo "### [pre-release] Branch ${DEVEL_BRANCH}: Create new version"
     mvn -e release:update-versions -DautoVersionSubmodules=true
 
     git commit pom.xml */pom.xml -m "prepare for next development iteration"
-    git push origin integration/master
-    echo "### [pre-release] integration/master branch updated"
+    git push origin ${DEVEL_BRANCH}
+    echo "### [pre-release] ${DEVEL_BRANCH} branch updated"
 fi
 
 ### Release process
 function release_perform(){
     if [ -z "${SKIP_RELEASE_PLUGIN}" ];then
         git clean -f -d
+
+        ### Other projects might related to zanata-parent
         if [ "$PROJECT" != "zanata-parent" ];then
              ensure_repo zanata-parent
         fi
         
-        echo "### [release_perform] Start"
+        echo "### [release_perform] Start: it should sign artifacts, push $PROJECT to nexus, then close it"
         mvn -e -Dmaven.repo.local=$REPO_LOCAL_DIR -Dgpg.useagent release:clean release:prepare release:perform
         if [ $? -ne 0 ];then
 	    echo_stderr "### [ERROR]: release goals failed"
@@ -249,8 +266,7 @@ git fetch --tags
 git pull
 
 case $PROJECT in
-    zanata-parent | zanata-api | zanata-common )
-	### zanata-parent has only master
+    zanata-parent | zanata-api | zanata-common | zanata-assets )
 	release_perform
 
         echo "### [release] nexus-staging:release"
