@@ -5,7 +5,7 @@ set -e
 function print_usage(){
     cat <<-END
 SYNOPSIS
-    zanata-nexus-staging [options] <PROJECT>
+    zanata-nexus-staging [options] <MODULE>
     zanata-nexus-staging-tennera   [options]
     zanata-nexus-staging-openprops [options]
     zanata-nexus-staging-parent    [options]
@@ -32,14 +32,18 @@ DESCRIPTION
     This program perform the release and push the relese with nexus.
 It can do following tasks:
 
- * For making a X release (e.g. 3.Y.Z -> 4.0.0) or 
-   Y release: (e.g. 3.7.Z -> 3.8.0 ), run:
+ * For making a big release (e.g. 3.Y.Z -> 4.0.0 or 3.7.Z -> 3.8.0 ), run:
 
    zanata-nexus-staging-<module> -b
+
+   It will commit to both RELEASING_BRANCH and DEVEL_BRANCH, see 
+   section ENVIRONMENT for details.
 
  * For making a Z release (e.g. 3.7.0 -> 3.7.1 ), run 
 
    zanata-nexus-staging-<module>
+
+   It will commit to RELEASING_BRANCH.
 
  * If tag is made but release failed, and you fixed it without changing 
    the source, You can resume the release process with 
@@ -48,9 +52,16 @@ It can do following tasks:
 
 
 ENVIRONMENT
-    DEFAULT_BRANCH
-      Branch is automatically determined by PROJECT.
-      Specify Environment DEFAULT_BRANCH to override.
+    RELEASING_BRANCH
+      The branch that release process should be working at. It is:
+         'release' if that branch branch exists; otherwise
+         'integration/master' if that branch exists; otherwise
+         'master'.
+ 
+    DEVEL_BRANCH 
+      The branch for new features. It is:
+         'integration/master' if that branch exists; otherwise
+         'master'.
 	
     WORK_ROOT
       The base directory for repository checkout
@@ -74,11 +85,11 @@ function echo_stderr(){
 }
 
 function ensure_repo(){
-    echo "### Ensure the repo $prj is at ${WORK_ROOT}/${prj}"
-    local prj=$1
-    local git_repo_url="git@github.com:zanata/${prj}.git"
+    local module=$1
+    echo "### Ensure the repo $module is at ${WORK_ROOT}/${module}"
+    local git_repo_url="git@github.com:zanata/${module}.git"
     pushd ${WORK_ROOT}
-    if [ ! -d ${prj} ];then
+    if [ ! -d ${module} ];then
         git clone ${git_repo_url}
         if [ $? -ne 0 ];then
 	    echo_stderr "[ERROR] Failed to clone ${git_repo_url}"
@@ -89,12 +100,12 @@ function ensure_repo(){
 }
 
 function does_branch_exist(){
-    local prj=$1
+    local module=$1
     local branch=$2
 
-    ensure_repo ${prj}
-    pushd ${WORK_ROOT}/${prj}
-    echo -n "### Does ${prj} has branch ${branch}?..."
+    ensure_repo ${module}
+    pushd ${WORK_ROOT}/${module}
+    echo -n "### Does ${module} has branch ${branch}?..."
 
     if git rev-parse --verify ${branch} &>/dev/null;then
         echo "yes" 
@@ -137,33 +148,33 @@ done
 
 shift $((OPTIND-1))
 if [ -n "$1" ];then
-    PROJECT="$1"
+    MODULE="$1"
 fi
 
 case $0 in
     *-tennera)
-	PROJECT=tennera
+	MODULE=tennera
         ;;
     *-openprops)
-	PROJECT=openprops
+	MODULE=openprops
 	;;
     *-parent)
-	PROJECT=zanata-parent
+	MODULE=zanata-parent
 	;;
     *-api)
-	PROJECT=zanata-api
+	MODULE=zanata-api
 	;;
     *-common)
-	PROJECT=zanata-common
+	MODULE=zanata-common
 	;;
     *-assets)
-	PROJECT=zanata-assets
+	MODULE=zanata-assets
 	;;
     *-client)
-	PROJECT=zanata-client
+	MODULE=zanata-client
 	;;
     *)
-	if [ -z "$PROJECT" ]; then
+	if [ -z "$MODULE" ]; then
 	    print_usage
 	    exit ${EXIT_INVALID_OPTIONS}
 	fi
@@ -174,58 +185,52 @@ if [ ! -d ${WORK_ROOT} ];then
     mkdir -p ${WORK_ROOT}
 fi
 
-### Determine DEFAULT_BRANCH
-if [ -z "${DEFAULT_BRANCH}" ];then
-    case ${PROJECT} in
-        tennera | openprops )
-	    DEFAULT_BRANCH=master
-            ;;
-        zanata-parent )
-	    DEFAULT_BRANCH=integration/master
-            ;;
-        * )
-	    DEFAULT_BRANCH=release
-            ;;
-    esac
+### Determine RELEASING_BRANCH
+
+if [ -z "${RELEASING_BRANCH}" ];then
+     if does_branch_exist ${MODULE} origin/release ;then
+         RELEASING_BRANCH=release
+     elif does_branch_exist ${MODULE} origin/integration/master ;then
+         RELEASING_BRANCH=integration/master
+     else
+         RELEASING_BRANCH=master
+    fi
 fi
-echo "### Releasing $PROJECT in branch ${DEFAULT_BRANCH}"
+echo "### RELEASING_BRANCH for $MODULE is ${RELEASING_BRANCH}"  
 
 ### Determine DEVEL_BRANCH, the branch the new feature developer 
 ### will normally submit. 
 ### DEVEL_BRANCH is integration/master if it exist, otherwise
 ### it is master
 
-if does_branch_exist ${PROJECT} origin/integration/master ;then
+if does_branch_exist ${MODULE} origin/integration/master ;then
     DEVEL_BRANCH=integration/master
 else
     DEVEL_BRANCH=master
 fi
-echo "### DEVEL_BRANCH for $PROJECT is ${DEVEL_BRANCH}"  
+echo "### DEVEL_BRANCH for $MODULE is ${DEVEL_BRANCH}"  
 
-cd ${WORK_ROOT}/${PROJECT}
+cd ${WORK_ROOT}/${MODULE}
 git fetch
 
-HAS_RELEASE_BRANCH=
-does_branch_exist ${PROJECT} origin/release && HAS_RELEASE_BRANCH=1
+echo "### [pre-release] ============================== Start"
+echo "### [pre-release] updating existing RELEASING_BRANCH (${RELEASING_BRANCH})"
+git checkout ${RELEASING_BRANCH}
 
-### Update existing release branch
-echo "### Pre-release: update existing release branchs"
-if [ -n "$HAS_RELEASE_BRANCH" ];then
-    git checkout release
+echo "### [pre-release] Branch ${RELEASING_BRANCH}: merge origin/${RELEASING_BRANCH}"
+git merge origin/${RELEASING_BRANCH} --ff-only --quiet
 
-    echo "### [pre-release] Branch release: merge origin/release"
-    git merge origin/release --ff-only --quiet
-    if [ -n "${BIG_RELEASE}" ];then
-        echo "### [pre-release] Branch release: merge origin/master as we do the big release"
-        git merge origin/master --ff-only --quiet
-    fi
-    echo "### [pre-release] Branch release: updated"
-    git push origin release
+if [ -n "${BIG_RELEASE}" -a "${RELEASING_BRANCH}" != "master" ];then
+    echo "### [pre-release] Branch ${RELEASING_BRANCH}: merge origin/master as we do the big release"
+    git merge origin/master --ff-only --quiet
+
+    echo "### [pre-release] Branch ${RELEASING_BRANCH}: pushing back to origin"
+    git push origin ${RELEASING_BRANCH}
 fi
 
 ### Update existing DEVEL_BRANCH on BIG_RELEASE
-echo "### Pre-release: update existing DEVEL_BRANCH (${DEVEL_BRANCH})"
 if [ -n "${BIG_RELEASE}" ]; then
+    echo "### Pre-release: update existing DEVEL_BRANCH (${DEVEL_BRANCH}) for big release"
     git checkout ${DEVEL_BRANCH}
 
     echo "### [pre-release] Branch ${DEVEL_BRANCH} merge origin/${DEVEL_BRANCH}"
@@ -234,22 +239,28 @@ if [ -n "${BIG_RELEASE}" ]; then
     echo "### [pre-release] Branch ${DEVEL_BRANCH}: Create new version"
     mvn -e release:update-versions -DautoVersionSubmodules=true
 
-    git commit pom.xml */pom.xml -m "prepare for next development iteration"
+    git commit $(find . -name 'pom.xml' | xargs ) -m "prepare for next development iteration"
     git push origin ${DEVEL_BRANCH}
     echo "### [pre-release] ${DEVEL_BRANCH} branch updated"
 fi
 
-### Release process
+echo "### [pre-release] back to RELEASING_BRANCH (${RELEASING_BRANCH})"
+git checkout ${RELEASING_BRANCH}
+git fetch --tags
+git pull
+
+echo "### [release] ============================== Start"
 function release_perform(){
     if [ -z "${SKIP_RELEASE_PLUGIN}" ];then
         git clean -f -d
 
-        ### Other projects might related to zanata-parent
-        if [ "$PROJECT" != "zanata-parent" ];then
+        ### Other MODULEs might related to zanata-parent
+        if [ "$MODULE" != "zanata-parent" ];then
              ensure_repo zanata-parent
         fi
         
-        echo "### [release_perform] Start: it should sign artifacts, push $PROJECT to nexus, then close it"
+        echo "### [release_perform] ============================== Start" 
+        echo "###it should sign artifacts, push $MODULE to nexus, then close it"
         mvn -e -Dmaven.repo.local=$REPO_LOCAL_DIR -Dgpg.useagent release:clean release:prepare release:perform
         if [ $? -ne 0 ];then
 	    echo_stderr "### [ERROR]: release goals failed"
@@ -260,12 +271,7 @@ function release_perform(){
     return 0
 }
 
-echo "### [release] Start"
-git checkout ${DEFAULT_BRANCH}
-git fetch --tags
-git pull
-
-case $PROJECT in
+case $MODULE in
     zanata-parent | zanata-api | zanata-common | zanata-assets )
 	release_perform
 
@@ -306,7 +312,7 @@ case $PROJECT in
 	;;
 
     * )
-	### Project like tennera or openprops
+	### MODULE like tennera or openprops
 	### These have only master
 	release_perform
 	mvn -e nexus-staging:close nexus-staging:release
