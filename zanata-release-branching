@@ -1,0 +1,105 @@
+#!/bin/bash
+### NAME
+###     zanata-release-branching - Do branching for big release (non-point release).
+###
+### SYNOPSIS
+###     zanata-release-branching <module> <developmentVersion>
+### 
+### DESCRIPTION
+###     This script performs branching chores for big releases of
+###     zanata-client and zanata-server.
+### 
+
+set -e
+SCRIPT_DIR=$(dirname $(readlink  -q -f $0))
+FUNCTION_SCRIPT_FILE=${SCRIPT_DIR}/zanata-functions
+source "${FUNCTION_SCRIPT_FILE}"
+
+if [ $# -ne 2 ];then
+    zanata_script_help $0
+fi
+
+MODULE=$1
+developmentVersion=$2
+shift
+
+echo_stderr "### [prepare] ============================== Start"
+if [ ! -d ${WORK_ROOT} ];then
+    mkdir -p ${WORK_ROOT}
+fi
+
+ensure_repo ${MODULE}
+cd ${WORK_ROOT}/${MODULE}
+git fetch
+
+echo_stderr "### [prepare] Check the branches exist"
+for b in origin/release origin/integration/master ;do
+    if ! does_branch_exist ${MODULE} $b ; then
+	echo_stderr "### [Fatal] ${MODULE} does not have $b !"
+	exit ${EXIT_FATAL_MISSING_DEPENDENCY}
+    fi
+done
+
+echo_stderr "### [prepare] Clean up local branch"
+git checkout integration/master
+for b in legacy release ;do
+    if does_branch_exist ${MODULE} $b ; then
+	echo_stderr "### [prepare] clean $b for ${MODULE}"
+	git branch -D $b
+	git checkout --track origin/$b
+    fi
+done
+
+pushRepo=()
+echo_stderr "### [prepare] Done"
+
+if does_branch_exist ${MODULE} origin/legacy ; then
+    echo_stderr "### [release->legacy] ============================== Start"
+    echo_stderr "### [release->legacy] Point 'legacy' at previous 'release'"
+    if ! git merge origin/release --ff-only; then
+        echo_stderr "### [FATAL] please check for cherry-picked commits in legacy which were never merged into release"
+        exit ${EXIT_FATAL_FAIL}
+    fi
+
+    pushRepo+=(legacy)
+    echo_stderr "### [release->legacy] Done"
+fi
+
+if [ -r zanata.xml -a "$MODULE" = "zanata-server" ];then
+    echo_stderr "### [translation update] ============================== Start"
+    echo_stderr "### [translation update] update translation in integration/master"
+    git checkout integration/master && git reset --hard origin/integration/master
+    echo_stderr "### [translation update] Get latest translations and commit to local integration/master before branching"
+    mvn zanata:pull -B
+    git add **/src/main/resources/**/*_*.properties
+    mvn -q com.googlecode.l10n-maven-plugin:l10n-maven-plugin:1.8:validate -pl zanata-war
+    git commit -m "Fetch updated translations from translate.zanata.org"
+    git push origin integration/master
+    echo_stderr "### [translation update] Done"
+fi
+
+echo_stderr "### [integration/master->release] ============================== Start"
+git checkout release
+
+echo_stderr  "### [integration/master->release] Point 'release' at local integration/master"
+if ! git merge integration/master --ff-only; then
+    echo_stderr "### [FATAL] please check for cherry-picked commits in release which were never merged into integration/master"
+    exit ${EXIT_FATAL_FAIL}
+fi
+pushRepo+=(release)
+echo_stderr "### [integration/master->release] Done"
+
+echo_stderr "### [Final] ============================== Start"
+echo_stderr "### [Final] Update integration/master version"
+git checkout integration/master
+mvn release:update-versions -DautoVersionSubmodules=true -DdevelopmentVersion=${developmentVersion}
+git commit pom.xml */pom.xml -m "prepare for next development iteration"
+pushRepo+=(integration/master)
+
+echo_stderr "### [Final] Push all the changes back"
+git push origin ${pushRepo[@]}
+
+echo_stderr "### [Final] Done"
+cat>/dev/stderr<<END
+Please remember to announce the branching in IRC and zanata-devel.
+END

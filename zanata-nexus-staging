@@ -74,55 +74,13 @@ ENVIRONMENT
       This should NOT be your normal work maven repo
 	
 EXIT_STATUS
-    EXIT_INVALID_OPTIONS=3
-    EXIT_FAIL_TO_CLONE=4
-    EXIT_RELEASE_GOAL_FAIL=5
 END
+    ${FUNCTION_SCRIPT_FILE} exit-status-help
 }
 
-function echo_stderr(){
-    echo "$1" > /dev/stderr
-}
-
-function ensure_repo(){
-    local module=$1
-    echo "### Ensure the repo $module is at ${WORK_ROOT}/${module}"
-    local git_repo_url="git@github.com:zanata/${module}.git"
-    pushd ${WORK_ROOT}
-    if [ ! -d ${module} ];then
-        git clone ${git_repo_url}
-        if [ $? -ne 0 ];then
-	    echo_stderr "[ERROR] Failed to clone ${git_repo_url}"
-	    exit ${EXIT_FAIL_TO_CLONE}
-       fi
-    fi
-    popd
-}
-
-function does_branch_exist(){
-    local module=$1
-    local branch=$2
-
-    ensure_repo ${module}
-    pushd ${WORK_ROOT}/${module}
-    echo -n "### Does ${module} has branch ${branch}?..."
-
-    if git rev-parse --verify ${branch} &>/dev/null;then
-        echo "yes" 
-        return 0
-    else
-        echo "no"
-        return 1 
-    fi
-    popd
-}
-
-: ${WORK_ROOT:=/tmp/zanata}
-: ${REPO_LOCAL_DIR:=/tmp/maven-central-release-repo}
-
-EXIT_INVALID_OPTIONS=3
-EXIT_FAIL_TO_CLONE=4
-EXIT_RELEASE_GOAL_FAIL=5
+SCRIPT_DIR=$(dirname $(readlink  -q -f $0))
+FUNCTION_SCRIPT_FILE=${SCRIPT_DIR}/zanata-functions
+source "${FUNCTION_SCRIPT_FILE}"
 
 BIG_RELEASE=
 SKIP_RELEASE_PLUGIN=
@@ -130,7 +88,7 @@ SKIP_RELEASE_PLUGIN=
 while getopts "brh" opt;do
     case $opt in
 	h )
-	    pring_usage
+	    print_usage
 	    exit 0
 	    ;;
         b )
@@ -141,7 +99,7 @@ while getopts "brh" opt;do
 	    ;;
 	* )
 	    echo "Invalid option $opt" > /dev/stderr
-	    exit ${EXIT_INVALID_OPTIONS}
+	    exit ${EXIT_FATAL_INVALID_OPTIONS}
 	    ;;
     esac
 done
@@ -176,7 +134,7 @@ case $0 in
     *)
 	if [ -z "$MODULE" ]; then
 	    print_usage
-	    exit ${EXIT_INVALID_OPTIONS}
+	    exit ${EXIT_FATAL_INVALID_OPTIONS}
 	fi
 	;;
 esac
@@ -186,28 +144,11 @@ if [ ! -d ${WORK_ROOT} ];then
 fi
 
 ### Determine RELEASING_BRANCH
-
-if [ -z "${RELEASING_BRANCH}" ];then
-     if does_branch_exist ${MODULE} origin/release ;then
-         RELEASING_BRANCH=release
-     elif does_branch_exist ${MODULE} origin/integration/master ;then
-         RELEASING_BRANCH=integration/master
-     else
-         RELEASING_BRANCH=master
-    fi
-fi
+: ${RELEASING_BRANCH:=$(get_releasing_branch $MODULE)}
 echo "### RELEASING_BRANCH for $MODULE is ${RELEASING_BRANCH}"  
 
-### Determine DEVEL_BRANCH, the branch the new feature developer 
-### will normally submit. 
-### DEVEL_BRANCH is integration/master if it exist, otherwise
-### it is master
 
-if does_branch_exist ${MODULE} origin/integration/master ;then
-    DEVEL_BRANCH=integration/master
-else
-    DEVEL_BRANCH=master
-fi
+: ${DEVEL_BRANCH:=$(get_devel_branch $MODULE)}
 echo "### DEVEL_BRANCH for $MODULE is ${DEVEL_BRANCH}"  
 
 cd ${WORK_ROOT}/${MODULE}
@@ -264,7 +205,7 @@ function release_perform(){
 	mvn -e -Dmaven.repo.local=$REPO_LOCAL_DIR -Dgpg.useagent release:clean release:prepare release:perform -Psonatype-oss-release
         if [ $? -ne 0 ];then
 	    echo_stderr "### [ERROR]: release goals failed"
-	    exit ${EXIT_RELEASE_GOAL_FAIL}
+	    exit ${EXIT_FATAL_FAIL}
         fi
     fi
     echo "### [release_perform] Done"
