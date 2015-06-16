@@ -53,13 +53,15 @@ It can do following tasks:
 
 ENVIRONMENT
     RELEASING_BRANCH
-      The branch that release process should be working at. It is:
-         'release' if that branch branch exists; otherwise
+      The branch that we recommend downstream to use, and 
+      release process should mainly happen here.
+      It is:
+         'release' if that branch exists; otherwise
          'integration/master' if that branch exists; otherwise
          'master'.
  
     DEVEL_BRANCH 
-      The branch for new features. It is:
+      The branch for committing new features. It is:
          'integration/master' if that branch exists; otherwise
          'master'.
 	
@@ -207,8 +209,8 @@ function release_perform(){
 	    echo_stderr "### [ERROR]: release goals failed"
 	    exit ${EXIT_FATAL_FAIL}
         fi
+	echo "### [release_perform] Done"
     fi
-    echo "### [release_perform] Done"
     return 0
 }
 

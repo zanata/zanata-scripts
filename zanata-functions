@@ -81,10 +81,12 @@ function does_branch_exist(){
 }
 
 ###     get_releasing_branch <module>
-###         Determine RELEASING_BRANCH, the branch the new feature developer 
-###         will normally submit. 
-###         RELEASING_BRANCH is integration/master if it exist, otherwise
-###         it is master
+###         Determine RELEASING_BRANCH, the branch that we recommend downstream to use, 
+###         and release process should mainly happen here.
+###         It is:
+###             'release' if that branch exists; otherwise
+###             'integration/master' if that branch exists; otherwise
+###              'master'.
 function get_releasing_branch(){
     local module=$1
     if does_branch_exist ${MODULE} origin/release ;then
@@ -99,10 +101,10 @@ function get_releasing_branch(){
 }
 
 ###     get_devel_branch <module>
-###         Determine DEVEL_BRANCH, the branch the new feature developer 
-###         will normally submit. 
-###         DEVEL_BRANCH is integration/master if it exist, otherwise
-###         it is master
+###         Determine DEVEL_BRANCH, the branch for committing new features. 
+###         It is:
+###             'integration/master' if that branch exists; otherwise
+###             'master'.
 function get_devel_branch(){
     local module=$1
     if does_branch_exist ${MODULE} origin/integration/master ;then
