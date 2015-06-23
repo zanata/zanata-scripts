@@ -46,6 +46,9 @@ function ensure_repo(){
     local module=$1
     echo_stderr "### Ensure the repo $module is at ${WORK_ROOT}/${module}"
     local git_repo_url=$(get_git_url ${module})
+    if [ ! -d ${WORK_ROOT} ];then
+        mkdir -p ${WORK_ROOT}
+    fi
     pushd ${WORK_ROOT} >/dev/null
     if [ ! -d ${module} ];then
         git clone "${git_repo_url}"
