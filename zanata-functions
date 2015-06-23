@@ -41,23 +41,64 @@ function get_git_url(){
     echo "${ZANATA_GIT_URL_PREFIX}/$1.git"
 }
 
-###     ensure_repo <module>
-function ensure_repo(){
-    local module=$1
-    echo_stderr "### Ensure the repo $module is at ${WORK_ROOT}/${module}"
-    local git_repo_url=$(get_git_url ${module})
-    if [ ! -d ${WORK_ROOT} ];then
-        mkdir -p ${WORK_ROOT}
+###     checkout_releasing_branch <module> 
+###         checkout RELEASING_BRANCH, the branch that we recommend downstream to use.
+function checkout_releasing_branch(){
+    local branchType=$1
+    local module=$2
+    local branch=$(get_releasing_branch $module)
+    pushd ${WORK_ROOT}/${module} >/dev/null
+    git fetch
+    git checkout ${branch}
+    popd >/dev/null
+}
+
+###     checkout_devel_branch <module> 
+###         checkout DEVEL_BRANCH, the branch the branch for committing new features.
+function checkout_devel_branch(){
+    local branchType=$1
+    local module=$2
+    local branch=$(get_devel_branch $module)
+    pushd ${WORK_ROOT}/${module} >/dev/null
+    git fetch
+    git checkout ${branch}
+    popd >/dev/null
+}
+
+###     ensure_repo_generic <parentDir> <module> [git_repo_url]
+###         Ensure repo is at <parentDir>/<module>
+function ensure_repo_generic(){
+    local parentDir=$1
+    local module=$2
+    local git_repo_url=$3
+    echo_stderr "### Ensure the repo $module is at ${parentDir}/${module}"
+    if [ -z "$git_repo_url" ];then
+	git_repo_url=$(get_git_url ${module})
     fi
-    pushd ${WORK_ROOT} >/dev/null
+    if [ ! -d ${parentDir} ];then
+	mkdir -p ${parentDir}
+    fi
+    pushd ${parentDir} >/dev/null
     if [ ! -d ${module} ];then
-        git clone "${git_repo_url}"
+	git clone "${git_repo_url}"
         if [ $? -ne 0 ];then
-            echo_stderr "[ERROR] Failed to clone ${git_repo_url}"
-            exit ${EXIT_FATAL_MISSING_DEPENDENCY}
+	    echo_stderr "[ERROR] Failed to clone ${git_repo_url}"
+	    exit ${EXIT_FATAL_MISSING_DEPENDENCY}
         fi
     fi
     popd >/dev/null
+}
+
+###     ensure_repo <module> [git_repo_url]
+###         Ensure repo is at $WORK_ROOT/<module>
+function ensure_repo(){
+    ensure_repo_generic "$WORK_ROOT" "$1" "$2"
+}
+
+###     ensure_devel_repo <module> [git_repo_url]
+###         Ensure repo is at $DEVEL_ROOT/<module>
+function ensure_devel_repo(){
+    ensure_repo_generic "$DEVEL_ROOT" "$1" "$2"
 }
 
 ###     does_branch_exist <module> <branch>
@@ -120,6 +161,8 @@ function get_devel_branch(){
 
 ###
 ### EXIT_STATUS
+###     Success
+###         EXIT_OK
 declare EXIT_OK=0
 
 ###     Fatal should stop immediately.
