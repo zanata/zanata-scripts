@@ -145,6 +145,7 @@ if [ ! -d ${WORK_ROOT} ];then
     mkdir -p ${WORK_ROOT}
 fi
 
+ensure_repo ${MODULE}
 ### Determine RELEASING_BRANCH
 : ${RELEASING_BRANCH:=$(get_releasing_branch $MODULE)}
 echo "### RELEASING_BRANCH for $MODULE is ${RELEASING_BRANCH}"  
@@ -215,45 +216,13 @@ function release_perform(){
 }
 
 case $MODULE in
-    zanata-parent | zanata-api | zanata-common | zanata-assets )
+    zanata-assets | zanata-parent | zanata-api | zanata-common | zanata-client)
 	release_perform
 
         echo "### [release] nexus-staging:release"
 	mvn -e nexus-staging:release -Psonatype-oss-release \
 	    -DstagingRepositoryId=$(grep -oP '^stagingRepository\.id=\K.*' target/checkout/target/nexus-staging/staging/*.properties)
 	;;
-    zanata-client )
-	### auto nexus-staging does not seem to work with zanata-client
-	### Need to use manual bundle jars
-	release_perform
-
-        ### Create and sign the artifacts
-        echo "### [release] Create and sign the artifacts"
-	mvn -e clean deploy source:jar javadoc:jar jar:jar gpg:sign -Dgpg.useagent -DskipTests=true -DskipArqTests=true -Dfindbugs.skip=true 
-
-	### make bundles for each submodules:
-	SUBMODULES=(. zanata-cli zanata-client-commands zanata-maven-plugin zanata-rest-client)
-	BUNDLE_JARS=()
-	for sm in "${SUBMODULES[@]}"; do
-	    pushd ${sm}/target
-	    jar cvf bundle.jar $(for i in `LANG=C find . -name  "*.asc" | sed -e 's/.asc$//' | xargs`;do echo -n $i $i.asc " ";done)
-	    BUNDLE_JARS+="${sm}/target/bundle.jar"
-	    popd
-	done
-
-	### Notify user to upload bundles
-	cat <<-END
-	Please:
-	1. Login to oss.sonatype.org
-	2. On Left panel, under Build Promotion section, click Staging Upload
-	3. Upload following files:
-	END
-
-	for bj in "${BUNDLE_JARS[@]}"; do
-	    echo "$bj"
-	done
-	;;
-
     * )
 	### MODULE like tennera or openprops
 	### These have only master
