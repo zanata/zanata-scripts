@@ -160,6 +160,7 @@ git fetch
 echo "### [pre-release] ============================== Start"
 echo "### [pre-release] updating existing RELEASING_BRANCH (${RELEASING_BRANCH})"
 git checkout ${RELEASING_BRANCH}
+git pull
 
 echo "### [pre-release] Branch ${RELEASING_BRANCH}: merge origin/${RELEASING_BRANCH}"
 git merge origin/${RELEASING_BRANCH} --ff-only --quiet
