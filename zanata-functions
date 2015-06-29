@@ -44,8 +44,7 @@ function get_git_url(){
 ###     checkout_releasing_branch <module> 
 ###         checkout RELEASING_BRANCH, the branch that we recommend downstream to use.
 function checkout_releasing_branch(){
-    local branchType=$1
-    local module=$2
+    local module=$1
     local branch=$(get_releasing_branch $module)
     pushd ${WORK_ROOT}/${module} >/dev/null
     git fetch
@@ -56,8 +55,7 @@ function checkout_releasing_branch(){
 ###     checkout_devel_branch <module> 
 ###         checkout DEVEL_BRANCH, the branch the branch for committing new features.
 function checkout_devel_branch(){
-    local branchType=$1
-    local module=$2
+    local module=$1
     local branch=$(get_devel_branch $module)
     pushd ${WORK_ROOT}/${module} >/dev/null
     git fetch
