@@ -159,6 +159,18 @@ function get_devel_branch(){
     return 0
 }
 
+###     time-stamp [DATE_FORMAT]
+###         Use stamp like "2015-06-29-06:56:34-953717856", base on UTC
+###         Default: '%F-%R-%N'
+###
+function time-stamp(){
+    local DATE_FORMAT=$1
+    if [ -z "$DATE_FORMAT" ];then
+	DATE_FORMAT='%F-%R-%N'
+    fi
+    date -u +"$DATE_FORMAT"
+}
+
 ###
 ### EXIT_STATUS
 ###     Success
