@@ -13,18 +13,20 @@
 : ${ZANATA_GIT_URL_PREFIX:=git@github.com:zanata}
 
 ### FUNCTIONS
-function zanata_script_help_header(){
+function zanata_functions_get_path(){
     shopt -s extdebug
+    declare -F zanata_functions_get_path | sed -e 's|^[^/]*||'
+    shopt -u extdebug
+}
+
+function zanata_script_help_header(){
     local script=$1
     [ -z "$script" ] && script=$0
     sed -n -e '/^###/ {s|^###||p}' $script |  sed -e '/^\s*EXIT_STATUS/,$d'
 }
 
 function zanata_script_exit_status_help(){
-    shopt -s extdebug
-    local script=$(declare -F zanata_script_exit_status_help | sed -e 's|^[^/]*||')
-    shopt -u extdebug
-    sed -n -e '/^###/ {s|^###||p}' $script | sed -e '0,/^\s*EXIT_STATUS/d'
+    sed -n -e '/^###/ {s|^###||p}' $(zanata_functions_get_path) | sed -e '0,/^\s*EXIT_STATUS/d'
 }
 
 function zanata_script_help(){
@@ -60,6 +62,61 @@ function checkout_devel_branch(){
     pushd ${WORK_ROOT}/${module} >/dev/null
     git fetch
     git checkout ${branch}
+    popd >/dev/null
+}
+
+###     detect_module_tag <module>
+###         Print latest tag of module
+###         
+function detect_module_tag(){
+    local module=$1
+    ensure_repo ${module}
+
+    pushd ${WORK_ROOT}/${module} >/dev/null
+    checkout_releasing_branch ${module} 1>/dev/stderr
+
+    git fetch --tags 1>/dev/stderr
+    local latestTag=$(git describe --abbrev=0 --tags)
+    popd >/dev/null
+
+    echo_stderr "### detect_module_version: ${module}: Latest tag: $latestTag"
+    echo "${latestTag}"
+}
+
+###     detect_module_version <module>
+###         Print latest tagged module version.
+###         
+function detect_module_version(){
+    local module=$1
+    local latestTag=$(detect_module_tag ${module})
+    local version=$(sed -e 's/[a-z]*-//' <<< ${latestTag})
+    test -n "$version"
+    exit_if_failed "$?" ${EXIT_FATAL_FAIL} "Failed to get version from ${module}"
+
+    echo_stderr "### detect_module_version: ${module}: Version: $version"
+    echo "$version"
+}
+
+###     does_branch_exist <module> <branch>
+function does_branch_exist(){
+    local module=$1
+    local branch=$2
+
+    if [ ! -d "${WORK_ROOT}/${module}" ];then
+	echo_stderr "[ERROR] ${WORK_ROOT}/${module} does not exist"
+	exit ${EXIT_FATAL_MISSING_DEPENDENCY}
+    fi
+
+    pushd ${WORK_ROOT}/${module} >/dev/null
+    echo_stderr -n "### Does ${module} has branch ${branch}?..."
+
+    if git rev-parse --verify ${branch} &>/dev/null;then
+	echo_stderr "yes" 
+	return 0
+    else
+	echo_stderr "no"
+	return ${EXIT_RETURN_FALSE}
+    fi
     popd >/dev/null
 }
 
@@ -99,28 +156,48 @@ function ensure_devel_repo(){
     ensure_repo_generic "$DEVEL_ROOT" "$1" "$2"
 }
 
-###     does_branch_exist <module> <branch>
-function does_branch_exist(){
-    local module=$1
-    local branch=$2
-
-    if [ ! -d "${WORK_ROOT}/${module}" ];then
-	echo_stderr "[ERROR] ${WORK_ROOT}/${module} does not exist"
-	exit ${EXIT_FATAL_MISSING_DEPENDENCY}
+###     exit_if_failed <var> <exitStatus> <exitMsg>
+function exit_if_failed(){
+    if [ $1 -ne 0 ];then
+	local exitStatus=$2
+	EXIT_MSG="$3"
+	exit $exitStatus
     fi
-
-    pushd ${WORK_ROOT}/${module} >/dev/null
-    echo_stderr -n "### Does ${module} has branch ${branch}?..."
-
-    if git rev-parse --verify ${branch} &>/dev/null;then
-        echo_stderr "yes" 
-        return 0
-    else
-        echo_stderr "no"
-        return ${EXIT_RETURN_FALSE}
-    fi
-    popd >/dev/null
 }
+
+###     exit_print_error
+###         Print error message just before exit
+###         Environment:
+###             EXIT_MSG: Error message to print.
+###
+EXIT_MSG=
+function exit_print_error(){
+    local exitStatus=$?
+    case $exitStatus in
+	${EXIT_OK} )
+	    echo_stderr "### Done ${EXIT_MSG}"
+	    ;;
+	${EXIT_FATAL_INVALID_OPTIONS} )
+	    zanata_script_help $0
+	    echo_stderr "### [FATAL] Invalid Options: ${EXIT_MSG}"
+	    ;;
+	${EXIT_FATAL_MISSING_DEPENDENCIES} )
+	    echo_stderr "### [FATAL] Missing dependencies: ${EXIT_MSG}"
+	    ;;
+	${EXIT_FATAL_UNKNOWN_MODULE} )
+	    zanata_script_help $0
+	    echo_stderr "### [FATAL] Unknown or Invalid module: ${EXIT_MSG}"
+	    ;;
+	${EXIT_FATAL_FAIL} )
+	    echo_stderr "### [FATAL] Fail: ${EXIT_MSG}"
+	    ;;
+	* )
+	    echo_stderr "### Unexpected Exit: ${EXIT_MSG}"
+	    ;;
+    esac
+    exit ${exitStatus}
+}
+
 
 ###     get_releasing_branch <module>
 ###         Determine RELEASING_BRANCH, the branch that we recommend downstream to use, 
@@ -131,10 +208,10 @@ function does_branch_exist(){
 ###              'master'.
 function get_releasing_branch(){
     local module=$1
-    if does_branch_exist ${MODULE} origin/release ;then
+    if does_branch_exist ${module} origin/release ;then
         echo "release"
         return 0
-    elif does_branch_exist ${MODULE} origin/integration/master ;then
+    elif does_branch_exist ${module} origin/integration/master ;then
         echo "integration/master"
         return 0
     fi
@@ -149,12 +226,67 @@ function get_releasing_branch(){
 ###             'master'.
 function get_devel_branch(){
     local module=$1
-    if does_branch_exist ${MODULE} origin/integration/master ;then
+    if does_branch_exist ${module} origin/integration/master ;then
         echo "integration/master"
         return 0
     fi
     echo "master"
     return 0
+}
+
+###     get_module <commandName>
+###         Determine module.
+###         Print: <module or - for unknown>
+###
+function get_module(){
+    case $1 in
+	*jgettext)
+	    echo "jgettext"
+	    ;;
+	*openprops)
+	    echo "openprops"
+	    ;;
+	*parent)
+	    echo "zanata-parent"
+	    ;;
+	*api)
+	    echo "zanata-api"
+	    ;;
+	*common)
+	    echo "zanata-common"
+	    ;;
+	*client)
+	    echo "zanata-client"
+	    ;;
+	*server)
+	    echo "zanata-server"
+	    ;;
+	*)
+	    echo "-"
+	    ;;
+    esac
+}
+
+###     get_module_from_command <firstArg>
+###         Determine module. or exit with EXIT_FATAL_UNKNOWN_MODULE
+###         Print: <module> <isShift>
+###             module: module name
+###             isShift: 1 for need shift, 0 otherwise.
+###
+function get_module_from_command(){
+    local firstArg=$1
+
+    Module=$(get_module $0)
+    if [ "x$Module" = "x-" ];then
+	Module=$(get_module $firstArg)
+	if [ "x$Module" = "x-" ];then
+	    exit ${EXIT_FATAL_UNKNOWN_MODULE}
+	else
+	    echo "$Module 1"
+	fi
+    else
+	echo "$Module 0"
+    fi
 }
 
 ###     time-stamp [DATE_FORMAT]
@@ -186,11 +318,14 @@ declare EXIT_FATAL_INVALID_OPTIONS=3
 ###         EXIT_FATAL_MISSING_DEPENDENCY: Cannot find dependency
 declare EXIT_FATAL_MISSING_DEPENDENCY=4
 
+###         EXIT_FATAL_UNKNOWN_MODULE: Invalid or unknown module name.
+declare EXIT_FATAL_UNKNOWN_MODULE=5
+
 ###         EXIT_FATAL_FAIL: Script detected that a fatal error occurred.
 declare EXIT_FATAL_FAIL=5
 
 ###     Error that need to stop before next step.
-###         EXIT_ERROT_FAIL: Script detected that an error occurred.
+###         EXIT_ERROR_FAIL: Script detected that an error occurred.
 declare EXIT_ERROR_FAIL=20
 
 ###     Return value, should not print error messages.
