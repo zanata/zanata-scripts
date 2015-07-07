@@ -89,7 +89,7 @@ function detect_module_tag(){
 function detect_module_version(){
     local module=$1
     local latestTag=$(detect_module_tag ${module})
-    local version=$(sed -e 's/[a-z]*-//' <<< ${latestTag})
+    local version=$(sed -e 's/.*-\([^-]*\)/\1/' <<< ${latestTag})
     test -n "$version"
     exit_if_failed "$?" ${EXIT_FATAL_FAIL} "Failed to get version from ${module}"
 

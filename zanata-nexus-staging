@@ -206,7 +206,7 @@ function release_perform(){
         
         echo "### [release_perform] ============================== Start" 
         echo "###it should sign artifacts, push $MODULE to nexus, then close it"
-	mvn -e -Dmaven.repo.local=$REPO_LOCAL_DIR -Dgpg.useagent release:clean release:prepare release:perform -Psonatype-oss-release
+	mvn -e -Dmaven.repo.local=$REPO_LOCAL_DIR -Dgpg.useagent release:clean release:prepare release:perform -Psonatype-oss-release -DupdateReleaseInfo=true
         if [ $? -ne 0 ];then
 	    echo_stderr "### [ERROR]: release goals failed"
 	    exit ${EXIT_FATAL_FAIL}
