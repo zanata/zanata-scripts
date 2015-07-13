@@ -1,97 +1,99 @@
 #!/bin/bash
-
 set -e
-
-function print_usage(){
-    cat <<-END
-SYNOPSIS
-    zanata-nexus-staging [options] <MODULE>
-    zanata-nexus-staging-tennera   [options]
-    zanata-nexus-staging-openprops [options]
-    zanata-nexus-staging-parent    [options]
-    zanata-nexus-staging-api       [options]
-    zanata-nexus-staging-common    [options]
-    zanata-nexus-staging-client    [options]
-    zanata-nexus-staging-assets    [options]
-
-OPTIONS
-    -h: Show this help
-    -b: Big release.
-        Integration/master need to be updated.
-        (e.g. when releasing from 3.7.X -> 3.8.0).
-        If not specified, only the default branch will be touch
-        (e.g. when releasing from 3.7.0 -> 3.7.1 ).
-	Default branch is:
-	  release if it has release; otherwise
-	  integration/master if it has release; otherwise
-	  master.
-
-    -r: Skip release plugin
-
-DESCRIPTION
-    This program perform the release and push the relese with nexus.
-It can do following tasks:
-
- * For making a big release (e.g. 3.Y.Z -> 4.0.0 or 3.7.Z -> 3.8.0 ), run:
-
-   zanata-nexus-staging-<module> -b
-
-   It will commit to both RELEASING_BRANCH and DEVEL_BRANCH, see 
-   section ENVIRONMENT for details.
-
- * For making a Z release (e.g. 3.7.0 -> 3.7.1 ), run 
-
-   zanata-nexus-staging-<module>
-
-   It will commit to RELEASING_BRANCH.
-
- * If tag is made but release failed, and you fixed it without changing 
-   the source, You can resume the release process with 
-  
-   zanata-nexus-staging-<module> -r
-
-
-ENVIRONMENT
-    RELEASING_BRANCH
-      The branch that we recommend downstream to use, and 
-      release process should mainly happen here.
-      It is:
-         'release' if that branch exists; otherwise
-         'integration/master' if that branch exists; otherwise
-         'master'.
- 
-    DEVEL_BRANCH 
-      The branch for committing new features. It is:
-         'integration/master' if that branch exists; otherwise
-         'master'.
-	
-    WORK_ROOT
-      The base directory for repository checkout
-      As maven release plugin generally require a clean git working tree
-      This script will clean it for you.
-      Thus it is better not use normal working directory.
-	
-    REPO_LOCAL_DIR (Optional)
-      The directory for maven repo
-      This should NOT be your normal work maven repo
-	
-EXIT_STATUS
-END
-    ${FUNCTION_SCRIPT_FILE} exit-status-help
-}
+### NAME
+###     zanata-nexus-staging - Staging and Release to Sonatype nexus
+###
+### SYNOPSIS
+###     zanata-nexus-staging [options] <MODULE>
+###     zanata-nexus-staging-tennera   [options]
+###     zanata-nexus-staging-openprops [options]
+###     zanata-nexus-staging-parent    [options]
+###     zanata-nexus-staging-api       [options]
+###     zanata-nexus-staging-common    [options]
+###     zanata-nexus-staging-client    [options]
+###     zanata-nexus-staging-assets    [options]
+### 
+### OPTIONS
+###     -h: Show this help
+###     -b: Big release.
+###         Integration/master need to be updated.
+###         (e.g. when releasing from 3.7.X -> 3.8.0).
+###         If not specified, only the default branch will be touch
+###         (e.g. when releasing from 3.7.0 -> 3.7.1 ).
+### 	Default branch is:
+### 	  release if it has release; otherwise
+### 	  integration/master if it has release; otherwise
+### 	  master.
+### 
+###     -r: Skip release plugin
+### 
+### DESCRIPTION
+###     This program perform the release and push the relese with nexus.
+### It can do following tasks:
+### 
+###  * For making a big release (e.g. 3.Y.Z -> 4.0.0 or 3.7.Z -> 3.8.0 ), run:
+### 
+###    zanata-nexus-staging-<module> -b
+### 
+###    It will commit to both RELEASING_BRANCH and DEVEL_BRANCH, see 
+###    section ENVIRONMENT for details.
+### 
+###  * For making a Z release (e.g. 3.7.0 -> 3.7.1 ), run 
+### 
+###    zanata-nexus-staging-<module>
+### 
+###    It will commit to RELEASING_BRANCH.
+### 
+###  * If tag is made but release failed, and you fixed it without changing 
+###    the source, You can resume the release process with 
+###   
+###    zanata-nexus-staging-<module> -r
+### 
+### 
+### ENVIRONMENT
+###     RELEASING_BRANCH
+###       The branch that we recommend downstream to use, and 
+###       release process should mainly happen here.
+###       It is:
+###          'release' if that branch exists; otherwise
+###          'integration/master' if that branch exists; otherwise
+###          'master'.
+###  
+###     DEVEL_BRANCH 
+###       The branch for committing new features. It is:
+###          'integration/master' if that branch exists; otherwise
+###          'master'.
+### 
+###     MAVEN_RELEASE_OPTIONS
+###       The maven options to be use in this scripts
+###       Default: -e -Dmaven.repo.local=$REPO_LOCAL_DIR -Dgpg.useagent -Psonatype-oss-release
+### 
+###     REPO_LOCAL_DIR (Optional)
+###       The directory for maven repo
+###       This should NOT be your normal work maven repo
+### 
+###     WORK_ROOT
+###       The base directory for repository checkout
+###       As maven release plugin generally require a clean git working tree
+###       This script will clean it for you.
+###       Thus it is better not use normal development directory.
+### 	
 
 SCRIPT_DIR=$(dirname $(readlink  -q -f $0))
 FUNCTION_SCRIPT_FILE=${SCRIPT_DIR}/zanata-functions
 source "${FUNCTION_SCRIPT_FILE}"
+trap exit_print_error EXIT
 
 BIG_RELEASE=
 SKIP_RELEASE_PLUGIN=
 
+: ${MAVEN_RELEASE_OPTIONS:="-e -Dmaven.repo.local=$REPO_LOCAL_DIR -Dgpg.useagent -Psonatype-oss-release"}
+
 while getopts "brh" opt;do
     case $opt in
 	h )
-	    print_usage
-	    exit 0
+	    zanata_script_help $0
+	    exit ${EXIT_OK}
 	    ;;
         b )
 	    BIG_RELEASE=1
@@ -107,127 +109,140 @@ while getopts "brh" opt;do
 done
 
 shift $((OPTIND-1))
-if [ -n "$1" ];then
-    MODULE="$1"
+
+##=== parsing Start ===
+Stage=parsing
+print_status -s "Start"
+
+## Get Module
+moduleResult=$(get_module_from_command $1)
+echo "moduleResult=$moduleResult"
+Module=$(sed -e 's/ .*//'<<<"$moduleResult")
+if [[ $moduleResult == *1 ]];then
+    shift
 fi
+print_status " Module=$Module"
 
-case $0 in
-    *-tennera)
-	MODULE=tennera
-        ;;
-    *-openprops)
-	MODULE=openprops
-	;;
-    *-parent)
-	MODULE=zanata-parent
-	;;
-    *-api)
-	MODULE=zanata-api
-	;;
-    *-common)
-	MODULE=zanata-common
-	;;
-    *-assets)
-	MODULE=zanata-assets
-	;;
-    *-client)
-	MODULE=zanata-client
-	;;
-    *)
-	if [ -z "$MODULE" ]; then
-	    print_usage
-	    exit ${EXIT_FATAL_INVALID_OPTIONS}
-	fi
-	;;
-esac
+##=== parpare  Start ===
+Stage=prepare
+print_status -s "Start"
 
+##  Ensure repo
 if [ ! -d ${WORK_ROOT} ];then
     mkdir -p ${WORK_ROOT}
 fi
 
-ensure_repo ${MODULE}
-### Determine RELEASING_BRANCH
-: ${RELEASING_BRANCH:=$(get_releasing_branch $MODULE)}
-echo "### RELEASING_BRANCH for $MODULE is ${RELEASING_BRANCH}"  
+ensure_repo ${Module}
+## Determine RELEASING_BRANCH
+: ${RELEASING_BRANCH:=$(get_releasing_branch $Module)}
+print_status " RELEASING_BRANCH for $Module is ${RELEASING_BRANCH}"  
 
+: ${DEVEL_BRANCH:=$(get_devel_branch $Module)}
+print_status " DEVEL_BRANCH for $Module is ${DEVEL_BRANCH}"  
 
-: ${DEVEL_BRANCH:=$(get_devel_branch $MODULE)}
-echo "### DEVEL_BRANCH for $MODULE is ${DEVEL_BRANCH}"  
-
-cd ${WORK_ROOT}/${MODULE}
+cd ${WORK_ROOT}/${Module}
 git fetch
 
-echo "### [pre-release] ============================== Start"
-echo "### [pre-release] updating existing RELEASING_BRANCH (${RELEASING_BRANCH})"
+Stage=pre-release
+print_status -s "Start"
+print_status " updating existing RELEASING_BRANCH (${RELEASING_BRANCH})"
 git checkout ${RELEASING_BRANCH}
 git pull
 
-echo "### [pre-release] Branch ${RELEASING_BRANCH}: merge origin/${RELEASING_BRANCH}"
+print_status " Branch ${RELEASING_BRANCH}: merge origin/${RELEASING_BRANCH}"
 git merge origin/${RELEASING_BRANCH} --ff-only --quiet
 
 if [ -n "${BIG_RELEASE}" -a "${RELEASING_BRANCH}" != "master" ];then
-    echo "### [pre-release] Branch ${RELEASING_BRANCH}: merge origin/master as we do the big release"
+    print_status " Branch ${RELEASING_BRANCH}: merge origin/master as we do the big release"
     git merge origin/master --ff-only --quiet
 
-    echo "### [pre-release] Branch ${RELEASING_BRANCH}: pushing back to origin"
+    print_status " Branch ${RELEASING_BRANCH}: pushing back to origin"
     git push origin ${RELEASING_BRANCH}
 fi
 
-### Update existing DEVEL_BRANCH on BIG_RELEASE
+## Update existing DEVEL_BRANCH on BIG_RELEASE
 if [ -n "${BIG_RELEASE}" ]; then
-    echo "### Pre-release: update existing DEVEL_BRANCH (${DEVEL_BRANCH}) for big release"
+    print_status " update existing DEVEL_BRANCH (${DEVEL_BRANCH}) for big release"
     git checkout ${DEVEL_BRANCH}
 
-    echo "### [pre-release] Branch ${DEVEL_BRANCH} merge origin/${DEVEL_BRANCH}"
+    print_status " Branch ${DEVEL_BRANCH} merge origin/${DEVEL_BRANCH}"
     git merge origin/${DEVEL_BRANCH} --ff-only --quiet
 
-    echo "### [pre-release] Branch ${DEVEL_BRANCH}: Create new version"
+    print_status " Branch ${DEVEL_BRANCH}: Create new version"
     mvn -e release:update-versions -DautoVersionSubmodules=true
 
     git commit $(find . -name 'pom.xml' | xargs ) -m "prepare for next development iteration"
     git push origin ${DEVEL_BRANCH}
-    echo "### [pre-release] ${DEVEL_BRANCH} branch updated"
+    print_status " ${DEVEL_BRANCH} branch updated"
 fi
 
-echo "### [pre-release] back to RELEASING_BRANCH (${RELEASING_BRANCH})"
+print_status " back to RELEASING_BRANCH (${RELEASING_BRANCH})"
 git checkout ${RELEASING_BRANCH}
 git fetch --tags
 git pull
 
-echo "### [release] ============================== Start"
+## Release start
+
 function release_perform(){
     if [ -z "${SKIP_RELEASE_PLUGIN}" ];then
-        git clean -f -d
+	Stage=release-tagging
+	print_status -s "Start"
 
-        ### Other MODULEs might related to zanata-parent
-        if [ "$MODULE" != "zanata-parent" ];then
+	git clean -f -d
+
+        ### Other Modules might related to zanata-parent
+        if [ "$Module" != "zanata-parent" ];then
              ensure_repo zanata-parent
         fi
         
-        echo "### [release_perform] ============================== Start" 
-        echo "###it should sign artifacts, push $MODULE to nexus, then close it"
-	mvn -e -Dmaven.repo.local=$REPO_LOCAL_DIR -Dgpg.useagent release:clean release:prepare release:perform -Psonatype-oss-release -DupdateReleaseInfo=true
+	mvn ${MAVEN_RELEASE_OPTIONS} release:clean
+
+	print_status " Dry-run: release:prepare release:perform"
+	mvn -e ${MAVEN_RELEASE_OPTIONS} release:prepare release:perform -DupdateReleaseInfo=true -DdryRun=true
+
+	print_status " Real-run: it should sign artifacts, push $Module to nexus, then close it"
+	mvn -e ${MAVEN_RELEASE_OPTIONS} release:clean release:prepare release:perform -DupdateReleaseInfo=true
+
         if [ $? -ne 0 ];then
-	    echo_stderr "### [ERROR]: release goals failed"
+	    EXIT_MSG="release goals failed"
 	    exit ${EXIT_FATAL_FAIL}
         fi
-	echo "### [release_perform] Done"
+	print_status " Done"
     fi
     return 0
 }
 
-case $MODULE in
+case $Module in
     zanata-assets | zanata-parent | zanata-api | zanata-common | zanata-client)
 	release_perform
 
-        echo "### [release] nexus-staging:release"
+	Stage=nexus-release
+	print_status -s "Start"
+	
+	StagingRepositoryId=$(mvn org.sonatype.plugins:nexus-staging-maven-plugin:rc-list -DnexusUrl=https://oss.sonatype.org/ -DserverId=sonatype-nexus-staging | sed -n  -e '/orgzanata-.* CLOSED/ s/.*\(orgzanata-[0-9]*\).*$/\1/p')
+
+	if [ -z "$StagingRepositoryId" ];then
+	    StagingRepositoryId=$(grep -oP '^stagingRepository\.id=\K.*' target/checkout/target/nexus-staging/staging/*.properties)
+	    test -n "$StagingRepositoryId"
+	    exit_if_failed $? $EXIT_FATAL_FAIL " Cannot obtain staging repository id from both nexus-staging plugin and local target files"
+	fi
+
+	print_status " StagingRepositoryId=${StagingRepositoryId}"
+
+	read -p "### Please login sonatype and check maven-metadata.xml. Press [Ctrl-C] to break, [Enter] to continue"
+
+	print_status " nexus-staging:release"
 	mvn -e nexus-staging:release -Psonatype-oss-release \
-	    -DstagingRepositoryId=$(grep -oP '^stagingRepository\.id=\K.*' target/checkout/target/nexus-staging/staging/*.properties)
+	    -DstagingRepositoryId=$(StagingRepositoryId)
 	;;
     * )
-	### MODULE like tennera or openprops
+	### Module like tennera or openprops
 	### These have only master
 	release_perform
+
+	read -p "### Pause for checking metadata"
+
+	print_status " nexus-staging:close nexus-stage:release"
 	mvn -e nexus-staging:close nexus-staging:release
 	;;
 esac
