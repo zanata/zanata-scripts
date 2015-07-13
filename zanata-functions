@@ -289,6 +289,47 @@ function get_module_from_command(){
     fi
 }
 
+###     print_status [-s] [-n] [message]
+###         Print the status message.
+###         Options:
+###             -s prepend separation line before message
+###         If -s is specified, it will pad separation line before message, like
+###         "[Stage]============================== Start"
+###         It will use following Environment variables
+###             Stage: As stage inside []
+###
+NoEOL=0
+function print_status(){
+    local outputStr=
+    local opt=
+    local optionArray=()
+    local optionN=0
+    while [[ $1 == -* ]]; do
+	case $1 in
+	    -s )
+		outputStr="=============================="
+		shift
+		;;
+	    -n )
+		optionArray+=( -n )
+		shift
+		NoEOL=1
+		optionN=1
+		;;
+        esac
+    done
+
+    local message="$1"
+    outputStr+="$message"
+    if [ $NoEOL -eq 1 ];then
+	echo_stderr "$outputStr"
+    fi
+    if [ $optionN -eq 0 ];then
+	NoEOL=0
+    fi
+    echo_stderr "### [$Stage]$outputStr"
+}
+
 ###     time-stamp [DATE_FORMAT]
 ###         Use stamp like "2015-06-29-06:56:34-953717856", base on UTC
 ###         Default: '%F-%R-%N'
