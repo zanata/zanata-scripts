@@ -38,8 +38,20 @@ LANG=C
 : ${MAINTAINER_EMAIL:=${FEDORA_USER}@fedorapeople.org}
 ###
 ### DESCRIPTION
-###     This script will package Zanata module for Fedora.
-###     It will do the following:
+###     This program builds and submits the latest Zanata modules
+###     that are not yet in supported Fedora branches.
+###
+###     It invokes bodhi for Fedora submission check and koji for Fedora build.
+###     It also requests buildroot override for 30 days for non-leaf modules
+###     like zanata-parent, zanata-api and zanata-common.
+###
+###     If a new version tag have been created in module source Git, 
+###     you can use option '-a', so you don't have to enter version-release.
+###
+###     However, if did not change source but modify spec or apply patch
+###     in RPM SPEC, then you cannot use '-a'
+###     and you need to specify version-release.
+###
 
 ## Default Environment Variable
 : ${SpecRelease:=1}
@@ -86,8 +98,7 @@ function is_branch_build_in_bodhi(){
 	print_status "yes, skip"
     else
 	print_status "no, will submit it"
-	BodhiBuildBranches+=" $branch"
-	BodhiPushList+="${pkgBuild}"
+	BodhiPushList+=" ${pkgBuild}"
     fi
 }
 
@@ -136,7 +147,6 @@ shift $((OPTIND-1))
 
 ## Get Module
 moduleResult=$(get_module_from_command $1)
-echo "moduleResult=$moduleResult"
 Module=$(sed -e 's/ .*//'<<<"$moduleResult")
 if [[ $moduleResult == *1 ]];then
     shift
@@ -206,7 +216,6 @@ print_status -s "Start"
 
 Nvr=${Module}-${Version}-${SpecRelease}
 FedpkgBuildBranches=
-BodhiBuildBranches=
 BodhiPushList=
 
 ## Is pkgBuild in rawhide/master in koji?
@@ -229,7 +238,9 @@ if [ -n "${FedpkgBuildBranches}" ];then
     ## Prepare FedPkg Git Repo
     prepare_fedpkg_git_repo
 
-    for branch in ${FedpkgBuildBranches}; do 
+    print_status " Branches to build in FedPkg: ${FedpkgBuildBranches}"
+    for branch in ${FedpkgBuildBranches}; do
+	fedpkg switch-branch ${branch}
 	if [ "$branch" = "master" ];then
 	    ## In master, ensure scratch build work for available branch
 	    ## SPEC update: changelog

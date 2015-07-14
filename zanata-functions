@@ -298,22 +298,26 @@ function get_module_from_command(){
 ###         It will use following Environment variables
 ###             Stage: As stage inside []
 ###
-NoEOL=0
+ZnatNoEOL=0
 function print_status(){
     local outputStr=
-    local opt=
     local optionArray=()
     local optionN=0
+
+    if [ $ZnatNoEOL -eq 0 ];then
+	## Previous line already ended
+	outputStr+="### [$Stage]"
+    fi
     while [[ $1 == -* ]]; do
 	case $1 in
 	    -s )
-		outputStr="=============================="
+		outputStr+="=============================="
 		shift
 		;;
 	    -n )
 		optionArray+=( -n )
 		shift
-		NoEOL=1
+		ZnatNoEOL=1
 		optionN=1
 		;;
         esac
@@ -321,13 +325,11 @@ function print_status(){
 
     local message="$1"
     outputStr+="$message"
-    if [ $NoEOL -eq 1 ];then
-	echo_stderr "$outputStr"
-    fi
+    echo_stderr ${optionArray[@]} "$outputStr"
+
     if [ $optionN -eq 0 ];then
-	NoEOL=0
+	ZnatNoEOL=0
     fi
-    echo_stderr "### [$Stage]$outputStr"
 }
 
 ###     time-stamp [DATE_FORMAT]
