@@ -289,10 +289,12 @@ function get_module_from_command(){
     fi
 }
 
-###     print_status [-s] [-n] [message]
+###     print_status [-n] [-s] [-t <Stage>] [message]
 ###         Print the status message.
 ###         Options:
-###             -s prepend separation line before message
+###             -n: Do not print end-of-line in the end.
+###             -s: prepend separation line before message
+###             -t <Stage>: Specify Stage
 ###         If -s is specified, it will pad separation line before message, like
 ###         "[Stage]============================== Start"
 ###         It will use following Environment variables
@@ -310,15 +312,20 @@ function print_status(){
     fi
     while [[ $1 == -* ]]; do
 	case $1 in
-	    -s )
-		outputStr+="=============================="
-		shift
-		;;
 	    -n )
 		optionArray+=( -n )
 		shift
 		ZnatNoEOL=1
 		optionN=1
+		;;
+	    -s )
+		outputStr+="=============================="
+		shift
+		;;
+	    -t )
+		shift
+		Stage=$1
+		shift
 		;;
         esac
     done
