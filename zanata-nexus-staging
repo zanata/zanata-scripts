@@ -15,15 +15,10 @@ set -e
 ### 
 ### OPTIONS
 ###     -h: Show this help
-###     -b: Big release.
-###         Integration/master need to be updated.
+###     -b: Big release. Both devel and releasing branches need to be updated.
 ###         (e.g. when releasing from 3.7.X -> 3.8.0).
-###         If not specified, only the default branch will be touch
+###         If not specified, only the releasing branch will be touch
 ###         (e.g. when releasing from 3.7.0 -> 3.7.1 ).
-### 	Default branch is:
-### 	  release if it has release; otherwise
-### 	  integration/master if it has release; otherwise
-### 	  master.
 ### 
 ###     -r: Skip release plugin
 ### 
