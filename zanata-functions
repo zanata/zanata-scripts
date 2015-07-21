@@ -8,10 +8,6 @@
 ### DESCRIPTION
 ###     This script is basically for source (include) from other script.
 ### 
-: ${WORK_ROOT:=/tmp/zanata}
-: ${REPO_LOCAL_DIR:=/tmp/maven-central-release-repo}
-: ${ZANATA_GIT_URL_PREFIX:=git@github.com:zanata}
-
 ### FUNCTIONS
 function zanata_functions_get_path(){
     shopt -s extdebug
@@ -43,37 +39,51 @@ function get_git_url(){
     echo "${ZANATA_GIT_URL_PREFIX}/$1.git"
 }
 
-###     checkout_releasing_branch <module> 
+###     checkout_releasing_branch <module> [parentDir]
 ###         checkout RELEASING_BRANCH, the branch that we recommend downstream to use.
 function checkout_releasing_branch(){
     local module=$1
+    local parentDir=$2
+    [ -z $parentDir ] && parentDir=${PWD}
     local branch=$(get_releasing_branch $module)
-    pushd ${WORK_ROOT}/${module} >/dev/null
+    pushd ${parentDir}/${module} >/dev/null
     git fetch
     git checkout ${branch}
     popd >/dev/null
 }
 
-###     checkout_devel_branch <module> 
+###     checkout_devel_branch <module>  [parentDir]
 ###         checkout DEVEL_BRANCH, the branch the branch for committing new features.
 function checkout_devel_branch(){
     local module=$1
+    local parentDir=$2
+    [ -z $parentDir ] && parentDir=${PWD}
     local branch=$(get_devel_branch $module)
-    pushd ${WORK_ROOT}/${module} >/dev/null
+    pushd ${parentDir}/${module} >/dev/null
     git fetch
     git checkout ${branch}
     popd >/dev/null
 }
 
+###
+###     create_missing_dir <dir>
+###         Create missing directory
+function create_missing_dir(){
+    local dir=$1
+    if [ ! -d $dir ];then
+	mkdir -p $dir
+    fi
+}
+
+###
 ###     detect_module_tag <module>
 ###         Print latest tag of module
-###         
 function detect_module_tag(){
     local module=$1
-    ensure_repo ${module}
+    ensure_repo_generic ${WORK_ROOT} ${module}
 
     pushd ${WORK_ROOT}/${module} >/dev/null
-    checkout_releasing_branch ${module} 1>/dev/stderr
+    checkout_releasing_branch ${module} ${WORK_ROOT} 1>/dev/stderr
 
     git fetch --tags 1>/dev/stderr
     local latestTag=$(git describe --abbrev=0 --tags)
@@ -83,9 +93,9 @@ function detect_module_tag(){
     echo "${latestTag}"
 }
 
+###         
 ###     detect_module_version <module>
 ###         Print latest tagged module version.
-###         
 function detect_module_version(){
     local module=$1
     local latestTag=$(detect_module_tag ${module})
@@ -97,17 +107,20 @@ function detect_module_version(){
     echo "$version"
 }
 
-###     does_branch_exist <module> <branch>
+###
+###     does_branch_exist <module> <branch> [parentDir]
 function does_branch_exist(){
     local module=$1
     local branch=$2
+    local parentDir=$3
+    [ -z $parentDir ] && parentDir=${WORK_ROOT}
 
-    if [ ! -d "${WORK_ROOT}/${module}" ];then
+    if [ ! -d "${parentDir}/${module}" ];then
 	echo_stderr "[ERROR] ${WORK_ROOT}/${module} does not exist"
 	exit ${EXIT_FATAL_MISSING_DEPENDENCY}
     fi
 
-    pushd ${WORK_ROOT}/${module} >/dev/null
+    pushd ${parentDir}/${module} >/dev/null
     echo_stderr -n "### Does ${module} has branch ${branch}?..."
 
     if git rev-parse --verify ${branch} &>/dev/null;then
@@ -120,6 +133,7 @@ function does_branch_exist(){
     popd >/dev/null
 }
 
+###
 ###     ensure_repo_generic <parentDir> <module> [git_repo_url]
 ###         Ensure repo is at <parentDir>/<module>
 function ensure_repo_generic(){
@@ -130,9 +144,7 @@ function ensure_repo_generic(){
     if [ -z "$git_repo_url" ];then
 	git_repo_url=$(get_git_url ${module})
     fi
-    if [ ! -d ${parentDir} ];then
-	mkdir -p ${parentDir}
-    fi
+    create_missing_dir ${parentDir}
     pushd ${parentDir} >/dev/null
     if [ ! -d ${module} ];then
 	git clone "${git_repo_url}"
@@ -144,18 +156,14 @@ function ensure_repo_generic(){
     popd >/dev/null
 }
 
+###
 ###     ensure_repo <module> [git_repo_url]
 ###         Ensure repo is at $WORK_ROOT/<module>
 function ensure_repo(){
     ensure_repo_generic "$WORK_ROOT" "$1" "$2"
 }
 
-###     ensure_devel_repo <module> [git_repo_url]
-###         Ensure repo is at $DEVEL_ROOT/<module>
-function ensure_devel_repo(){
-    ensure_repo_generic "$DEVEL_ROOT" "$1" "$2"
-}
-
+###
 ###     exit_if_failed <var> <exitStatus> <exitMsg>
 function exit_if_failed(){
     if [ $1 -ne 0 ];then
@@ -165,11 +173,11 @@ function exit_if_failed(){
     fi
 }
 
+###
 ###     exit_print_error
 ###         Print error message just before exit
 ###         Environment:
 ###             EXIT_MSG: Error message to print.
-###
 EXIT_MSG=
 function exit_print_error(){
     local exitStatus=$?
@@ -198,7 +206,7 @@ function exit_print_error(){
     exit ${exitStatus}
 }
 
-
+###
 ###     get_releasing_branch <module>
 ###         Determine RELEASING_BRANCH, the branch that we recommend downstream to use, 
 ###         and release process should mainly happen here.
@@ -219,6 +227,7 @@ function get_releasing_branch(){
     return 0
 }
 
+###
 ###     get_devel_branch <module>
 ###         Determine DEVEL_BRANCH, the branch for committing new features. 
 ###         It is:
@@ -234,10 +243,10 @@ function get_devel_branch(){
     return 0
 }
 
+###
 ###     get_module <commandName>
 ###         Determine module.
 ###         Print: <module or - for unknown>
-###
 function get_module(){
     case $1 in
 	*jgettext)
@@ -267,12 +276,12 @@ function get_module(){
     esac
 }
 
+###
 ###     get_module_from_command <firstArg>
 ###         Determine module. or exit with EXIT_FATAL_UNKNOWN_MODULE
 ###         Print: <module> <isShift>
 ###             module: module name
 ###             isShift: 1 for need shift, 0 otherwise.
-###
 function get_module_from_command(){
     local firstArg=$1
 
@@ -289,6 +298,7 @@ function get_module_from_command(){
     fi
 }
 
+###
 ###     print_status [-n] [-s] [-t <Stage>] [message]
 ###         Print the status message.
 ###         Options:
@@ -299,27 +309,22 @@ function get_module_from_command(){
 ###         "[Stage]============================== Start"
 ###         It will use following Environment variables
 ###             Stage: As stage inside []
-###
 ZnatNoEOL=0
 function print_status(){
     local outputStr=
     local optionArray=()
     local optionN=0
+    local optionS=0
 
-    if [ $ZnatNoEOL -eq 0 ];then
-	## Previous line already ended
-	outputStr+="### [$Stage]"
-    fi
     while [[ $1 == -* ]]; do
 	case $1 in
 	    -n )
 		optionArray+=( -n )
 		shift
-		ZnatNoEOL=1
 		optionN=1
 		;;
 	    -s )
-		outputStr+="=============================="
+		optionS=1
 		shift
 		;;
 	    -t )
@@ -329,20 +334,26 @@ function print_status(){
 		;;
         esac
     done
+    if [ $ZnatNoEOL -eq 0 ];then
+	## Previous line already ended
+	outputStr+="### [$Stage]"
+    fi
+
+    if [ $optionS -eq 1 ];then
+	outputStr+="=============================="
+    fi
 
     local message="$1"
     outputStr+="$message"
     echo_stderr ${optionArray[@]} "$outputStr"
 
-    if [ $optionN -eq 0 ];then
-	ZnatNoEOL=0
-    fi
+    ZnatNoEOL=$optionN
 }
 
+###
 ###     time-stamp [DATE_FORMAT]
 ###         Use stamp like "2015-06-29-06:56:34-953717856", base on UTC
 ###         Default: '%F-%R-%N'
-###
 function time-stamp(){
     local DATE_FORMAT=$1
     if [ -z "$DATE_FORMAT" ];then
@@ -357,6 +368,7 @@ function time-stamp(){
 ###         EXIT_OK
 declare EXIT_OK=0
 
+###
 ###     Fatal should stop immediately.
 ###         EXIT_FATAL_UNSPECIFIED: Unspecified fatal error, 
 ###             usually indicate a bug in our scripts.
@@ -374,6 +386,7 @@ declare EXIT_FATAL_UNKNOWN_MODULE=5
 ###         EXIT_FATAL_FAIL: Script detected that a fatal error occurred.
 declare EXIT_FATAL_FAIL=5
 
+###
 ###     Error that need to stop before next step.
 ###         EXIT_ERROR_FAIL: Script detected that an error occurred.
 declare EXIT_ERROR_FAIL=20
@@ -385,8 +398,50 @@ declare EXIT_RETURN_FALSE=40
 case $1 in
     help )
         zanata_script_help $0
+	exit ${EXIT_OK}
         ;;
     exit-status-help )
         zanata_script_exit_status_help
+	exit ${EXIT_OK}
         ;;
 esac
+
+### 
+### ENVIRONMENT
+###     TMP_ROOT: 
+###         Root of temporary directories and files, and expected to be clean
+###         Default: /tmp/zanata
+: ${TMP_ROOT:=/tmp/zanata}
+create_missing_dir "${TMP_ROOT}"
+
+###
+###     REPO_LOCAL_DIR:
+###         Temporary maven repo
+###         Default: /tmp/maven-central-release-repo
+: ${REPO_LOCAL_DIR:=${TMP_ROOT}/maven-central-release-repo}
+create_missing_dir "${REPO_LOCAL_DIR}"
+
+###
+###     DEVEL_ROOT
+###         Root of development project directories.
+###	    For example,  Git Repo zanata-scripts is expected to be in 
+###         ${DEVEL_ROOT}/zanata-scripts
+###         Default: ${HOME}/devel
+: ${DEVEL_ROOT:=$HOME/devel}
+create_missing_dir "${DEVEL_ROOT}"
+
+###
+###     WORK_ROOT:
+###         Root of working directories, whose content is expected to be changed by scripts.
+###         So normally this should NOT be your development directory.
+###         You can also clean it by removing it, it should rebuild when running any scripts use it.
+###         Default: ${HOME}/zanata-work-root
+: ${WORK_ROOT:=${HOME}/zanata-work-root}
+create_missing_dir "${WORK_ROOT}"
+
+###
+###     ZANATA_GIT_URL_PREFIX:
+###         Prefix of Zanata Git URL
+###         Default: git@github.com:zanata
+: ${ZANATA_GIT_URL_PREFIX:=git@github.com:zanata}
+
