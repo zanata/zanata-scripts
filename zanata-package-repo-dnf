@@ -1,0 +1,271 @@
+#!/bin/bash -e
+LANG=C
+### NAME
+###     zanata-package-repo-fedorapeople - Release package in repo-fedorapeople
+###
+### SYNOPSIS
+###     zanata-package-repo-fedorapeople [Options] <module> <version-release>
+###
+### ARGUMENTS
+###     module: module to upload to fedorarepo. It is also the Fedora package name.
+###
+###     version-release: (Required if -a is not specified) 
+###         Version and SPEC release field. For example, 3.7.2-2
+###         This is mandatory when bumping SPEC release number.
+###
+### OPTIONS
+###     -h: Show this help.
+###
+###     -a: Automatic detected.
+###         Version will be detected from latest tag from git. 
+###         And release is 1.
+###
+###     -b: Straight to build
+###         Go straight to build.
+###         No remote directory sync.
+###
+### DESCRIPTION
+###     This program builds and submits the latest Zanata modules
+###     that are not yet in supported yum/dnf repo.
+###    
+###     This program uses rsync to do the sync. 
+###     So make sure both ends support rsync.
+###
+## Default Environment Variable
+: ${SpecRelease:=1}
+
+SCRIPT_DIR=$(dirname $(readlink  -q -f $0))
+FUNCTION_SCRIPT_FILE=${SCRIPT_DIR}/zanata-functions
+source "${FUNCTION_SCRIPT_FILE}"
+trap exit_print_error EXIT
+source "${SCRIPT_DIR}/zanata-rpm-functions"
+
+
+### ENVIRONMENT
+###     REMOTE_USERNAME
+###         Required if your remote username is different from $USER
+###         Default: ${USER}
+: ${REMOTE_USER:=${USER}}
+###
+###     REMOTE_HOST
+###         Host that host for yum/dnf repo
+###         Default: fedorapeople.org
+: ${REMOTE_HOST:=fedorapeople.org}
+###     
+###     REMOTE_DIR
+###         The remote directory that hold repo
+###         Default: /home/${REMOTE_USER}/srv/repos/${REMOTE_USER}/
+: ${REMOTE_DIR:=/srv/repos/${REMOTE_USER}/zanata}
+###
+###    	LOCAL_DIR
+###         The local directory that mirror the remote directory
+: ${LOCAL_DIR:=${WORK_ROOT}/dnf/zanata}
+###
+###    	RSYNC_OPTIONS
+###         Options that will be passed to rsync
+###         Default: "--cvs-exclude --recursive --verbose --links --update --compress --exclude '*.core' --stats --progress --archive  --keep-dirlinks"
+: ${RSYNC_OPTIONS:=--cvs-exclude --recursive --verbose --links --update --compress --exclude '*.core' --stats --progress --archive  --keep-dirlinks}
+###
+###     FEDORA_RELEASES
+###         Fedora or epel releases to be build
+###         Default: "epel-7 epel-6"
+: ${FEDORA_RELEASES:="epel-7 epel-6"}
+PROGRAM_NAME=$(basename $0)
+TMP_DIR="${TMP_ROOT}/${PROGRAM_NAME}"
+create_missing_dir "${TMP_DIR}"
+CACHE_DIR="${WORK_ROOT}/${PROGRAM_NAME}"
+create_missing_dir "${CACHE_DIR}"
+
+##=== function definitions Start ===
+function fedora_release_to_dist_tag(){
+    local fedoraRelease=$1
+    if [[ $fedoraRelease == epel* ]];then
+        sed -e 's/epel-/el/' <<< "${fedoraRelease}"
+    fi
+}
+
+function update_dnf_repo_dir(){
+    local baseDir=$1
+    local repoDir=$2
+    pushd "$baseDir" 1>/dev/null
+    createrepo -vd --update -s sha "$repoDir"
+    popd 1>/dev/null
+}
+##=== function definitions End   ===
+
+##=== parsing Start ===
+print_status -t parsing -s "Start"
+
+Version=
+SpecRelease=
+AUTO_DETECT=0
+START_FROM=0
+while getopts "hab" opt;do
+    case $opt in
+	h )
+	    zanata_script_help $0
+	    exit ${EXIT_OK}
+	    ;;
+	a )
+	    AUTO_DETECT=1
+	    ;;
+	b ) 
+	    START_FROM="build"
+	    ;;
+	* )
+	    exit_if_failed ${EXIT_FATAL_INVALID_OPTIONS} ${EXIT_FATAL_INVALID_OPTIONS} "$opt"
+	    ;;
+    esac
+done
+shift $((OPTIND-1))
+
+## Get Module
+moduleResult=$(get_module_from_command $1)
+Module=$(sed -e 's/ .*//'<<<"$moduleResult")
+if [[ $moduleResult == *1 ]];then
+    shift
+fi
+print_status " Module=$Module"
+
+## Get Package name
+case $Module in
+    zanata-client )
+	PackageName=zanata-cli-bin
+	;;
+    * )
+	PackageName=$Module
+	;;
+esac
+
+## Get Version
+if [ ${AUTO_DETECT} -eq 0 ];then
+    if [ -z "$1" ];then
+	zanata_script_help $0
+	EXIT_MSG="Requires version-release. Please either specify version-release or use option -a"
+	exit ${EXIT_FATAL_INVALID_OPTIONS}
+    fi
+    VersionRelease=$1
+
+    EXIT_MSG="VersionRelease $VersionRelease is invalid"
+    SpecRelease=$(sed -n 's/.*-\([0-9]*\)$/\1/p' <<<$VersionRelease)
+    EXIT_MSG=
+
+    test -n "$SpecRelease"
+    exit_if_failed "$?" ${EXIT_FATAL_INVALID_OPTION} "Failed to get SPEC release from ${VersionRelease}"
+    Version=$(sed -e 's/-'$SpecRelease'$//' <<<$VersionRelease)
+    test -n "$Version"
+    exit_if_failed "$?" ${EXIT_FATAL_INVALID_OPTION} "Failed to get version from ${VersionRelease}"
+else
+    ## Auto detect version
+    Version=$(detect_module_version ${Module})
+    print_status " ${Module} version: $Version"
+
+    test -n "$Version"
+    exit_if_failed "$?" ${EXIT_FATAL_FAIL} "Failed to get version from ${Module} git repo"
+    SpecRelease=1
+fi
+print_status " Version=$Version"
+print_status " SpecRelease=$SpecRelease"
+
+##=== prepare Start ===
+print_status -t prepare -s "Start"
+
+## Check depending programs
+print_status " check depending programs"
+ExitStatus=${EXIT_OK}
+for dep in rpmbuild mock createrepo; do
+    if ! which $dep &>/dev/null ; then
+	ExitStatus=${EXIT_FATAL_MISSING_DEPENDENCIES}
+	EXIT_MSG+=" $dep"
+    fi
+done
+exit_if_failed "${ExitStatus}" ${EXIT_FATAL_MISSING_DEPENDENCIES} "$EXIT_MSG"
+
+## Ensure work space
+create_missing_dir "${LOCAL_DIR}"
+cd ${LOCAL_DIR}
+
+if [ -z "${START_FROM}" ];then
+    print_status " Sync remote directory to local"
+    rsync ${RSYNC_OPTIONS} --delete  ${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/ .
+
+    print_status "  Create missing directories and links"
+    for fr in ${FEDORA_RELEASES}; do
+	create_missing_dir "$fr"
+
+	## RHEL usually use something like epel-7Server 
+	for e in Client Workstation Server; do
+	    if [ ! -r "$fr$e" ];then
+		ln -sf "$fr" "$fr$e"
+	    fi
+	done
+
+	for arch in SRPMS i386 x86_64; do
+	    create_missing_dir "$fr/$arch"
+	done
+    done
+fi
+
+##=== spec Start ===
+specFilename="${PackageName}.spec"
+if [ -z "${START_FROM}" ];then
+    print_status -t "spec-update" -s "Start"
+    spec_update ${specFilename} ${Version} ${SpecRelease} ${MAINTAINER_EMAIL}
+
+    print_status " spectool: Downloading source file(s)"
+    spectool -g -S "${TmpSpecPath}" -C ${CACHE_DIR}
+    cp -v ${TmpSpecPath} ${specFilename}
+fi
+
+
+##=== rpmbuild Start ===
+print_status -t "rpmbuild" -s "Start"
+
+## For each koji-target
+for fr in ${FEDORA_RELEASES}; do
+    print_status " Fedora release: $fr"
+    distTag=$(fedora_release_to_dist_tag "$fr")
+
+    ## Create missing SRPMS
+    srpmFilename="${PackageName}-${Version}-${SpecRelease}.${distTag}.src.rpm"
+    srpmDir="$fr/SRPMS"
+    srpmPath="$srpmDir/${srpmFilename}"
+
+    create_missing_dir "${srpmDir}"
+    if [ ! -r "${srpmPath}" ];then
+	## Create srpm
+	print_status " creating SRPM: ${srpmPath}"
+	rpmbuild -bs --define "dist .${distTag}" --define "_sourcedir ${CACHE_DIR}" --define "_srcrpmdir ${srpmDir}" "${specFilename}"
+	update_dnf_repo_dir $fr SRPMS
+    fi
+
+    ## Create missing RPMS
+    for arch in x86_64 i386; do
+	specArch=$(rpm -qp --qf '%{arch}' "${srpmPath}")
+	rpmFilename="${PackageName}-${Version}-${SpecRelease}.$distTag.${specArch}.rpm"
+	rpmDir="$fr/$arch"
+	rpmPath="$rpmDir/${rpmFilename}"
+
+	if [ ! -r "${rpmPath}" ];then
+	    ## Creating rpm
+	    if [[ "$specArch" = "noarch" && "$arch" == i?86 ]];then
+		## noarch in i?86 can just link to  x86_64.rpm
+		rpm64RelativePath="../x86_64/${rpmFilename}"
+		print_status " linking ${rpm64RelativePath} to ${rpmPath}"
+		ln -sf ${rpm64RelativePath} ${rpmPath}
+	    else
+		print_status " creating ${rpmPath}"
+		mock  -r "${fr}-${arch}" -D "dist .${distTag}" --resultdir "${TMP_DIR}" --rebuild "${srpmPath}"
+		cp -v ${TMP_DIR}/${rpmFilename} ${rpmDir}
+	    fi
+	    update_dnf_repo_dir $fr $arch
+	fi
+    done
+done
+
+##=== repo-upload Start ===
+print_status -t "repo-upload" -s "Start"
+rsync ${RSYNC_OPTIONS} --delete * ${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}
+
+
+## Done
