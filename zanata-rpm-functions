@@ -1,0 +1,151 @@
+#!/bin/bash
+### NAME
+###     zanata-rpm-functions
+###
+### SYNOPSIS
+###     zanata-rpm-functions [help|exit-status-help]
+### 
+### DESCRIPTION
+###     The script contain function to build RPM.
+###     
+###     This script depends on zanata-funtions
+###
+
+##=== function definitions Start ===
+### FUNCTIONS
+
+###     spec_update <specPath> <version> <specRelease> <maintainerEmail> [changeLogMsg]
+function spec_update(){
+    local specPath=$1
+    local version=$2
+    local specRelease=$3
+    local maintainerEmail=$4
+    local changeLogMsg=$5
+    SpecModified=0
+
+    test -r $specPath
+    exit_if_failed $? $EXIT_FATAL_FAIL "SPEC file $specPath does not exists"
+
+    if [ -z "$changeLogMsg" ];then
+	changeLogMsg="- Upgrade to upstream version ${Version}"
+    fi
+
+    TmpSpecPath=${TMP_ROOT}/$(basename ${specPath})
+
+    ## Update changelog
+    local changelogMatchStr=$(sed -n -e '/^%changelog/,$ p' ${specPath} | sed -n -e "/^\* .* ${Version}-${SpecRelease}/ p")
+    if [ -z "$changelogMatchStr" ];then
+	print_status " updating changelog"
+	sed -e '/^%changelog/a *'" $(date '+%a %b %d %Y') $maintainerEmail $version-$specRelease\n$changeLogMsg\n" "${specPath}" > ${TmpSpecPath}.changelog
+	SpecModified=1
+    else
+	cp "${specPath}" ${TmpSpecPath}.changelog
+    fi
+
+    ## Update version 
+    local versionMatchStr=$(sed -n -e '/^Version:/ s/^Version:\s*\([0-9]*\.[0-9]*\.[0-9]*\).*$/\1/ p' ${TmpSpecPath}.changelog)
+    if [ -z "${versionMatchStr}" ];then
+	print_status " updating version to $version"
+	sed -e '/^Version:/ s/[0-9]*\.[0-9]*\.[0-9]*/'$version'/' ${TmpSpecPath}.changelog > ${TmpSpecPath}.version
+	SpecModified=1
+    else
+	cp "${specPath}" ${TmpSpecPath}.version
+    fi
+
+    ## Update SpecRelease
+    local releaseMatchStr=$(sed -n -e '/^Release:/ s/^Release:\s*\([0-9]*\).*$/\1/ p' ${TmpSpecPath}.changelog)
+    if [ -z "${versionMatchStr}" ];then
+	print_status " updating SPEC release to ${specRelease}"
+	sed -e '/^Release:/ s/[0-9]*/'$specRelease'/' ${TmpSpecPath}.version > ${TmpSpecPath}
+	SpecModified=1
+    else
+	cp "${specPath}" ${TmpSpecPath}
+    fi
+
+
+    print_status " checking generated SPEC"
+    rpmlint ${TmpSpecPath} 1>/dev/stderr
+    exit_if_failed "$?" $EXIT_FATAL_FAIL "rpmlint check failed"
+}
+
+###
+###     branch_to_bodhi_branch <branch>
+###         Valid branch: fedora-<ver>, fedora<ver>, f<ver>, fc<ver>
+###                      epel-<ver>, epel<ver>, el<ver>
+function branch_to_bodhi_branch(){
+    local branch=$1
+    if [ "$branch" = "master" ];then
+	branch=${RawhideKojiTarget}
+    fi
+
+    local num=$(sed -e 's/[^0-9]*//' <<< $branch)
+    
+    case $branch in
+	f* )
+	    echo "fc$num"
+	    ;;
+	e* )
+	    echo "el$num"
+	    ;;
+    esac
+}
+
+###
+###     branches_to_koji_targets <branch1> ...
+###         Valid branch: master, fedora-<ver>, fedora<ver>, f<ver>, fc<ver>
+###                      epel-<ver>, epel<ver>, el<ver>
+function branches_to_koji_targets(){
+    local first=1
+    for branch in "$@"; do
+	if [ "$branch" = "master" ];then
+	    branch=${RawhideKojiTarget}
+	fi
+
+	local num=$(sed -e 's/[^0-9]*//' <<< $branch)
+
+	if [ $first -eq 1 ];then
+	    first=0
+	else
+	    echo " "
+	fi
+
+	case $branch in
+	    f* )
+		echo "f$num"
+		;;
+	    e* )
+		if [ $num -ge 7 ];then
+		    echo "epel$num"
+		else
+		    echo "el$num"
+		fi
+		;;
+	esac
+    done
+}
+
+##=== function definitions End ===
+
+## Check depending programs
+ExitStatus=${EXIT_OK}
+for dep in awk koji fedpkg bodhi rpmbuild mock; do
+    if ! which $dep &>/dev/null ; then
+	ExitStatus=${EXIT_FATAL_MISSING_DEPENDENCIES}
+	EXIT_MSG+=" $dep"
+    fi
+done
+exit_if_failed "${ExitStatus}" ${EXIT_FATAL_MISSING_DEPENDENCIES} "$EXIT_MSG"
+
+## Get applicable koji target
+print_status -t "determine-target" -s "Start"
+
+ListTargets=$(koji list-targets --quiet)
+FedoraKojiTargets=$(sed -n 's/^\(f[1-9][0-9]*\)\s.*/\1/ p' <<<"$ListTargets"| xargs)
+print_status " koji: active fedora targets: $FedoraKojiTargets"
+RawhideKojiTarget=$(sed -n '/^rawhide\s/ s/^rawhide\s.*\(f[1-9][0-9]*\)\s*/\1/p' <<<"$ListTargets")
+
+print_status " koji: rawhide version: $RawhideKojiTarget"
+SupportedKojiTargets=$(sed -e "s/${RawhideKojiTarget}//" <<<"$FedoraKojiTargets")
+print_status " koji: supported baranches: $SupportedKojiTargets"
+
+

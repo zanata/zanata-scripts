@@ -55,27 +55,19 @@ LANG=C
 
 ## Default Environment Variable
 : ${SpecRelease:=1}
-: ${TMP_DIR:=/tmp}
 
 SCRIPT_DIR=$(dirname $(readlink  -q -f $0))
-FUNCTION_SCRIPT_FILE=${SCRIPT_DIR}/zanata-functions
+FUNCTION_SCRIPT_FILE="${SCRIPT_DIR}/zanata-functions"
 source "${FUNCTION_SCRIPT_FILE}"
 trap exit_print_error EXIT
+source "${SCRIPT_DIR}/zanata-rpm-functions"
 
 ##=== function definitions Start ===
-function fedpkg_branch_to_bodhi_branch(){
-    local branch=$1
-    if [ "$branch" = "master" ];then
-	branch=${RAWHIDE_VERSION}
-    fi
-    sed -e 's/f/fc/g' <<<"$branch"
-}
-
 # is pkgBuild been built in koji
 # Valid pkgBuild example: cmake-fedora-1.4.0-1.fc21
 function is_branch_build_in_koji(){
     local branch=$1
-    local bodhiBranch=$(fedpkg_branch_to_bodhi_branch $branch)
+    local bodhiBranch=$(branch_to_bodhi_branch $branch)
     local pkgBuild="$Nvr.${bodhiBranch}"
     print_status -n " koji: is ${pkgBuild} in? ... "
 
@@ -91,7 +83,7 @@ function is_branch_build_in_koji(){
 # Valid pkgBuild example: cmake-fedora-1.4.0-1.fc21
 function is_branch_build_in_bodhi(){
     local branch=$1
-    local bodhiBranch=$(fedpkg_branch_to_bodhi_branch $branch)
+    local bodhiBranch=$(branch_to_bodhi_branch $branch)
     local pkgBuild="$Nvr.${bodhiBranch}"
     print_status -n " bodhi: is ${pkgBuild} in? ... "
     if bodhi "${pkgBuild}" | grep -qcs -i "Submit" > /dev/null;then
@@ -123,8 +115,7 @@ function prepare_fedpkg_git_repo(){
 ##=== function definitions End   ===
 
 ##=== parsing Start ===
-Stage=parsing
-print_status -s "Start"
+print_status -t parsing -s "Start"
 
 Version=
 SpecRelease=
@@ -184,8 +175,7 @@ print_status " Version=$Version"
 print_status " SpecRelease=$SpecRelease"
 
 ##=== prepare Start ===
-Stage=prepare
-print_status -s "Start"
+print_status -t prepare -s "Start"
 
 ### Check depended programs
 ExitStatus=${EXIT_OK}
@@ -197,22 +187,10 @@ for dep in awk koji fedpkg bodhi; do
 done
 exit_if_failed "${ExitStatus}" ${EXIT_FATAL_MISSING_DEPENDENCIES} "$EXIT_MSG"
 
-## Get applicable koji target
-print_status " koji: Determine applicable targets"
-LIST_TARGETS=$(koji list-targets --quiet)
-FEDORA_BRANCHES=$(sed -n 's/^\(f[1-9][0-9]*\)\s.*/\1/ p' <<<"$LIST_TARGETS"| xargs)
-print_status " koji: active fedora branches: $FEDORA_BRANCHES"
-RAWHIDE_VERSION=$(sed -n '/^rawhide\s/ s/^rawhide\s.*\(f[1-9][0-9]*\)\s*/\1/p' <<<"$LIST_TARGETS")
-
-print_status " koji: rawhide version: $RAWHIDE_VERSION"
-SUPPORTED_BRANCHES=$(sed -e "s/${RAWHIDE_VERSION}//" <<<"$FEDORA_BRANCHES")
-print_status " koji: supported baranches: $SUPPORTED_BRANCHES"
-print_status " koji: done"
-
 ##=== determine-task Start ===
 ## Find what need to build with bodhi and fedpkg
 Stage=determine-task
-print_status -s "Start"
+print_status -t "determine-task" -s "Start"
 
 Nvr=${Module}-${Version}-${SpecRelease}
 FedpkgBuildBranches=
@@ -222,7 +200,7 @@ BodhiPushList=
 is_branch_build_in_koji master
 
 ## Is build in branches?
-for branch in ${SUPPORTED_BRANCHES};do
+for branch in ${SupportedKojiTargets};do
     print_status " branch: ${branch}"
     is_branch_build_in_koji ${branch}
 
@@ -232,8 +210,7 @@ done
 ##=== fedpkg Start ===
 ## if fedpkg build is required
 if [ -n "${FedpkgBuildBranches}" ];then
-    Stage=fedpkg
-    print_status -s "Start"
+    print_status -t fedpkg -s "Start"
 
     ## Prepare FedPkg Git Repo
     prepare_fedpkg_git_repo
@@ -243,39 +220,29 @@ if [ -n "${FedpkgBuildBranches}" ];then
 	fedpkg switch-branch ${branch}
 	if [ "$branch" = "master" ];then
 	    ## In master, ensure scratch build work for available branch
-	    ## SPEC update: changelog
-	    print_status " ${Module}.spec: changelog to ${Version}-${SpecRelease}"
-	    TMP_SPEC=${TMP_DIR}/${Module}.spec
-	    CHANGELOG_MATCH=$(sed -n -e '/^%changelog/,$ p' ${Module}.spec | sed -n -e "/^\* .* ${Version}-${SpecRelease}/ p")
-	    if [ -z "${CHANGELOG_MATCH}" ];then
-		sed -e '/^%changelog/a *'" $(date '+%a %b %d %Y') $MAINTAINER_EMAIL $Version-$SpecRelease\n- Upgrade to upstream version ${Version}\n" ${Module}.spec > ${TMP_SPEC}.changelog
+	    spec_update ${Module}.spec ${Version} ${SpecRelease} ${MAINTAINER_EMAIL}
+
+	    print_status " spectool: Getting list of source file(s)"
+	    sourceFiles=$(spectool -l -S "${TmpSpecPath}" | sed -e 's!.*/!!' | xargs)
+
+	    print_status " spectool: Downloading source file(s): ${sourceFiles}"
+	    spectool -g -S "${TmpSpecPath}"
+
+	    if [ $SpecModified -eq 1 ];then
+		print_status " copy modified spec back"
+		cp -v "${TmpSpecPath}" ${Module}.spec
 	    fi
 
-	    ### SPEC update: version
-	    print_status " ${Module}.spec: Version: to ${Version}"
-	    sed -e '/^Version:/ s/[0-9]*\.[0-9]*\.[0-9]*/'$Version'/' ${TMP_SPEC}.changelog > ${TMP_SPEC}.version
-
-	    ### SPEC update: SPEC release
-	    print_status " ${Module}.spec: Release: to ${SpecRelease}"
-	    sed -e '/^Release:/ s/[0-9]*%/'$SpecRelease'%/' ${TMP_SPEC}.version > ${TMP_SPEC}
-
-	    ### SPEC check
-	    print_status " ${Module}.spec: sanity check"
-	    rpmlint ${TMP_SPEC}
-	    exit_if_failed "$?" $EXIT_FATAL_FAIL "rpmlint ${Module}.spec check failed"
-
-	    print_status " spectool: Download source file(s): ${SOURCE_FILES}"
-	    spectool -g -S ${TMP_SPEC}
-
-	    cp -v ${TMP_SPEC} ${Module}.spec
-	    SRPM_FILE=$(fedpkg srpm | sed -n -e 's!^.*/!!p')
-	    test -n "${SRPM_FILE}"
+	    print_status " making SRPM"
+	    srpmFile=$(fedpkg srpm | sed -n -e 's!^.*/!!p')
+	    test -n "${srpmFile}"
 	    exit_if_failed "$?" $EXIT_FATAL_FAIL "${Module}.spec: failed to get SRPM file"
 
-	    print_status " scratch-build: ${SRPM_FILE}"
-	    for t in ${FEDORA_BRANCHES};do
+	    ## Scratch build
+	    print_status " scratch-build: ${srpmFile}"
+	    for t in $(branches_to_koji_targets ${FedpkgBuildBranches}); do
 		print_status " scratch-build: target $t"
-		fedpkg scratch-build --target $t --srpm ${SRPM_FILE}
+		fedpkg scratch-build --target $t --srpm "${srpmFile}"
 
 		if [ $? -ne 0 ];then
 		    ExitStatus=${EXIT_ERROR_FAIL}
@@ -285,17 +252,22 @@ if [ -n "${FedpkgBuildBranches}" ];then
 	    exit_if_failed "${ExitStatus}" ${EXIT_ERROR_FAIL} "scratch-build: at least one build failed"
 
 	    ## Scratch build success, fedpkg commit and push
-	    print_status " fedpkg-commit"
-	    fedpkg new-sources ${SOURCE_FILES}
-	    git add ${Module}.spec
-	    fedpkg commit -m "Release ${Module}-${Version}-${SpecRelease}" -p
+	    if [ $SpecModified -eq 1 ];then
+		print_status " fedpkg-commit"
+		fedpkg new-sources ${sourceFiles}
+		git add ${Module}.spec
+		fedpkg commit -m "Release ${Module}-${Version}-${SpecRelease}" -p
+	    fi
 	else
 	    ## Assume master is done.
 	    git merge master
 	    exit_if_failed "$?" ${EXIT_ERROR_FAIL} "${branch}: merge master failed"
 	fi
-	fedpkg push
-	exit_if_failed "$?" ${EXIT_ERROR_FAIL} "${branch}: Push failed"
+
+	if [ $SpecModified -eq 1 ];then
+	    fedpkg push
+	    exit_if_failed "$?" ${EXIT_ERROR_FAIL} "${branch}: Push failed"
+	fi
 
 	fedpkg build
 	exit_if_failed "$?" ${EXIT_ERROR_FAIL} "${branch}: Build failed"
@@ -305,8 +277,7 @@ fi
 ##=== bodhi Start ===
 ## if bodhi is required
 if [ -n "${BodhiPushList}" ];then
-    Stage=bodhi
-    print_status -s "Start"
+    print_status -t bodhi -s "Start"
 
     if [ $SpecRelease -eq 1 ];then
 	BodhiType=enhancement
