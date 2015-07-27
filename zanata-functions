@@ -299,6 +299,54 @@ function get_module_from_command(){
 }
 
 ###
+###     parse_gav <GAV>
+###         Parse GAV
+###         GAV can either in following formats
+###             commons-cli:commons-cli:1.0 
+###             commons-cli:commons-cli:jar:1.0 
+###             commons-cli:commons-cli:jar:1.0:test
+###             commons-cli:commons-cli:jar:source:1.0:test
+function parse_gav(){
+    local gav=$1
+    GroupId=$(awk -F ':' '{print $1}'<<<$gav)
+    ArtifactId=$(awk -F ':' '{print $2}'<<<$gav)
+    local c3=$(awk -F ':' '{print $3}'<<<$gav)
+    local c4=$(awk -F ':' '{print $4}'<<<$gav)
+    local c5=$(awk -F ':' '{print $5}'<<<$gav)
+    if [[ "$c3" != jar && "$c3" != pom && "$c3" != ejb ]];then
+        Version=$c3
+    elif [[ "$c4" != source* && "$c4" != compat && "$c4" != ejb ]];then
+        Version=$c4
+    else
+        Version=$c5
+    fi
+    test -n "$GroupId" -a -n "$ArtifactId" -a -n "$Version"
+    exit_if_failed $? ${EXIT_FATAL_INVALID_OPTIONS} "GAV $gav is invalid, should be in groupId:artifactId:version"
+    Gav="$GroupId:$ArtifactId:$Version"
+}
+
+###
+###     gav_to_path_prefix <GroupId> <artifactId> <version>
+###        Return path prefix, when given GroupId, ArtifactId, and Version
+function gav_to_path_prefix(){
+    local groupId=$1
+    local artifactId=$2
+    local version=$3
+    local retStr=$(sed -e 's|\.|/|' <<< ${GroupId})
+    retStr+="/${ArtifactId}/${Version}/${ArtifactId}-${Version}"
+    echo "$retStr"
+}
+
+###
+###     ga_to_package_name <GroupId> <artifactId>
+function ga_to_package_name(){
+    local groupId=$1
+    local artifactId=$2
+    echo "$groupId-$artifactId"
+}
+
+
+###
 ###     print_status [-n] [-s] [-t <Stage>] [message]
 ###         Print the status message.
 ###         Options:
