@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 ### NAME
 ###     zanata-release-branching - Do branching for big release (non-point release).
 ###
@@ -10,96 +10,80 @@
 ###     zanata-client and zanata-server.
 ### 
 
-set -e
 SCRIPT_DIR=$(dirname $(readlink  -q -f $0))
 FUNCTION_SCRIPT_FILE=${SCRIPT_DIR}/zanata-functions
 source "${FUNCTION_SCRIPT_FILE}"
+trap exit_print_error EXIT
+PROGRAM_NAME=$(basename $0)
 
 if [ $# -ne 2 ];then
     zanata_script_help $0
+    exit ${EXIT_FATAL_INVALID_OPTIONS}
 fi
 
-MODULE=$1
+Module=$1
 developmentVersion=$2
-shift
+shift 2
 
-echo_stderr "### [prepare] ============================== Start"
-if [ ! -d ${WORK_ROOT} ];then
-    mkdir -p ${WORK_ROOT}
-fi
+##=== prepare Start ===
+print_status -t prepare -s "Start"
 
-ensure_repo ${MODULE}
-cd ${WORK_ROOT}/${MODULE}
+ensure_repo ${Module}
+cd ${WORK_ROOT}/${Module}
 git fetch
 
-echo_stderr "### [prepare] Check the branches exist"
+print_status " Check the branches exist"
 for b in origin/release origin/integration/master ;do
-    if ! does_branch_exist ${MODULE} $b ; then
-	echo_stderr "### [Fatal] ${MODULE} does not have $b !"
+    if ! does_branch_exist ${Module} $b ; then
+	print_status " ${Module} does not have $b !"
 	exit ${EXIT_FATAL_MISSING_DEPENDENCY}
     fi
 done
 
-echo_stderr "### [prepare] Clean up local branch"
+print_status " Clean up local branch"
 git checkout integration/master
 for b in legacy release ;do
-    if does_branch_exist ${MODULE} $b ; then
-	echo_stderr "### [prepare] clean $b for ${MODULE}"
+    if does_branch_exist ${Module} $b ; then
+	echo_stderr "### [prepare] clean $b for ${Module}"
 	git branch -D $b
 	git checkout --track origin/$b
     fi
 done
 
 pushRepo=()
-echo_stderr "### [prepare] Done"
+print_status " Done"
 
-if does_branch_exist ${MODULE} origin/legacy ; then
-    echo_stderr "### [release->legacy] ============================== Start"
-    echo_stderr "### [release->legacy] Point 'legacy' at previous 'release'"
+if does_branch_exist ${Module} origin/legacy ; then
+    print_status -t "release->legacy" -s "Start"
+    print_status " Point 'legacy' at previous 'release'"
     if ! git merge origin/release --ff-only; then
-        echo_stderr "### [FATAL] please check for cherry-picked commits in legacy which were never merged into release"
+	print_status " [FATAL] please check for cherry-picked commits in legacy which were never merged into release"
         exit ${EXIT_FATAL_FAIL}
     fi
 
     pushRepo+=(legacy)
-    echo_stderr "### [release->legacy] Done"
+    print_status " Done"
 fi
 
-if [ -r zanata.xml -a "$MODULE" = "zanata-server" ];then
-    echo_stderr "### [translation update] ============================== Start"
-    echo_stderr "### [translation update] update translation in integration/master"
-    git checkout integration/master && git reset --hard origin/integration/master
-    echo_stderr "### [translation update] Get latest translations and commit to local integration/master before branching"
-    mvn zanata:pull -B
-    git add **/src/main/resources/**/*_*.properties
-    mvn -q com.googlecode.l10n-maven-plugin:l10n-maven-plugin:1.8:validate -pl zanata-war
-    git commit -m "Fetch updated translations from translate.zanata.org"
-    git push origin integration/master
-    echo_stderr "### [translation update] Done"
-fi
-
-echo_stderr "### [integration/master->release] ============================== Start"
-git checkout release
-
-echo_stderr  "### [integration/master->release] Point 'release' at local integration/master"
+print_status -t "integration/master->release" -s "Start"
+print_status " Point 'release' at local integration/master"
 if ! git merge integration/master --ff-only; then
-    echo_stderr "### [FATAL] please check for cherry-picked commits in release which were never merged into integration/master"
+    EXIT_MSG=" Please check for cherry-picked commits in release which were never merged into integration/master"
     exit ${EXIT_FATAL_FAIL}
 fi
 pushRepo+=(release)
-echo_stderr "### [integration/master->release] Done"
+print_status " Done"
 
-echo_stderr "### [Final] ============================== Start"
-echo_stderr "### [Final] Update integration/master version"
+print_status -t "Final" -s "Start"
+print_status " Udate integration/master version"
 git checkout integration/master
 mvn release:update-versions -DautoVersionSubmodules=true -DdevelopmentVersion=${developmentVersion}
 git commit pom.xml */pom.xml -m "prepare for next development iteration"
 pushRepo+=(integration/master)
 
-echo_stderr "### [Final] Push all the changes back"
+print_status " Push all the changes back"
 git push origin ${pushRepo[@]}
 
-echo_stderr "### [Final] Done"
 cat>/dev/stderr<<END
 Please remember to announce the branching in IRC and zanata-devel.
 END

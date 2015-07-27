@@ -1,0 +1,63 @@
+#!/bin/bash -e
+### NAME
+###     zanata-translate-pull Download zanata translation.
+###
+### SYNOPSIS
+###     zanata-translate-pull <module> <branch> [ZanataMvnOption]
+### 
+### DESCRIPTION
+###     This script performs branching chores for big releases of
+###     zanata-client and zanata-server.
+###
+
+## globstar enable **/* glob match
+shopt -s globstar
+
+SCRIPT_DIR=$(dirname $(readlink  -q -f $0))
+FUNCTION_SCRIPT_FILE=${SCRIPT_DIR}/zanata-functions
+source "${FUNCTION_SCRIPT_FILE}"
+trap exit_print_error EXIT
+PROGRAM_NAME=$(basename $0)
+
+if [ $# -lt 2 ];then
+    zanata_script_help $0
+    exit ${EXIT_FATAL_INVALID_OPTIONS}
+fi
+
+Module=$1
+Branch=$2
+shift 2
+
+##=== prepare Start ===
+print_status -t prepare -s "Start"
+
+ensure_repo ${Module}
+cd ${WORK_ROOT}/${Module}
+git fetch
+print_status " Check branch $Branch exist"
+if ! does_branch_exist ${Module} $Branch ; then
+    EXIT_MSG=" ${Module} does not have $Branch"
+    exit ${EXIT_FATAL_MISSING_DEPENDENCY}
+fi
+
+git checkout $Branch
+print_status -t "translation update" -s "Start"
+if [ -r zanata.xml ];then
+    print_status " reset to origin/${Branch}"
+    git reset --hard origin/$Branch
+
+    print_status " pull translation from Zanata"
+    mvn -B org.zanata:zanata-maven-plugin:pull $@
+
+    print_status " Validate translation"
+    mvn -q com.googlecode.l10n-maven-plugin:l10n-maven-plugin:validate -pl zanata-war
+
+
+    print_status " Push translation"
+    git add **/src/main/resources/**/*_*.properties
+    git commit -m "Fetch updated translations from translate.zanata.org"
+    git push origin $Branch
+else
+    print_status " No zanata.xml, translation pull skipped."
+fi
+
