@@ -326,23 +326,25 @@ function parse_gav(){
 }
 
 ###
+###     gav_to_nv <GroupId> <artifactId> <Version>
+###        GroupId-ArtifactId-Version to RPM name-version
+function gav_to_nv(){
+    local groupId=$1
+    local artifactId=$2
+    local version=$(sed -e 's/-/_/g' <<<$3)
+    echo "$groupId-$artifactId-$version"
+}
+
+###
 ###     gav_to_path_prefix <GroupId> <artifactId> <version>
 ###        Return path prefix, when given GroupId, ArtifactId, and Version
 function gav_to_path_prefix(){
     local groupId=$1
     local artifactId=$2
-    local version=$3
-    local retStr=$(sed -e 's|\.|/|' <<< ${GroupId})
-    retStr+="/${ArtifactId}/${Version}/${ArtifactId}-${Version}"
+    local version=$(sed -e 's/-/_/g' <<<$3)
+    local retStr=$(sed -e 's|\.|/|' <<< ${groupId})
+    retStr+="/${artifactId}/${version}/${artifactId}-${version}"
     echo "$retStr"
-}
-
-###
-###     ga_to_package_name <GroupId> <artifactId>
-function ga_to_package_name(){
-    local groupId=$1
-    local artifactId=$2
-    echo "$groupId-$artifactId"
 }
 
 
