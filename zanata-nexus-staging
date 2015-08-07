@@ -228,7 +228,7 @@ case $Module in
 
 	print_status " nexus-staging:release"
 	mvn -e nexus-staging:release -Psonatype-oss-release \
-	    -DstagingRepositoryId=$(StagingRepositoryId)
+	    -DstagingRepositoryId=${StagingRepositoryId}
 	;;
     * )
 	### Module like tennera or openprops
