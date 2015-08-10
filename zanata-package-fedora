@@ -220,7 +220,7 @@ if [ -n "${FedpkgBuildBranches}" ];then
 	fedpkg switch-branch ${branch}
 	if [ "$branch" = "master" ];then
 	    ## In master, ensure scratch build work for available branch
-	    spec_update ${Module}.spec ${Version} ${SpecRelease} ${MAINTAINER_EMAIL}
+	    spec_update ${Module}.spec ${Version} ${SpecRelease} "${MAINTAINER_EMAIL}"
 
 	    print_status " spectool: Getting list of source file(s)"
 	    sourceFiles=$(spectool -l -S "${TmpSpecPath}" | sed -e 's!.*/!!' | xargs)

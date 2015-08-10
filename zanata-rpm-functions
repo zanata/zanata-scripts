@@ -16,11 +16,11 @@
 
 ###     spec_update <specPath> <version> <specRelease> <maintainerEmail> [changeLogMsg]
 function spec_update(){
-    local specPath=$1
+    local specPath="$1"
     local version=$2
-    local specRelease=$3
-    local maintainerEmail=$4
-    local changeLogMsg=$5
+    local specRelease="$3"
+    local maintainerEmail="$4"
+    local changeLogMsg="$5"
     SpecModified=0
 
     test -r $specPath
@@ -44,24 +44,23 @@ function spec_update(){
 
     ## Update version 
     local versionMatchStr=$(sed -n -e '/^Version:/ s/^Version:\s*\([0-9]*\.[0-9]*\.[0-9]*\).*$/\1/ p' ${TmpSpecPath}.changelog)
-    if [ -z "${versionMatchStr}" ];then
+    if [ "${versionMatchStr}" != "$version" ];then
 	print_status " updating version to $version"
 	sed -e '/^Version:/ s/[0-9]*\.[0-9]*\.[0-9]*/'$version'/' ${TmpSpecPath}.changelog > ${TmpSpecPath}.version
 	SpecModified=1
     else
-	cp "${specPath}" ${TmpSpecPath}.version
+	cp "${TmpSpecPath}.changelog" "${TmpSpecPath}.version"
     fi
 
     ## Update SpecRelease
     local releaseMatchStr=$(sed -n -e '/^Release:/ s/^Release:\s*\([0-9]*\).*$/\1/ p' ${TmpSpecPath}.changelog)
-    if [ -z "${versionMatchStr}" ];then
+    if [ "${releaseMatchStr}" != "${specRelease}" ];then
 	print_status " updating SPEC release to ${specRelease}"
 	sed -e '/^Release:/ s/[0-9]*/'$specRelease'/' ${TmpSpecPath}.version > ${TmpSpecPath}
 	SpecModified=1
     else
-	cp "${specPath}" ${TmpSpecPath}
+	cp "${TmpSpecPath}.version" "${TmpSpecPath}"
     fi
-
 
     print_status " checking generated SPEC"
     rpmlint ${TmpSpecPath} 1>/dev/stderr
