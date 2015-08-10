@@ -53,10 +53,10 @@ function spec_update(){
     fi
 
     ## Update SpecRelease
-    local releaseMatchStr=$(sed -n -e '/^Release:/ s/^Release:\s*\([0-9]*\).*$/\1/ p' ${TmpSpecPath}.changelog)
+    local releaseMatchStr=$(sed -n -e '/^Release:/ s/^Release:\s*\([0-9][0-9]*\).*$/\1/ p' ${TmpSpecPath}.changelog)
     if [ "${releaseMatchStr}" != "${specRelease}" ];then
 	print_status " updating SPEC release to ${specRelease}"
-	sed -e '/^Release:/ s/[0-9]*/'$specRelease'/' ${TmpSpecPath}.version > ${TmpSpecPath}
+	sed -e '/^Release:/ s/[0-9][0-9]*/'$specRelease'/' ${TmpSpecPath}.version > ${TmpSpecPath}
 	SpecModified=1
     else
 	cp "${TmpSpecPath}.version" "${TmpSpecPath}"

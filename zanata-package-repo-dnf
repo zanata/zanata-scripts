@@ -99,7 +99,7 @@ print_status -t parsing -s "Start"
 Version=
 SpecRelease=
 AUTO_DETECT=0
-START_FROM=0
+START_FROM=
 while getopts "hab" opt;do
     case $opt in
 	h )
@@ -207,14 +207,14 @@ if [ -z "${START_FROM}" ];then
 fi
 
 ##=== spec Start ===
-specFilename="${PackageName}.spec"
+SpecFilename="${PackageName}.spec"
 if [ -z "${START_FROM}" ];then
     print_status -t "spec-update" -s "Start"
-    spec_update ${specFilename} ${Version} ${SpecRelease} ${MAINTAINER_EMAIL}
+    spec_update ${SpecFilename} ${Version} ${SpecRelease} "${MAINTAINER_EMAIL}"
 
     print_status " spectool: Downloading source file(s)"
     spectool -g -S "${TmpSpecPath}" -C ${CACHE_DIR}
-    cp -v ${TmpSpecPath} ${specFilename}
+    cp -v ${TmpSpecPath} ${SpecFilename}
 fi
 
 
@@ -235,7 +235,7 @@ for fr in ${FEDORA_RELEASES}; do
     if [ ! -r "${srpmPath}" ];then
 	## Create srpm
 	print_status " creating SRPM: ${srpmPath}"
-	rpmbuild -bs --define "dist .${distTag}" --define "_sourcedir ${CACHE_DIR}" --define "_srcrpmdir ${srpmDir}" "${specFilename}"
+	rpmbuild -bs --define "dist .${distTag}" --define "_sourcedir ${CACHE_DIR}" --define "_srcrpmdir ${srpmDir}" "${SpecFilename}"
 	update_dnf_repo_dir $fr SRPMS
     fi
 
