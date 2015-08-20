@@ -11,24 +11,118 @@
 ### FUNCTIONS
 function zanata_functions_get_path(){
     shopt -s extdebug
-    declare -F zanata_functions_get_path | sed -e 's|^[^/]*||'
+    declare -F zanata_functions_get_path| sed -e 's|^[^ ]* [0-9]* ||'
     shopt -u extdebug
 }
 
-function zanata_script_help_header(){
-    local script=$1
+function zanata_help_raw(){
+    local script="$1"
     [ -z "$script" ] && script=$0
-    sed -n -e '/^###/ {s|^###||p}' $script |  sed -e '/^\s*EXIT_STATUS/,$d'
+    sed -r -n -e '/^### ?/ {s|^### ?||p}' $script
 }
 
-function zanata_script_exit_status_help(){
-    sed -n -e '/^###/ {s|^###||p}' $(zanata_functions_get_path) | sed -e '0,/^\s*EXIT_STATUS/d'
+function zanata_help_list_sections_from_string(){
+    local -A idx
+    for section in $(sed -n -e '/^[A-Z]/ p' <<<"$1" | xargs); do
+	if [ -z "${idx[$section]}"   ];then
+	    idx[$section]=1
+	    echo "$section"
+	fi
+    done
+}
+
+###     zanata_help_list_sections <script>
+function zanata_help_list_sections(){
+    local script="$1"
+    zanata_help_list_sections_from_string "$(zanata_help_raw $script)"
+}
+
+function zanata_help_section_from_string(){
+    local section="$1"
+    local buf="$2"
+
+    local currentHeader=
+    local headerPrinted=0
+    IFS_BAK="${IFS}"
+    IFS=''
+    echo "$buf" | while read line ; do 
+        ## update currentHeader
+	if [[ "$line" =~ ^[A-Z].* ]];then 
+	    currentHeader=$(sed -e 's/\s*$//' <<< "$line") 
+	fi 
+
+	## print if current Header is section
+	if [[ "$currentHeader" = "$section" ]];then
+	    ## print section header if not already
+	    if [[ "$line" =~ $section\s* ]];then 
+		if [ $headerPrinted -eq 0 ];then
+		    headerPrinted=1
+		    echo "$line"
+		fi
+	    else
+		echo "$line"
+	    fi
+	fi
+    done
+    IFS="${IFS_BAK}"
+}
+
+###     zanata_help_section <script> <section> 
+function zanata_help_section(){
+    local script=$1
+    local section=$2
+    zanata_help_section_from_string "$section" "$(zanata_help_raw $script)"
+    
+}
+
+function zanata_script_help_short(){
+    local script=$1
+    local buf=$(zanata_help_raw $script)
+    local zanataFunc=$(zanata_functions_get_path)
+    if [ "$script" != "${zanataFunc}" ];then
+	buf+="
+	"
+	buf+=$(zanata_help_section "${zanataFunc}" "EXIT_STATUS")
+	buf+="
+	"
+	buf+=$(zanata_help_section "${zanataFunc}" "ENVIRONMENT")
+    fi
+
+    for section in $(zanata_help_list_sections_from_string "$buf" | xargs );do
+	case "$section" in
+	    SYNOPSIS )
+		zanata_help_section_from_string "$section" "$buf"
+		echo
+		;;
+	    ARGUMENTS )
+		zanata_help_section_from_string "$section" "$buf"
+		echo
+		;;
+	    OPTIONS )
+		zanata_help_section_from_string "$section" "$buf"
+		echo
+		;;
+	esac
+    done
 }
 
 function zanata_script_help(){
-    zanata_script_help_header $1
-    echo -e " EXIT_STATUS"
-    zanata_script_exit_status_help
+    local script=$1
+    local buf=$(zanata_help_raw $script)
+    local zanataFunc=$(zanata_functions_get_path)
+    if [ "$script" != "${zanataFunc}" ];then
+	buf+="
+"
+	buf+=$(zanata_help_section "${zanataFunc}" "EXIT_STATUS")
+	buf+="
+"
+	buf+=$(zanata_help_section "${zanataFunc}" "ENVIRONMENT")
+    fi
+
+    for section in $(zanata_help_list_sections_from_string "$buf" | xargs );do
+	zanata_help_section_from_string "$section" "$buf"
+	echo
+    done
 }
     
 function echo_stderr(){
@@ -186,14 +280,14 @@ function exit_print_error(){
 	    echo_stderr "### Done ${EXIT_MSG}"
 	    ;;
 	${EXIT_FATAL_INVALID_OPTIONS} )
-	    zanata_script_help $0
+	    zanata_script_help_short $0
 	    echo_stderr "### [FATAL] Invalid Options: ${EXIT_MSG}"
 	    ;;
 	${EXIT_FATAL_MISSING_DEPENDENCIES} )
 	    echo_stderr "### [FATAL] Missing dependencies: ${EXIT_MSG}"
 	    ;;
 	${EXIT_FATAL_UNKNOWN_MODULE} )
-	    zanata_script_help $0
+	    zanata_script_help_short $0
 	    echo_stderr "### [FATAL] Unknown or Invalid module: ${EXIT_MSG}"
 	    ;;
 	${EXIT_FATAL_FAIL} )
@@ -414,12 +508,12 @@ function time-stamp(){
 
 ###
 ### EXIT_STATUS
-###     Success
+###     Success:
 ###         EXIT_OK
 declare EXIT_OK=0
 
 ###
-###     Fatal should stop immediately.
+###     Fatal that should stop immediately:
 ###         EXIT_FATAL_UNSPECIFIED: Unspecified fatal error, 
 ###             usually indicate a bug in our scripts.
 declare EXIT_FATAL_UNSPECIFIED=1
@@ -437,11 +531,11 @@ declare EXIT_FATAL_UNKNOWN_MODULE=5
 declare EXIT_FATAL_FAIL=5
 
 ###
-###     Error that need to stop before next step.
+###     Error that need to stop before next stage:
 ###         EXIT_ERROR_FAIL: Script detected that an error occurred.
 declare EXIT_ERROR_FAIL=20
 
-###     Return value, should not print error messages.
+###     Return value, should not print error messages:
 ###         EXIT_RETURN_FALSE: Script should return false
 declare EXIT_RETURN_FALSE=40
 
@@ -450,15 +544,19 @@ case $1 in
         zanata_script_help $0
 	exit ${EXIT_OK}
         ;;
-    exit-status-help )
-        zanata_script_exit_status_help
+    help-section )
+	zanata_help_section $0 $2
 	exit ${EXIT_OK}
-        ;;
+	;;
+    help-list-sections )
+	zanata_help_list_sections $0
+	exit ${EXIT_OK}
+	;;
 esac
 
-### 
+###
 ### ENVIRONMENT
-###     TMP_ROOT: 
+###     TMP_ROOT:
 ###         Root of temporary directories and files, and expected to be clean
 ###         Default: /tmp/zanata
 : ${TMP_ROOT:=/tmp/zanata}
@@ -472,7 +570,7 @@ create_missing_dir "${TMP_ROOT}"
 create_missing_dir "${REPO_LOCAL_DIR}"
 
 ###
-###     DEVEL_ROOT
+###     DEVEL_ROOT:
 ###         Root of development project directories.
 ###	    For example,  Git Repo zanata-scripts is expected to be in 
 ###         ${DEVEL_ROOT}/zanata-scripts
