@@ -261,9 +261,7 @@ function ensure_repo(){
 ###     exit_if_failed <var> <exitStatus> <exitMsg>
 function exit_if_failed(){
     if [ $1 -ne 0 ];then
-	local exitStatus=$2
-	EXIT_MSG="$3"
-	exit $exitStatus
+	failed $2 "$3"
     fi
 }
 
@@ -299,6 +297,15 @@ function exit_print_error(){
     esac
     exit ${exitStatus}
 }
+
+###
+###     failed <exitStatus> <exitMsg>
+function failed(){
+    local exitStatus=$1
+    EXIT_MSG="$2"
+    exit $exitStatus
+}
+
 
 ###
 ###     get_releasing_branch <module>
