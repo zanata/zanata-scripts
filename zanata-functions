@@ -600,3 +600,9 @@ create_missing_dir "${WORK_ROOT}"
 ###         Default: git@github.com:zanata
 : ${ZANATA_GIT_URL_PREFIX:=git@github.com:zanata}
 
+###
+###     M2_REPOSITORY_DIR
+###         Repository for maven
+###         Default: ${HOME}/.m2/repository
+: ${M2_REPOSITORY_DIR:=$HOME/.m2/repository}
+
