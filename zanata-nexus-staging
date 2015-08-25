@@ -97,8 +97,7 @@ while getopts "brh" opt;do
 	    SKIP_RELEASE_PLUGIN=1
 	    ;;
 	* )
-	    echo "Invalid option $opt" > /dev/stderr
-	    exit ${EXIT_FATAL_INVALID_OPTIONS}
+            failed ${EXIT_FATAL_INVALID_OPTIONS} "$opt"
 	    ;;
     esac
 done
