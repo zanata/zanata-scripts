@@ -53,8 +53,8 @@ LANG=C
 ###     and you need to specify version-release.
 ###
 
-## Default Environment Variable
-: ${SpecRelease:=1}
+## Variables
+SpecRelease=1
 
 SCRIPT_DIR=$(dirname $(readlink  -q -f $0))
 FUNCTION_SCRIPT_FILE="${SCRIPT_DIR}/zanata-functions"
