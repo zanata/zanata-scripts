@@ -5,8 +5,8 @@ set -e
 ###
 ### SYNOPSIS
 ###     zanata-nexus-staging [options] <MODULE>
-###     zanata-nexus-staging-tennera   [options]
 ###     zanata-nexus-staging-openprops [options]
+###     zanata-nexus-staging-jgettext   [options]
 ###     zanata-nexus-staging-parent    [options]
 ###     zanata-nexus-staging-api       [options]
 ###     zanata-nexus-staging-common    [options]
@@ -230,7 +230,7 @@ case $Module in
 	    -DstagingRepositoryId=${StagingRepositoryId}
 	;;
     * )
-	### Module like tennera or openprops
+	### Module like jgettext or openprops
 	### These have only master
 	release_perform
 
