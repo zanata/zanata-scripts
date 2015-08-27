@@ -13,53 +13,54 @@
 -- NB: the following tables are deliberately not purged:
 -- HAccount* HCredentials HLocale* HPerson* HRoleAssignmentRule
 
--- Warning: this has only been tested against one database. Some delete
--- statements are probably in the wrong order, and will violate
--- constraints if the tables contain any data.
--- The script may also leave orphan records in some cases.
+-- The deletion order was created with help from SchemaSpy 5.0.0
+-- running against Zanata 3.6, but it should work for 3.7 too.
 
--- Zanata DB version: 3.7.1
+-- Warning: this has only had minimal testing.
 
-delete from Activity;
-delete from HTextFlowTargetContentHistory;
-delete from HPoTargetHeader;
-delete from HTextFlowTargetHistory;
-delete from HTextFlowTargetReviewComment;
-delete from HTextFlowTarget;
-delete from HTextFlowContentHistory;
-delete from HTextFlowHistory;
-delete from HTextFlow;
-delete from HPotEntryData;
+-- Author: Sean Flanigan <sflaniga@redhat.com>
+
 delete from TransMemoryUnitVariant;
 delete from TransMemoryUnit;
 delete from TransMemory_Metadata;
 delete from TransMemory;
-delete from WebHook;
-delete from HTermComment;
-delete from HDocument_RawDocument;
+delete from IterationGroup_Locale;
+delete from HTextFlowTargetReviewComment;
+delete from HTextFlowTargetContentHistory;
+delete from HTextFlowContentHistory;
 delete from HRawDocument;
+delete from HProjectIteration_Validation;
+delete from HProject_Validation;
+delete from HProject_AllowedRole;
+delete from HIterationGroup_ProjectIteration;
+delete from HIterationGroup_Maintainer;
+delete from HIterationGroup;
 delete from HDocumentUploadPart;
 delete from HDocumentUpload;
+delete from HDocument_RawDocument;
+delete from Activity;
+delete from HPoTargetHeader;
 delete from HDocumentHistory;
-delete from HDocument;
-delete from HPoHeader;
-delete from HSimpleComment;
+delete from HTextFlowTargetHistory;
 delete from HProjectIteration_Locale;
-delete from HProjectIteration_Validation;
-delete from HProjectIteration;
-delete from HProject_AllowedRole;
-delete from HProject_Locale;
 delete from HProject_Maintainer;
-delete from HProject_Validation;
+delete from HProject_Locale;
+delete from WebHook;
+delete from HTextFlowHistory;
+delete from HTermComment;
+delete from HProjectIteration_LocaleAlias;
+delete from HProject_LocaleAlias;
+delete from HTextFlowTarget;
+delete from HGlossaryTerm;
+delete from HTextFlow;
+delete from HDocument;
+delete from HProjectIteration;
+delete from HPotEntryData;
+delete from HPoHeader;
+delete from HGlossaryEntry;
 delete from HProject;
 delete from HCopyTransOptions;
-delete from HTermComment;
-delete from HGlossaryTerm;
-delete from HGlossaryEntry;
-delete from IterationGroup_Locale;
-delete from HIterationGroup_Maintainer;
-delete from HIterationGroup_ProjectIteration;
-delete from HIterationGroup;
+delete from HSimpleComment;
 
 delete from HApplicationConfiguration
   where config_key in ('host.url', 'log.email.active', 'piwik.url', 'piwik.idSite');
