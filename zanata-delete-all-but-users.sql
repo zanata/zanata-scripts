@@ -66,8 +66,7 @@ delete from HApplicationConfiguration
   where config_key in ('host.url', 'log.email.active', 'piwik.url', 'piwik.idSite');
 
 delete from HLocale_Member
-where supportedLanguageId in (select id from HLocale where active=false);
+  where supportedLanguageId in (select id from HLocale where active=false);
 
 delete from HLocale
-where active=false;
-
+  where active=false;
