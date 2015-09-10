@@ -141,7 +141,7 @@ function checkout_releasing_branch(){
     [ -z $parentDir ] && parentDir=${PWD}
     local branch=$(get_releasing_branch $module)
     pushd ${parentDir}/${module} >/dev/null
-    git fetch
+    git remote update origin
     git checkout ${branch}
     popd >/dev/null
 }
@@ -154,7 +154,7 @@ function checkout_devel_branch(){
     [ -z $parentDir ] && parentDir=${PWD}
     local branch=$(get_devel_branch $module)
     pushd ${parentDir}/${module} >/dev/null
-    git fetch
+    git remote update origin
     git checkout ${branch}
     popd >/dev/null
 }
@@ -193,7 +193,7 @@ function detect_module_tag(){
 function detect_module_version(){
     local module=$1
     local latestTag=$(detect_module_tag ${module})
-    local version=$(sed -e 's/.*-\([^-]*\)/\1/' <<< ${latestTag})
+    local version=$(sed -e 's/^[^-]*-\(.*\)$/\1/' <<< ${latestTag})
     test -n "$version"
     exit_if_failed "$?" ${EXIT_FATAL_FAIL} "Failed to get version from ${module}"
 
