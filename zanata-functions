@@ -266,8 +266,9 @@ function exit_if_failed(){
 }
 
 ###
-###     exit_print_error
-###         Print error message just before exit
+###     exit_print_error <exitStatus>
+###         Print error message just before exit. 
+###         This function does not meant to call directly.
 ###         Environment:
 ###             EXIT_MSG: Error message to print.
 EXIT_MSG=
