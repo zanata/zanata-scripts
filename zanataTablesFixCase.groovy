@@ -43,9 +43,11 @@ HPotEntryData
 HProject
 HProjectIteration
 HProjectIteration_Locale
+HProjectIteration_LocaleAlias
 HProjectIteration_Validation
 HProject_AllowedRole
 HProject_Locale
+HProject_LocaleAlias
 HProject_Maintainer
 HProject_Validation
 HRawDocument
