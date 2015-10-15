@@ -133,30 +133,37 @@ function get_git_url(){
     echo "${ZANATA_GIT_URL_PREFIX}/$1.git"
 }
 
+###     checkout_branch <module> <branch> [parentDir]
+###         checkout <branch> for <module>
+function checkout_branch(){
+    local module=$1
+    local branch=$2
+    local parentDir=$3
+    [ -z $parentDir ] && parentDir=${PWD}
+    pushd ${parentDir}/${module} >/dev/null
+    git remote update origin
+    git checkout ${branch}
+    git pull
+    popd >/dev/null
+}
+
+
 ###     checkout_releasing_branch <module> [parentDir]
 ###         checkout RELEASING_BRANCH, the branch that we recommend downstream to use.
 function checkout_releasing_branch(){
     local module=$1
-    local parentDir=$2
-    [ -z $parentDir ] && parentDir=${PWD}
+    shift
     local branch=$(get_releasing_branch $module)
-    pushd ${parentDir}/${module} >/dev/null
-    git remote update origin
-    git checkout ${branch}
-    popd >/dev/null
+    checkout_branch ${module} ${branch} $@
 }
 
 ###     checkout_devel_branch <module>  [parentDir]
 ###         checkout DEVEL_BRANCH, the branch the branch for committing new features.
 function checkout_devel_branch(){
     local module=$1
-    local parentDir=$2
-    [ -z $parentDir ] && parentDir=${PWD}
+    shift
     local branch=$(get_devel_branch $module)
-    pushd ${parentDir}/${module} >/dev/null
-    git remote update origin
-    git checkout ${branch}
-    popd >/dev/null
+    checkout_branch ${module} ${branch} $@
 }
 
 ###
@@ -428,13 +435,19 @@ function parse_gav(){
 }
 
 ###
-###     gav_to_nv <GroupId> <artifactId> <Version>
-###        GroupId-ArtifactId-Version to RPM name-version
-function gav_to_nv(){
+###     gav_to_nvr <GroupId> <artifactId> <Version>
+###        GroupId-ArtifactId-Version to RPM name-version-release
+###        Note the release does not include dist tag (.el7)
+function gav_to_nvr(){
     local groupId=$1
     local artifactId=$2
     local version=$(sed -e 's/-/_/g' <<<$3)
-    echo "$groupId-$artifactId-$version"
+    local release=1
+#    if [[ "$version" =~ _SNAPSHOT ]];then
+#	version=$(sed -e 's/_SNAPSHOT//' <<<$version)
+#		release="0.snapshot"
+#    fi
+    echo "$groupId-$artifactId-$version-$release"
 }
 
 ###
