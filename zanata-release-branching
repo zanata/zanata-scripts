@@ -75,7 +75,7 @@ pushRepo+=(release)
 print_status " Done"
 
 print_status -t "Final" -s "Start"
-print_status " Udate integration/master version"
+print_status " Update integration/master version"
 git checkout integration/master
 mvn release:update-versions -DautoVersionSubmodules=true -DdevelopmentVersion=${developmentVersion}
 git commit pom.xml */pom.xml -m "prepare for next development iteration"
