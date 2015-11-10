@@ -42,11 +42,13 @@ done
 
 print_status " Clean up local branch"
 git checkout integration/master
+git pull
 for b in legacy release ;do
     if does_branch_exist ${Module} $b ; then
 	echo_stderr "### [prepare] clean $b for ${Module}"
 	git branch -D $b
 	git checkout --track origin/$b
+	git pull
     fi
 done
 
