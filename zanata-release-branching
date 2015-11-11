@@ -95,13 +95,7 @@ print_status -t "Final" -s "Start"
 print_status " Update $DEVEL_BRANCH version"
 git checkout $DEVEL_BRANCH
 
-case $Module in
-    zanata-assets )
-	;;
-    * )
-	mvn release:update-versions -DautoVersionSubmodules=true -DdevelopmentVersion=${DevelopmentVersion}
-	;;
-esac
+mvn release:update-versions -DautoVersionSubmodules=true -DdevelopmentVersion=${DevelopmentVersion}
 git commit -m "[$ProgramName] prepare for next development iteration" -- **/pom.xml
 PushRepoArray+=($DEVEL_BRANCH)
 
