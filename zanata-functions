@@ -358,23 +358,26 @@ function get_devel_branch(){
 ###         Print: <module or - for unknown>
 function get_module(){
     case $1 in
-	*jgettext)
-	    echo "jgettext"
-	    ;;
-	*openprops)
-	    echo "openprops"
-	    ;;
-	*parent)
-	    echo "zanata-parent"
-	    ;;
 	*api)
 	    echo "zanata-api"
+	    ;;
+	*assets)
+	    echo "zanata-assets"
+	    ;;
+	*client)
+	    echo "zanata-client"
 	    ;;
 	*common)
 	    echo "zanata-common"
 	    ;;
-	*client)
-	    echo "zanata-client"
+	*jgettext)
+	    echo "jgettext"
+	    ;;
+	*parent)
+	    echo "zanata-parent"
+	    ;;
+	*openprops)
+	    echo "openprops"
 	    ;;
 	*server)
 	    echo "zanata-server"
