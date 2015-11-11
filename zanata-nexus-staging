@@ -97,10 +97,17 @@ function release_perform(){
 
 	print_status " Dry-run: release:prepare release:perform"
 
-	mvn ${MAVEN_RELEASE_OPTIONS} release:clean release:prepare release:perform -DdryRun=true 
+	case $Module in
+	    zanata-assets)
+		print_status " grunt build for $Module"
+		MAVEN_RELEASE_OPTIONS+=" '-DpreparationGoals=clean install verify'"
+		;;
+	esac
 
-	print_status " Real-run: it should sign artifacts, push $Module to nexus, then close it"
-	mvn ${MAVEN_RELEASE_OPTIONS} release:clean release:prepare release:perform
+        mvn ${MAVEN_RELEASE_OPTIONS} release:clean release:prepare release:perform -DdryRun=true 
+
+        print_status " Real-run: it should sign artifacts, push $Module to nexus, then close it"
+        mvn ${MAVEN_RELEASE_OPTIONS} release:clean release:prepare release:perform
 
 	if [ $? -ne 0 ];then
 	    EXIT_MSG="release goals failed"
@@ -189,9 +196,9 @@ print_status -t release -s "Start"
 
 case $Module in
     zanata-assets | zanata-parent | zanata-api | zanata-common | zanata-client)
-	release_perform
+        release_perform
 
-	print_status -t nexus-reelase -s "Start"
+        print_status -t nexus-release -s "Start"
 
 	StagingRepositoryId=$(mvn $NEXUS_STAGING_OPTIONS ${NEXUS_STAGING_PLUGIN}:rc-list | sed -n  -e '/orgzanata-.* OPEN/ s/.*\(orgzanata-[0-9]*\).*$/\1/p' | tail -n 1)
 
@@ -199,7 +206,7 @@ case $Module in
 
 	if [ -z "$StagingRepositoryId" ];then
 	    if [ ! -e $StagingPropertiesGlob ];then
-		failed $? $EXIT_FATAL_FAIL " Failed to find $StagingPropertiesGlob"
+		failed $EXIT_FATAL_FAIL " Failed to find $StagingPropertiesGlob"
 	    fi
 	    StagingRepositoryId=$(grep -oP '^stagingRepository\.id=\K.*' $StagingPropertiesGlob )
 	    test -n "$StagingRepositoryId"
