@@ -215,7 +215,7 @@ case $Module in
 	    -DstagingRepositoryId=${StagingRepositoryId}
 
         print_status " nexus-staging:release"
-	mvn $NEXUS_STAGING_OPTIONS ${NEXUS_STAGING_PLUGIN}:close \
+	mvn $NEXUS_STAGING_OPTIONS ${NEXUS_STAGING_PLUGIN}:release \
 	    -DstagingRepositoryId=${StagingRepositoryId}
 
 	;;
