@@ -88,9 +88,7 @@ function release_perform(){
 	git clean -f -d
 
 	print_status " Update Zanata dependencies"
-	mvn versions:update-parent
-	mvn versions:use-releases '-Dincludes=org.zanata:*'
-	mvn versions:update-properties '-Dincludes=org.zanata:*'
+	$ScriptDir/zanata-version-update -j
 	if ! git diff --exit-code;then
 	    git commit -a -m "chore(dependency): [zanata-nexus-staging] Update Zanata dependencies"
 	fi

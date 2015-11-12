@@ -1,0 +1,94 @@
+#!/bin/bash -e
+### NAME
+###     zanata-version-update - Update the Zanata dependencies
+###
+### SYNOPSIS
+###     zanata-version-update [Option] [<module>|<artifact> [<branch>]]
+### 
+### DESCRIPTION
+###     This program updates pom.xml to use latest release
+### of the dependencies in org.zanata
+###
+### ARGUMENTS
+###     <module>: module name like zanata-api
+###         If option '-j' is specified, this will be ignored
+###
+###     <artifact>: artifact like api
+###         If option '-j' is specified, this will be ignored
+###
+###     <branch>: branch to work on. By default it is releasing branch.
+###         If option '-j' is specified, this will be ignored
+###
+###
+### OPTIONS
+###     -h: Show help.
+###
+###     -j: Jenkins mode.
+###         This assumes that current directory is <module> work directory.
+###         and correct branch is checked out.
+
+
+shopt -s globstar
+ScriptDir=$(dirname $(readlink  -q -f $0))
+FunctionScriptFile=${ScriptDir}/zanata-functions
+source "${FunctionScriptFile}"
+trap exit_print_error EXIT
+ProgramName=$(basename $0)
+
+##=== parsing Start ===
+print_status -t "parse" -s "Start"
+JenkinsMode=0
+
+while getopts "hj" opt;do
+    case $opt in
+	h )
+	    zanata_script_help $0
+	    exit ${EXIT_OK}
+	    ;;
+	j )
+	    JenkinsMode=1
+	    ;;
+	* )
+	    failed ${EXIT_FATAL_INVALID_OPTIONS} "$opt"
+	    ;;
+    esac
+done
+shift $((OPTIND-1))
+
+
+##=== prepare Start ===
+print_status -t prepare  -s "Start"
+## If not JenkinsMode, then checkout should be done here
+if [ $JenkinsMode -eq 0 ];then
+    ModuleResult=$(get_module_from_command $1)
+    echo "ModuleResult=$ModuleResult"
+    Module=$(sed -e 's/ .*//'<<<"$ModuleResult")
+    if [[ $ModuleResult == *1 ]];then
+	shift
+    fi
+    print_status " Module=$Module"
+
+    ensure_repo ${Module}
+    cd $WORK_ROOT/$Module
+    ## Determine RELEASING_BRANCH
+    git fetch
+    if [ -n "$1" ];then
+	branch=$1
+	shift
+    else
+	branch=$(get_releasing_branch $Module)
+    fi
+    print_status " Branch is $branch"  
+    git checkout $branch
+    git pull
+fi
+
+##=== update Start ===
+print_status -t update  -s "Start"
+
+mvn versions:update-parent
+mvn versions:use-releases '-Dincludes=org.zanata:*'
+mvn versions:update-properties '-Dincludes=org.zanata:*'
+
+git diff
+
