@@ -17,9 +17,12 @@ set -e
 ###     -h: Show this help
 ###
 ###     -d <developmentVersion>:
-###         Development Vesion like: 3.9.0-SNAPSHOT
+###         Development Vesion like: 3.10.0-SNAPSHOT
 ###
 ###     -s: Skip release plugin
+###
+###     -r <releaseVersion>
+###         Release Vesion like: 3.9.0
 ### 
 ### DESCRIPTION
 ###     This program releases version in maven and submit to sonatype.
