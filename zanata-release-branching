@@ -58,12 +58,13 @@ done
 print_status " Checkout and pull $DEVEL_BRANCH"
 git checkout $DEVEL_BRANCH
 git pull
+git reset --hard origin/$DEVEL_BRANCH
 for b in legacy release ;do
     if does_branch_exist ${Module} $b ; then
-	echo_stderr "### [prepare] clean $b for ${Module}"
-	git branch -D $b
+	echo_stderr "### [prepare] match branch $b with origin for ${Module}"
 	git checkout --track origin/$b
 	git pull
+	git reset --hard origin/$DEVEL_BRANCH
     fi
 done
 
