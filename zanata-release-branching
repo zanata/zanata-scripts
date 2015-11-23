@@ -68,7 +68,6 @@ for b in legacy release ;do
     fi
 done
 
-
 PushRepoArray=()
 print_status " Done"
 
