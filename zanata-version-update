@@ -26,7 +26,9 @@
 ###     -j: Jenkins mode.
 ###         This assumes that current directory is <module> work directory.
 ###         and correct branch is checked out.
-
+###     
+###     -n: Allow Snapshots
+###
 
 shopt -s globstar
 ScriptDir=$(dirname $(readlink  -q -f $0))
@@ -38,8 +40,10 @@ ProgramName=$(basename $0)
 ##=== parsing Start ===
 print_status -t "parse" -s "Start"
 JenkinsMode=0
+AllowSnapshot=0
+ExtraOptionArray=()
 
-while getopts "hj" opt;do
+while getopts "hjn" opt;do
     case $opt in
 	h )
 	    zanata_script_help $0
@@ -47,6 +51,10 @@ while getopts "hj" opt;do
 	    ;;
 	j )
 	    JenkinsMode=1
+	    ;;
+	n )
+	    AllowSnapshot=1
+	    ExtraOptionArray+=(-DallowSnapshots=true)
 	    ;;
 	* )
 	    failed ${EXIT_FATAL_INVALID_OPTIONS} "$opt"
@@ -86,9 +94,17 @@ fi
 ##=== update Start ===
 print_status -t update  -s "Start"
 
-mvn versions:update-parent
-mvn versions:use-releases '-Dincludes=org.zanata:*'
-mvn versions:update-properties '-Dincludes=org.zanata:*'
+print_status " update-parent ${ExtraOptionArray[*]}"
+mvn versions:update-parent "${ExtraOptionArray[@]}"
+if [ $AllowSnapshot -eq 1 ];then
+    print_status " use-next-versions '-Dincludes=org.zanata:*' ${ExtraOptionArray[*]}"
+    mvn versions:use-next-versions '-Dincludes=org.zanata:*' "${ExtraOptionArray[@]}"
+else
+    print_status " update-releases '-Dincludes=org.zanata:*' ${ExtraOptionArray[*]}"
+    mvn versions:use-releases '-Dincludes=org.zanata:*' "${ExtraOptionArray[@]}"
+fi
+print_status " update-properties '-Dincludes=org.zanata:*' ${ExtraOptionArray[*]}"
+mvn versions:update-properties '-Dincludes=org.zanata:*' "${ExtraOptionArray[@]}"
 
 if ! git diff --exit-code ;then
     exit ${EXIT_RETURN_FALSE}
