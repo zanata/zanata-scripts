@@ -90,5 +90,7 @@ mvn versions:update-parent
 mvn versions:use-releases '-Dincludes=org.zanata:*'
 mvn versions:update-properties '-Dincludes=org.zanata:*'
 
-git diff
-
+if ! git diff --exit-code ;then
+    exit ${EXIT_RETURN_FALSE}
+fi
+exit ${EXIT_OK}
