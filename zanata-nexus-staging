@@ -96,9 +96,17 @@ function release_perform(){
 		;;
 	    *)
 		print_status " Update Zanata dependencies"
-		if ! $ScriptDir/zanata-version-update -j ;then
+		set +e
+		$ScriptDir/zanata-version-update -j
+		VersionUpdateResult=$?
+		if [ "$VersionUpdateResult" = "$EXIT_RETURN_FALSE" ];then
+		    read -p "### Are the change looks alright? Press [Ctrl-C] to break, [Enter] to continue"
 		    git commit -a -m "chore(dependency): [zanata-nexus-staging] Update Zanata dependencies"
+		elif [ "$VersionUpdateResult" != "$EXIT_OK" ];then
+		    ## Error, pass the error code as-is
+		    exit $VersionUpdateResult
 		fi
+		set -e
 		;;
 	esac
 
