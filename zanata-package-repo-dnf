@@ -1,10 +1,11 @@
 #!/bin/bash -e
 LANG=C
 ### NAME
-###     zanata-package-repo-fedorapeople - Release package in repo-fedorapeople
+###     zanata-package-repo-dnf - Release package in repo-dnf
 ###
 ### SYNOPSIS
-###     zanata-package-repo-fedorapeople [Options] <module> <version-release>
+###     zanata-package-repo-dnf [Options] <module> <version-release>
+###     zanata-package-repo-dnf [Options] -a <module>
 ###
 ### ARGUMENTS
 ###     module: module to upload to fedorarepo. It is also the Fedora package name.
@@ -224,39 +225,39 @@ print_status -t "rpmbuild" -s "Start"
 ## For each koji-target
 for fr in ${FEDORA_RELEASES}; do
     print_status " Fedora release: $fr"
-    distTag=$(fedora_release_to_dist_tag "$fr")
+    DistTag=$(fedora_release_to_dist_tag "$fr")
 
     ## Create missing SRPMS
-    srpmFilename="${PackageName}-${Version}-${SpecRelease}.${distTag}.src.rpm"
-    srpmDir="$fr/SRPMS"
-    srpmPath="$srpmDir/${srpmFilename}"
+    SRpmFilename="${PackageName}-${Version}-${SpecRelease}.${DistTag}.src.rpm"
+    SRpmDir="$fr/SRPMS"
+    SrpmPath="$SRpmDir/${SRpmFilename}"
 
-    create_missing_dir "${srpmDir}"
-    if [ ! -r "${srpmPath}" ];then
+    create_missing_dir "${SRpmDir}"
+    if [ ! -r "${SrpmPath}" ];then
 	## Create srpm
-	print_status " creating SRPM: ${srpmPath}"
-	rpmbuild -bs --define "dist .${distTag}" --define "_sourcedir ${CACHE_DIR}" --define "_srcrpmdir ${srpmDir}" "${SpecFilename}"
+	print_status " creating SRPM: ${SrpmPath}"
+	rpmbuild -bs --define "dist .${DistTag}" --define "_sourcedir ${CACHE_DIR}" --define "_srcrpmdir ${SRpmDir}" "${SpecFilename}"
 	update_dnf_repo_dir $fr SRPMS
     fi
 
     ## Create missing RPMS
     for arch in x86_64 i386; do
-	specArch=$(rpm -qp --qf '%{arch}' "${srpmPath}")
-	rpmFilename="${PackageName}-${Version}-${SpecRelease}.$distTag.${specArch}.rpm"
-	rpmDir="$fr/$arch"
-	rpmPath="$rpmDir/${rpmFilename}"
+	SpecArch=$(rpm -qp --qf '%{arch}' "${SrpmPath}")
+	RpmFilename="${PackageName}-${Version}-${SpecRelease}.$DistTag.${SpecArch}.rpm"
+	RpmDir="$fr/$arch"
+	RpmPath="$RpmDir/${RpmFilename}"
 
-	if [ ! -r "${rpmPath}" ];then
+	if [ ! -r "${RpmPath}" ];then
 	    ## Creating rpm
-	    if [[ "$specArch" = "noarch" && "$arch" == i?86 ]];then
+	    if [[ "$SpecArch" = "noarch" && "$arch" == i?86 ]];then
 		## noarch in i?86 can just link to  x86_64.rpm
-		rpm64RelativePath="../x86_64/${rpmFilename}"
-		print_status " linking ${rpm64RelativePath} to ${rpmPath}"
-		ln -sf ${rpm64RelativePath} ${rpmPath}
+		Rpm64RelativePath="../x86_64/${RpmFilename}"
+		print_status " linking ${Rpm64RelativePath} to ${RpmPath}"
+		ln -sf ${Rpm64RelativePath} ${RpmPath}
 	    else
-		print_status " creating ${rpmPath}"
-		mock  -r "${fr}-${arch}" -D "dist .${distTag}" --resultdir "${TMP_DIR}" --rebuild "${srpmPath}"
-		cp -v ${TMP_DIR}/${rpmFilename} ${rpmDir}
+		print_status " creating ${RpmPath}"
+		mock  -r "${fr}-${arch}" -D "dist .${DistTag}" --resultdir "$HOME/mock" --rebuild "${SrpmPath}"
+		cp -v ${TMP_DIR}/${RpmFilename} ${RpmDir}
 	    fi
 	    update_dnf_repo_dir $fr $arch
 	fi
