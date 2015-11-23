@@ -135,16 +135,3 @@ for dep in awk koji fedpkg bodhi rpmbuild mock; do
 done
 exit_if_failed "${ExitStatus}" ${EXIT_FATAL_MISSING_DEPENDENCIES} "$EXIT_MSG"
 
-## Get applicable koji target
-print_status -t "determine-target" -s "Start"
-
-ListTargets=$(koji list-targets --quiet)
-FedoraKojiTargets=$(sed -n 's/^\(f[1-9][0-9]*\)\s.*/\1/ p' <<<"$ListTargets"| xargs)
-print_status " koji: active fedora targets: $FedoraKojiTargets"
-RawhideKojiTarget=$(sed -n '/^rawhide\s/ s/^rawhide\s.*\(f[1-9][0-9]*\)\s*/\1/p' <<<"$ListTargets")
-
-print_status " koji: rawhide version: $RawhideKojiTarget"
-SupportedKojiTargets=$(sed -e "s/${RawhideKojiTarget}//" <<<"$FedoraKojiTargets")
-print_status " koji: supported baranches: $SupportedKojiTargets"
-
-
