@@ -72,8 +72,8 @@ source "${SCRIPT_DIR}/zanata-rpm-functions"
 ###         Default: "epel-7 epel-6"
 : ${FEDORA_RELEASES:="epel-7 epel-6"}
 PROGRAM_NAME=$(basename $0)
-TMP_DIR="${TMP_ROOT}/${PROGRAM_NAME}"
-create_missing_dir "${TMP_DIR}"
+: ${RESULT_DIR:=${HOME}/mock/zanata}
+create_missing_dir "${RESULT_DIR}"
 CACHE_DIR="${WORK_ROOT}/${PROGRAM_NAME}"
 create_missing_dir "${CACHE_DIR}"
 
@@ -256,8 +256,8 @@ for fr in ${FEDORA_RELEASES}; do
 		ln -sf ${Rpm64RelativePath} ${RpmPath}
 	    else
 		print_status " creating ${RpmPath}"
-		mock  -r "${fr}-${arch}" -D "dist .${DistTag}" --resultdir "$HOME/mock" --rebuild "${SrpmPath}"
-		cp -v ${TMP_DIR}/${RpmFilename} ${RpmDir}
+		mock  -r "${fr}-${arch}" -D "dist .${DistTag}" --resultdir "${RESULT_DIR}" --rebuild "${SrpmPath}"
+		cp -v ${RESULT_DIR}/${RpmFilename} ${RpmDir}
 	    fi
 	    update_dnf_repo_dir $fr $arch
 	fi
