@@ -267,7 +267,7 @@ function ensure_repo(){
 ###
 ###     exit_if_failed <var> <exitStatus> <exitMsg>
 function exit_if_failed(){
-    if [ $1 -ne 0 ];then
+    if [ "$1" -ne 0 ];then
 	failed $2 "$3"
     fi
 }
