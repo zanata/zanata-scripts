@@ -100,8 +100,8 @@ if [ $AllowSnapshot -eq 1 ];then
     print_status " use-next-versions '-Dincludes=org.zanata:*' ${ExtraOptionArray[*]}"
     mvn versions:use-next-versions '-Dincludes=org.zanata:*' "${ExtraOptionArray[@]}"
 else
-    print_status " update-releases '-Dincludes=org.zanata:*' ${ExtraOptionArray[*]}"
-    mvn versions:use-releases '-Dincludes=org.zanata:*' "${ExtraOptionArray[@]}"
+    print_status " use-latest-releases '-Dincludes=org.zanata:*' ${ExtraOptionArray[*]}"
+    mvn versions:use-latest-releases '-Dincludes=org.zanata:*' "${ExtraOptionArray[@]}"
 fi
 print_status " update-properties '-Dincludes=org.zanata:*' ${ExtraOptionArray[*]}"
 mvn versions:update-properties '-Dincludes=org.zanata:*' "${ExtraOptionArray[@]}"
