@@ -199,8 +199,20 @@ function detect_module_tag(){
 ###         Print latest tagged module version.
 function detect_module_version(){
     local module=$1
-    local latestTag=$(detect_module_tag ${module})
-    local version=$(sed -e 's/^[^-]*-\(.*\)$/\1/' <<< ${latestTag})
+    ensure_repo_generic ${WORK_ROOT} ${module}
+
+    pushd ${WORK_ROOT}/${module} >/dev/null
+    checkout_releasing_branch ${module} ${WORK_ROOT} 1>/dev/stderr
+
+    git fetch --tags 1>/dev/stderr
+    local latestTag=$(git describe --abbrev=0 --tags)
+    git checkout $latestTag
+    local version=$(mvn -q -Dexec.executable="echo"  -Dexec.args='${project.version}' --non-recursive org.codehaus.mojo:exec-maven-plugin:exec)
+
+    ## Restore branch
+    checkout_releasing_branch ${module} ${WORK_ROOT} 1>/dev/stderr
+    popd >/dev/null
+
     test -n "$version"
     exit_if_failed "$?" ${EXIT_FATAL_FAIL} "Failed to get version from ${module}"
 
