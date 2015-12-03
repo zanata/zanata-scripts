@@ -299,6 +299,9 @@ function exit_print_error(){
 	${EXIT_FATAL_FAIL} )
 	    echo_stderr "### [FATAL] Fail: ${EXIT_MSG}"
 	    ;;
+	${EXIT_RETURN_FALSE} )
+	    echo_stderr "### [RETURN] FALSE: ${EXIT_MSG}"
+	    ;;
 	* )
 	    echo_stderr "### Unexpected Exit: ${EXIT_MSG}"
 	    ;;
