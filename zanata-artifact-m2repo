@@ -1,0 +1,17 @@
+#!/bin/bash -e
+### NAME
+###     zanata-artifact-m2repo - Get artifact list from m2 repo
+###
+### SYNOPSIS
+###     zanata-artifact-m2repo
+### 
+### DESCRIPTION
+###     This program produce artifact list from m2 repo/
+###
+###
+
+M2Repo=${HOME}/.m2/repository
+
+find $M2Repo -name '*.pom' -printf '%h\n' | sed -e 's|^'$M2Repo/'||' \
+    | sed -e 's|\(.*\)/\([^/]*\)|\1:\2|' | sed -e 's|\(.*\)/\([^/]*\)|\1:\2|' \
+    | sed -s 's|/|.|g'
