@@ -23,13 +23,20 @@
 ### OPTIONS
 ###     -h: Show help.
 ###
+###     -c: Commit and push
+###         Commit and change and push.
+###     
 ###     -j: Jenkins mode.
 ###         This assumes that current directory is <module> work directory.
 ###         and correct branch is checked out.
 ###     
 ###     -n: Allow Snapshots
 ###
+### ENVIRONMENT_VARIABLES
+###     EXCLUDE_PROPERTIES: A comma separated list of properties to not update.
+: ${EXCLUDE_PROPERTIES:=zanata.api.compat.version}
 
+###
 shopt -s globstar
 ScriptDir=$(dirname $(readlink  -q -f $0))
 FunctionScriptFile=${ScriptDir}/zanata-functions
@@ -37,17 +44,22 @@ source "${FunctionScriptFile}"
 trap exit_print_error EXIT
 ProgramName=$(basename $0)
 
+
 ##=== parsing Start ===
 print_status -t "parse" -s "Start"
+CommitMode=0
 JenkinsMode=0
 AllowSnapshot=0
 ExtraOptionArray=()
 
-while getopts "hjn" opt;do
+while getopts "hcjn" opt;do
     case $opt in
 	h )
 	    zanata_script_help $0
 	    exit ${EXIT_OK}
+	    ;;
+	c )
+	    CommitMode=1
 	    ;;
 	j )
 	    JenkinsMode=1
@@ -103,10 +115,16 @@ else
     print_status " use-latest-releases '-Dincludes=org.zanata:*' ${ExtraOptionArray[*]}"
     mvn versions:use-latest-releases '-Dincludes=org.zanata:*' "${ExtraOptionArray[@]}"
 fi
-print_status " update-properties '-Dincludes=org.zanata:*' ${ExtraOptionArray[*]}"
-mvn versions:update-properties '-Dincludes=org.zanata:*' "${ExtraOptionArray[@]}"
+
+print_status " update-properties '-Dincludes=org.zanata:*'  '-DexcludeProperties=${EXCLUDE_PROPERTIES}' ${ExtraOptionArray[*]}"
+mvn versions:update-properties '-Dincludes=org.zanata:*' "-DexcludeProperties=${EXCLUDE_PROPERTIES}" "${ExtraOptionArray[@]}"
 
 if ! git diff --exit-code ;then
-    exit ${EXIT_RETURN_FALSE}
+    if [ $CommitMode -ge 1 ];then
+	git commit -a -m "chore(version): Update Zanata dependencies"
+	git push
+    else
+	exit ${EXIT_RETURN_FALSE}
+    fi
 fi
 exit ${EXIT_OK}
