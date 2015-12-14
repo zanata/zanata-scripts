@@ -90,7 +90,6 @@ function release_perform(){
 
 	git clean -f -d
 
-
 	case $Module in
 	    zanata-assets)
 		;;
@@ -124,6 +123,40 @@ function release_perform(){
     fi
     return 0
 }
+
+function nexus_release(){
+    print_status -t nexus-release -s "Start"
+
+    StagingRepositoryBuffer=$(mvn $NEXUS_STAGING_OPTIONS ${NEXUS_STAGING_PLUGIN}:rc-list | sed -n  -e '/orgzanata-.* / p' )
+    StagingRepositoryId=$( awk '{print $2}' <<<"$StagingRepositoryBuffer" | tail -n 1)
+    StagingRepositoryState=$( awk '{print $3}' <<<"$StagingRepositoryBuffer" | tail -n 1)
+    StagingPropertiesGlob="target/checkout/target/nexus-staging/staging/*.properties"
+
+    if [ -z "$StagingRepositoryId" ];then
+	if [ ! -e $StagingPropertiesGlob ];then
+	    failed $EXIT_FATAL_FAIL " Failed to find $StagingPropertiesGlob"
+	fi
+	StagingRepositoryId=$(grep -oP '^stagingRepository\.id=\K.*' $StagingPropertiesGlob )
+	test -n "$StagingRepositoryId"
+	exit_if_failed $? $EXIT_FATAL_FAIL " Cannot obtain staging repository id from both nexus-staging plugin and local target files"
+    fi
+
+    print_status " StagingRepositoryId=${StagingRepositoryId}"
+
+    # read -p "### Please login sonatype and check maven-metadata.xml. Press [Ctrl-C] to break, [Enter] to continue"
+
+    if [ "$StagingRepositoryState" = "OPEN" ];then
+	print_status " nexus-staging:close"
+	mvn $NEXUS_STAGING_OPTIONS ${NEXUS_STAGING_PLUGIN}:close \
+	    -DstagingRepositoryId=${StagingRepositoryId}
+
+    fi
+
+    print_status " nexus-staging:release"
+    mvn $NEXUS_STAGING_OPTIONS ${NEXUS_STAGING_PLUGIN}:release \
+	-DstagingRepositoryId=${StagingRepositoryId}
+
+}
 ##=== function definitions End   ===
 
 ##=== parsing Start ===
@@ -133,7 +166,6 @@ SkipReleasePlugin=0
 MavenReleaseBranch=
 DevelopmentVersion=
 ReleaseVersion=
-
 
 while getopts "d:r:sh" opt;do
     case $opt in
@@ -167,6 +199,17 @@ if [[ $moduleResult == *1 ]];then
 fi
 print_status " Module=$Module"
 
+## Final parsing check
+if [ "$Module" = "zanata-assets" ];then
+    if [ -z "$ReleaseVersion" ];then
+	failed $EXIT_FATAL_INVALID_OPTIONS "assets requires -r <releaseVersion>"
+    fi	
+    if [ -z "$DevelopmentVersion" ];then
+	failed $EXIT_FATAL_INVALID_OPTIONS "assets requires -d <developmentVersion>"
+    fi	
+fi
+
+
 ##=== parpare  Start ===
 print_status -t prepare -s "Start"
 
@@ -191,6 +234,7 @@ git fetch --tags
 print_status -t pre-release -s "Start"
 
 print_status " updating existing maven release branch ($MavenReleaseBranch)"
+git reset --hard HEAD
 git checkout "$MavenReleaseBranch"
 git pull
 
@@ -202,40 +246,30 @@ git merge origin/$MavenReleaseBranch --ff-only --quiet
 print_status -t release -s "Start"
 
 case $Module in
-    zanata-assets | zanata-parent | zanata-api | zanata-common | zanata-client)
+    zanata-assets )
+	print_status -t release-tagging -s "Start"
+
+	## Release plugin does not work with assets
+	sed -i -e 's|<tag>HEAD</tag>|<tag>zanata-assets-'$ReleaseVersion'</tag>|' pom.xml
+	mvn ${MAVEN_RELEASE_OPTIONS} versions:set -DnewVersion=$ReleaseVersion
+        mvn scm:checkin -Dmessage="chore(version): set version ${ReleaseVersion}" -DpushChanges=false
+	mvn scm:tag -Dtag=$Module-$ReleaseVersion -DpushChanges=false
+
+	## Deploy
+	mvn -Prelease clean deploy
+
+	nexus_release
+
+	## Post tag action
+	sed -i -e 's|<tag>.*</tag>|<tag>HEAD</tag>|' pom.xml
+	mvn ${MAVEN_RELEASE_OPTIONS} versions:set -DnewVersion=$DevelopmentVersion
+	mvn scm:checkin -Dmessage="chore(version): new snapshot version ${DevelopmentVersion}"
+	;;
+
+    zanata-parent | zanata-api | zanata-common | zanata-client)
         release_perform
 
-        print_status -t nexus-release -s "Start"
-
-	StagingRepositoryBuffer=$(mvn $NEXUS_STAGING_OPTIONS ${NEXUS_STAGING_PLUGIN}:rc-list | sed -n  -e '/orgzanata-.* / p' )
-	StagingRepositoryId=$( awk '{print $2}' <<<"$StagingRepositoryBuffer" | tail -n 1)
-	StagingRepositoryState=$( awk '{print $3}' <<<"$StagingRepositoryBuffer" | tail -n 1)
-	StagingPropertiesGlob="target/checkout/target/nexus-staging/staging/*.properties"
-
-	if [ -z "$StagingRepositoryId" ];then
-	    if [ ! -e $StagingPropertiesGlob ];then
-		failed $EXIT_FATAL_FAIL " Failed to find $StagingPropertiesGlob"
-	    fi
-	    StagingRepositoryId=$(grep -oP '^stagingRepository\.id=\K.*' $StagingPropertiesGlob )
-	    test -n "$StagingRepositoryId"
-	    exit_if_failed $? $EXIT_FATAL_FAIL " Cannot obtain staging repository id from both nexus-staging plugin and local target files"
-	fi
-
-	print_status " StagingRepositoryId=${StagingRepositoryId}"
-
-	# read -p "### Please login sonatype and check maven-metadata.xml. Press [Ctrl-C] to break, [Enter] to continue"
-
-	if [ "$StagingRepositoryState" = "OPEN" ];then
-	    print_status " nexus-staging:close"
-	    mvn $NEXUS_STAGING_OPTIONS ${NEXUS_STAGING_PLUGIN}:close \
-		-DstagingRepositoryId=${StagingRepositoryId}
-
-	fi
-
-        print_status " nexus-staging:release"
-	mvn $NEXUS_STAGING_OPTIONS ${NEXUS_STAGING_PLUGIN}:release \
-	    -DstagingRepositoryId=${StagingRepositoryId}
-
+	nexus_release
 	;;
     * )
 	## Module not in sonatype
