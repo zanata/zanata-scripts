@@ -90,7 +90,12 @@ function release_perform(){
 
 	git clean -f -d
 
+        ## Update Zanata Dependencies
 	case $Module in
+            jgettext)
+                ;;
+            openprops)
+                ;;
 	    zanata-assets)
 		;;
 	    *)
