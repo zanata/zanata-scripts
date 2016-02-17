@@ -453,19 +453,33 @@ function parse_gav(){
 }
 
 ###
+###     ga_to_rpm_name <GroupId> <artifactId>
+###        GroupId-ArtifactId to RPM name
+function ga_to_rpm_name(){
+    echo "$1-$2"
+}
+
+###
+###     gav_to_nv <GroupId> <artifactId> <Version>
+###        GroupId-ArtifactId-Version to RPM name-version
+function gav_to_nv(){
+    local version=$(sed -e 's/-/_/g' <<<$3)
+    echo "$(ga_to_rpm_name $1 $2)-$version"
+}
+
+###
 ###     gav_to_nvr <GroupId> <artifactId> <Version>
 ###        GroupId-ArtifactId-Version to RPM name-version-release
+###        release is always 1
 ###        Note the release does not include dist tag (.el7)
+###        
 function gav_to_nvr(){
-    local groupId=$1
-    local artifactId=$2
-    local version=$(sed -e 's/-/_/g' <<<$3)
     local release=1
 #    if [[ "$version" =~ _SNAPSHOT ]];then
 #	version=$(sed -e 's/_SNAPSHOT//' <<<$version)
 #		release="0.snapshot"
 #    fi
-    echo "$groupId-$artifactId-$version-$release"
+    echo "$(gav_to_nv $1 $2 $3)-$release"
 }
 
 ###
@@ -480,6 +494,14 @@ function gav_to_path_prefix(){
     echo "$retStr"
 }
 
+function gav_to_maven_artifact_dir(){
+    local groupId=$1
+    local artifactId=$2
+    local version=$(sed -e 's/-/_/g' <<<$3)
+    local retStr=$(sed -e 's|\.|/|g' <<< ${groupId})
+    retStr+="/${artifactId}/${version}"
+    echo "$retStr"
+}
 
 ###
 ###     print_status [-n] [-s] [-t <Stage>] [message]
