@@ -43,14 +43,10 @@ set -e
 ###       The branch that we recommend downstream to use, and 
 ###       release process should mainly happen here.
 ###       It is:
-###          'release' if that branch exists; otherwise
-###          'integration/master' if that branch exists; otherwise
-###          'master'.
+###          'release' if that branch exists; otherwise 'master'
 ###  
 ###     DEVEL_BRANCH 
-###       The branch for committing new features. It is:
-###          'integration/master' if that branch exists; otherwise
-###          'master'.
+###       The branch for committing new features. It is 'master'
 ### 
 ###     REPO_LOCAL_DIR (Optional)
 ###       The directory for maven repo
