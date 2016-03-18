@@ -82,6 +82,7 @@ function release_perform(){
 
 	if [ -n "$ReleaseVersion" ];then
 	    MAVEN_RELEASE_OPTIONS+=" -DreleaseVersion=$ReleaseVersion"
+	    MAVEN_RELEASE_OPTIONS+=" -Dtag=$(get_artifact_id $Module)-$ReleaseVersion"
 	fi
 
 	git clean -f -d
@@ -134,12 +135,13 @@ function nexus_release(){
     StagingPropertiesGlob="target/checkout/target/nexus-staging/staging/*.properties"
 
     if [ -z "$StagingRepositoryId" ];then
-	if [ ! -e $StagingPropertiesGlob ];then
-	    failed $EXIT_FATAL_FAIL " Failed to find $StagingPropertiesGlob"
-	fi
-	StagingRepositoryId=$(grep -oP '^stagingRepository\.id=\K.*' $StagingPropertiesGlob )
-	test -n "$StagingRepositoryId"
-	exit_if_failed $? $EXIT_FATAL_FAIL " Cannot obtain staging repository id from both nexus-staging plugin and local target files"
+	#TODO: Maybe because it has not yet been deployed
+#	if [ ! -e $StagingPropertiesGlob ];then
+#	    failed $EXIT_FATAL_FAIL " Failed to find $StagingPropertiesGlob"
+#	fi
+#	StagingRepositoryId=$(grep -oP '^stagingRepository\.id=\K.*' $StagingPropertiesGlob )
+#	test -n "$StagingRepositoryId"
+#	exit_if_failed $? $EXIT_FATAL_FAIL " Cannot obtain staging repository id from both nexus-staging plugin and local target files"
     fi
 
     print_status " StagingRepositoryId=${StagingRepositoryId}"

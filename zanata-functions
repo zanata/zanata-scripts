@@ -329,7 +329,6 @@ function failed(){
     exit $exitStatus
 }
 
-
 ###
 ###     get_releasing_branch <module>
 ###         Determine RELEASING_BRANCH, the branch that we recommend downstream to use, 
@@ -356,7 +355,7 @@ function get_devel_branch(){
 }
 
 ###
-###     get_module <commandName>
+###     get_module <argument>
 ###         Determine module.
 ###         Print: <module or - for unknown>
 function get_module(){
@@ -411,6 +410,42 @@ function get_module_from_command(){
     else
 	echo "$Module 0"
     fi
+}
+
+###
+###     get_artifact_id <argument>
+###         Obtain SCM Tag like zanata-parent, api
+###         Print: <SCM Tag>
+function get_artifact_id(){
+    case $1 in
+	*api)
+	    echo "api"
+	    ;;
+	*assets)
+	    echo "zanata-assets"
+	    ;;
+	*client)
+	    echo "client"
+	    ;;
+	*common)
+	    echo "common"
+	    ;;
+	*jgettext)
+	    echo "jgettext"
+	    ;;
+	*parent)
+	    echo "zanata-parent"
+	    ;;
+	*openprops)
+	    echo "openprops"
+	    ;;
+	*server)
+	    echo "server"
+	    ;;
+	*)
+	    failed ${EXIT_FATAL_UNKNOWN_MODULE} "get_artifact_id: module not recognized "
+	    ;;
+    esac
 }
 
 ###
