@@ -1,0 +1,69 @@
+#!/usr/bin/env perl
+=pod
+
+=head1 NAME
+
+ zanata-jira-extract-release - Extract release note from Jira
+
+=head1 SYNOPSIS
+
+ zanata-jira-extract-release [options] <MODULE> <VERSION>
+
+ zanata-jira-extract-release -u <URL>
+
+=head1 OPTIONS
+
+=over 4
+
+=item B<-h>
+
+Show this help
+
+=item B<-u URL>
+
+Release Note URL is at <URL>
+
+=back
+=cut
+
+use strict;
+use Data::Dumper qw(Dumper);
+use Getopt::Std qw(getopts);
+use Pod::Usage qw(pod2usage);
+use HTTP::Tiny;
+use constant {
+    EXIT_OK=>0,
+	EXIT_FATAL_UNSPECIFIED=>1,
+	EXIT_FATAL_INVALID_OPTIONS=>3,
+	EXIT_FATAL_MISSING_DEPENDENCY=>4,
+	EXIT_FATAL_UNKNOWN_MODULE=>5,
+	EXIT_FATAL_FAIL=>6,
+
+	EXIT_ERROR_FAIL=>20,
+	EXIT_RETURN_FALSE=>40
+};
+
+my %opts = ();
+getopts('hu:', \%opts );
+
+pod2usage(-verbose =>3, -output=> \*STDERR ) if $opts{'h'};
+pod2usage(-verbose =>2, -exitval => EXIT_FATAL_UNKNOWN_MODULE, -output=> \*STDERR) if (@ARGV == 0 && ! $opts{'u'});
+
+my $response = HTTP::Tiny->new->get($opts{'u'});
+die "[FATAL] Failed with " . $response->{status} unless $response->{success};
+
+##== Extract the related code part
+$_=$response->{content};
+s|.*<textarea|<textarea|s ;
+s|\s*</textarea>.*||s ;
+
+my ($version)= m|.*Release Notes .*-([0-9][0-9.]*)|;
+print "## ".$version."\n";
+s|.*?<h2>|<h2>|s;
+
+##== Convert headers
+s|\s*<h2>.*Bug.*</h2>\s*<ul>|##### Bug fixes|s ;
+s|\n\s*</ul>\s*|\n-----------------------|gs;
+s|<li>\[<a href='(.*?)'>(.*?)\</a>\] -\s*(.*?)\s*</li>| * [\2](\1) - \3|sg;
+print $_;
+
