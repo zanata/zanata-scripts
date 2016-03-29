@@ -612,7 +612,7 @@ declare EXIT_FATAL_MISSING_DEPENDENCY=4
 declare EXIT_FATAL_UNKNOWN_MODULE=5
 
 ###         EXIT_FATAL_FAIL: Script detected that a fatal error occurred.
-declare EXIT_FATAL_FAIL=5
+declare EXIT_FATAL_FAIL=6
 
 ###
 ###     Error that need to stop before next stage:

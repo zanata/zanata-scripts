@@ -19,6 +19,9 @@ set -e
 ###     -d <developmentVersion>:
 ###         Development Vesion like: 3.10.0-SNAPSHOT
 ###
+###     -p: Use PR instead of modify in RELEASING_BRANCH
+###         and generate pr-<artifactId>-<version> branch
+###
 ###     -s: Skip release plugin
 ###
 ###     -r <releaseVersion>
@@ -136,12 +139,18 @@ function nexus_release(){
 
     if [ -z "$StagingRepositoryId" ];then
 	#TODO: Maybe because it has not yet been deployed
-#	if [ ! -e $StagingPropertiesGlob ];then
-#	    failed $EXIT_FATAL_FAIL " Failed to find $StagingPropertiesGlob"
-#	fi
-#	StagingRepositoryId=$(grep -oP '^stagingRepository\.id=\K.*' $StagingPropertiesGlob )
-#	test -n "$StagingRepositoryId"
-#	exit_if_failed $? $EXIT_FATAL_FAIL " Cannot obtain staging repository id from both nexus-staging plugin and local target files"
+	if [ -e $StagingPropertiesGlob ];then
+	    StagingRepositoryId=$(grep -oP '^stagingRepository\.id=\K.*' $StagingPropertiesGlob )
+	    test -n "$StagingRepositoryId"
+	    exit_if_failed $? $EXIT_FATAL_FAIL " Cannot obtain staging repository id from both nexus-staging plugin and local target files"
+	else
+	    print_status " Failed to found either stagingRepositoryId or $StagingPropertiesGlob"
+	    print_status " Please try to manually submit nexus manually"
+	    print_status " Steps:"
+	    print_status "   1. git checkout <ArtifactId>-<Version>"
+	    print_status "   2. mvn clean deploy -Prelease"
+	    failed $EXIT_FATAL_FAILED " Failed to found either stagingRepositoryId or $StagingPropertiesGlob"
+	fi
     fi
 
     print_status " StagingRepositoryId=${StagingRepositoryId}"
@@ -165,12 +174,13 @@ function nexus_release(){
 ##=== parsing Start ===
 print_status -t parsing -s "Start"
 
+PullRequestMode=0
 SkipReleasePlugin=0
 MavenReleaseBranch=
 DevelopmentVersion=
 ReleaseVersion=
 
-while getopts "d:r:sh" opt;do
+while getopts "hd:pr:s" opt;do
     case $opt in
 	h )
 	    zanata_script_help $0
@@ -178,6 +188,9 @@ while getopts "d:r:sh" opt;do
 	    ;;
 	d )
 	    DevelopmentVersion=$OPTARG
+	    ;;
+	p )
+	    PullRequestMode=1
 	    ;;
 	r )
 	    ReleaseVersion=$OPTARG
@@ -212,8 +225,9 @@ if [ "$Module" = "zanata-assets" ];then
     fi	
 fi
 
+ArtifactId=$(get_artifact_id $Module)
 
-##=== parpare  Start ===
+##=== prepare  Start ===
 print_status -t prepare -s "Start"
 
 ##  Ensure repo
@@ -221,7 +235,6 @@ if [ ! -d ${WORK_ROOT} ];then
     mkdir -p ${WORK_ROOT}
 fi
 
-ensure_repo ${Module}
 ## Determine RELEASING_BRANCH
 : ${RELEASING_BRANCH:=$(get_releasing_branch $Module)}
 print_status " RELEASING_BRANCH for $Module is ${RELEASING_BRANCH}"  
@@ -244,6 +257,15 @@ git pull
 print_status " Branch ${MavenReleaseBranch}: merge origin/$MavenReleaseBranch"
 git merge origin/$MavenReleaseBranch --ff-only --quiet
 
+##==== Pull Request Start ====
+if [ $PullRequestMode -eq 1 ];then
+    MavenActionBranch="pr-$ArtifactId-$ReleaseVersion"
+
+    git branch $MavenActionBranch
+    git checkout $MavenActionBranch
+else
+    MavenActionBranch=$MavenReleaseBranch
+fi
 
 ##=== release  Start ===
 print_status -t release -s "Start"
@@ -253,7 +275,7 @@ case $Module in
 	print_status -t release-tagging -s "Start"
 
 	## Release plugin does not work with assets
-	sed -i -e 's|<tag>HEAD</tag>|<tag>zanata-assets-'$ReleaseVersion'</tag>|' pom.xml
+	sed -i -e 's|<tag>HEAD</tag>|<tag>'$ArtifactId'-'$ReleaseVersion'</tag>|' pom.xml
 	mvn ${MAVEN_RELEASE_OPTIONS} versions:set -DnewVersion=$ReleaseVersion
         mvn scm:checkin -Dmessage="chore(version): set version ${ReleaseVersion}" -DpushChanges=false
 	mvn scm:tag -Dtag=$Module-$ReleaseVersion -DpushChanges=false
