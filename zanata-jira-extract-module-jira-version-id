@@ -1,0 +1,77 @@
+#!/usr/bin/env perl
+=pod
+
+=head1 NAME
+
+ zanata-jira-extract-module-jira-version-id - Extract release note from Jira
+
+=head1 SYNOPSIS
+
+ zanata-jira-extract-module-jira-version-id <Version-Name>
+
+=head1 ARGUMENTS
+
+=over 4
+=item <Version-Name>
+
+Version name in Jira, e.g. client-3.9.0, python-client-3.9.0
+
+=head1 OPTIONS
+
+=over 4
+
+=item B<-h>
+
+Show this help
+
+=item B<-u URL>
+
+Release Note URL is at <URL>
+
+=back
+=cut
+
+use strict;
+use Data::Dumper qw(Dumper);
+use Getopt::Std qw(getopts);
+use Pod::Usage qw(pod2usage);
+use HTTP::Tiny;
+use JSON::XS;
+use constant {
+    EXIT_OK=>0,
+	EXIT_FATAL_UNSPECIFIED=>1,
+	EXIT_FATAL_INVALID_OPTIONS=>3,
+	EXIT_FATAL_MISSING_DEPENDENCY=>4,
+	EXIT_FATAL_UNKNOWN_MODULE=>5,
+	EXIT_FATAL_FAIL=>6,
+
+	EXIT_ERROR_FAIL=>20,
+	EXIT_RETURN_FALSE=>40
+};
+
+use constant JIRA_SERVER_URL => 'https://zanata.atlassian.net';
+use constant PROJECT => 'ZNTA';
+
+my %opts = ();
+getopts('h', \%opts );
+
+pod2usage(-verbose =>3, -output=> \*STDERR ) if $opts{'h'};
+pod2usage(-verbose =>2, -exitval => EXIT_FATAL_UNKNOWN_MODULE, -output=> \*STDERR) if (@ARGV == 0 );
+my $versionName=$ARGV[0];
+
+##== Download JSON using REST
+my $response = HTTP::Tiny->new->get(JIRA_SERVER_URL . '/rest/api/2/project/' . PROJECT . '/versions'	);
+die "[FATAL] Failed with " . $response->{status} . " " . $response->{reason} 
+    unless $response->{success};
+
+##== Extract from JSon
+my $versionItemArrayRef = decode_json $response->{content};
+foreach my $versionItem (@$versionItemArrayRef){
+	if ($versionItem->{name} eq $versionName){
+		print $versionItem->{id} . "\n";
+		exit EXIT_OK;
+	}
+}
+
+print {*STDERR} "[FATAL] Failed to found the Version-Name $versionName\n";
+exit EXIT_FATAL_INVALID_OPTIONS
