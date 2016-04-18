@@ -89,18 +89,19 @@ if [ $JenkinsMode -eq 0 ];then
     print_status " Module=$Module"
 
     ensure_repo ${Module}
-    cd $WORK_ROOT/$Module
-    ## Determine RELEASING_BRANCH
-    git fetch
+
+    ## Determine branch
     if [ -n "$1" ];then
 	branch=$1
 	shift
     else
+	## Determine RELEASING_BRANCH
 	branch=$(get_releasing_branch $Module)
     fi
     print_status " Branch is $branch"  
-    git checkout $branch
-    git pull
+
+    checkout_branch $Module "$branch" $WORK_ROOT
+    cd "$WORK_ROOT/$Module"
 fi
 
 ##=== update Start ===

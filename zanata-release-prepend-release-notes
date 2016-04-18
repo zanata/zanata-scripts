@@ -1,0 +1,99 @@
+#!/bin/bash -e
+### NAME
+###     release-prepend-release-notes - Update the Zanata dependencies
+###
+### SYNOPSIS
+###     release-prepend-release-notes [Option] <module>|<artifact> <version>
+### 
+### DESCRIPTION
+###     This program prepends release notes of specified version to release-notes.md
+###     and create new git commit of it.
+###
+###     If the version is already in release-notes. It will do nothing but return
+###     EXIT_RETURN_FAIL (40) and quit.
+###
+###     It works on releasing branch.
+###
+### ARGUMENTS
+###     <module>: module name like zanata-api
+###
+###     <version>: Version to be prepended
+###
+### OPTIONS
+###     -h: Show this help.
+###
+###     -j: Jenkins mode.
+###         This assumes that current directory is <module> work directory.
+###         and correct branch is checked out.
+###     
+### ENVIRONMENT_VARIABLES
+###     EXCLUDE_PROPERTIES: A comma separated list of properties to not update.
+: ${EXCLUDE_PROPERTIES:=zanata.api.compat.version}
+
+###
+shopt -s globstar
+ScriptDir=$(dirname $(readlink  -q -f $0))
+FunctionScriptFile=${ScriptDir}/zanata-functions
+source "${FunctionScriptFile}"
+trap exit_print_error EXIT
+ProgramName=$(basename $0)
+
+##=== parsing Start ===
+print_status -t "parse" -s "Start"
+JenkinsMode=0
+
+while getopts "hj" opt;do
+    case $opt in
+         h )
+	     zanata_script_help $0
+	     exit ${EXIT_OK}
+	     ;;
+	 j )
+	     JenkinsMode=1
+	     ;;
+	 * )
+	     failed ${EXIT_FATAL_INVALID_OPTIONS} "$opt"
+	     ;;
+    esac
+done
+shift $((OPTIND-1))
+
+## Get Module
+moduleResult=$(get_module_from_command $1)
+echo "moduleResult=$moduleResult"
+Module=$(sed -e 's/ .*//'<<<"$moduleResult")
+if [[ $moduleResult == *1 ]];then
+    shift
+fi
+print_status " Module=$Module"
+ArtifactId=`get_artifact_id $Module`
+Version=$1
+
+##=== prepare  Start ===
+print_status -t prepare -s "Start"
+## If not JenkinsMode, then checkout should be done here
+if [ $JenkinsMode -eq 0 ];then
+    ensure_repo ${Module}
+    checkout_releasing_branch $Module $WORK_ROOT
+    cd "$WORK_ROOT/$Module"
+fi
+
+RELEASE_NOTES_FILE=docs/release-notes.md
+if [ ! -r $RELEASE_NOTES_FILE ];then
+    failed $EXIT_FATAL_MISSING_DEPENDENCY "docs/release-notes.md does not exist"
+fi
+
+if grep -f "## $Version" $RELEASE_NOTES_FILE >& /dev/null;then
+    failed $EXIT_RETURN_FALSE "Version $Version is already in $RELEASE_NOTE_FILE"
+fi
+
+##=== Execute  Start ===
+print_status -t Execute -s "Start"
+
+TmpFile=`mktemp zanata-release-notes.XXXXXXXX`
+echo -e "## $Version\n"> $TmpFile
+zanata-jira-get-release-notes "$ArtifactId-$Version" >> $TmpFile
+echo -e "\n-----------------------\n" >> $TmpFile
+cat $RELEASE_NOTES_FILE >> $TmpFile
+mv $TmpFile $RELEASE_NOTES_FILE
+git commit -m "doc(release): Prepend release notes for version $Version" -- $RELEASE_NOTES_FILE

@@ -1,0 +1,150 @@
+#!/usr/bin/env perl
+=pod
+
+=head1 NAME
+
+ zanata-jira-get-release-notes - Extract release note from Jira
+
+=head1 SYNOPSIS
+
+ zanata-jira-get-release-notes [options] <MODULE> <VERSION>
+
+ zanata-jira-get-release-notes -u <URL>
+
+=head1 ARGUMENTS
+
+=over 4
+
+=item <Version-Name>
+
+Version name in Jira, e.g. client-3.9.0, python-client-3.9.0
+
+=back
+
+=head1 OPTIONS
+
+=over 4
+
+=item B<-h>
+
+Show this help
+
+=head1 DESCRIPTION
+
+This program get list of issue given Version name like 'client-3.8.4'.
+
+=head1 EXIT STATUS
+
+Returns 0 when successfully.
+
+Return 40 when Version-name exists, but no issues.
+
+Return 5 when the Version-Name does not exist.
+
+Return 6 for other error.
+
+
+
+
+
+=back
+=cut
+
+#== Common use ==
+use strict;
+use Cwd 'abs_path';
+use Data::Dumper qw(Dumper);
+use File::Basename;
+use Getopt::Std qw(getopts);
+use Pod::Usage qw(pod2usage);
+
+my $scriptDir;
+BEGIN{
+	$scriptDir=dirname(abs_path($0));
+	push @INC, $scriptDir
+};
+use ZanataScriptsCommon ;
+
+##== Program dependency ==
+use HTTP::Tiny;
+use JSON::XS;
+
+##== Parse options ==
+my %opts = ();
+getopts('h', \%opts );
+
+pod2usage(-verbose =>3, -output=> \*STDERR ) if $opts{'h'};
+pod2usage(-verbose =>2, -exitval => EXIT_FATAL_UNKNOWN_MODULE, -output=> \*STDERR) if (@ARGV == 0 );
+my $versionName=$ARGV[0];
+
+##== Download JSON using REST
+my $response = HTTP::Tiny->new->get(JIRA_SERVER_URL . "/rest/api/2/search?jql=fixVersion=$versionName");
+
+if ($response->{status}==200){
+}elsif ($response->{status}=~/40.*/){
+	$!=EXIT_FATAL_UNKNOWN_MODULE;
+	die "[FATAL] $versionName does not exists. " . $response->{status} . " " . $response->{reason};
+}else{
+	$!=EXIT_FATAL_FAIL;
+	die "[FATAL] Failed with " . $response->{status} . " " . $response->{reason};
+}
+
+##== Extract from JSon
+my $versionHashRef = decode_json $response->{content};
+if ($versionHashRef->{total} == 0){
+	$!=EXIT_RETURN_FALSE;
+	die "[FALSE] No issue associate with Version-Name $versionName";
+}
+
+##== Issue split 
+## Two types of issues, Bug for "Bugs fix", "Changes" for other types.
+
+my $changeBuf="";
+my $bugBuf="";
+
+sub add_issue{
+	my ($bufRef, $issue) = @_;
+	$$bufRef .= " * [" . $issue->{key} . "](" . JIRA_SERVER_URL . "/browse/". $issue->{key} . ") - " . $issue->{fields}->{summary} . "\n";
+}
+
+foreach my $issue (@{$versionHashRef->{issues}}){
+	if ($issue->{fields}->{issuetype}->{name} eq "Bug"){
+		add_issue(\$bugBuf, $issue);
+	}else{
+		add_issue(\$changeBuf, $issue);
+	}
+}
+
+##== Print result
+unless( $changeBuf eq ""){
+    print "##### Changes\n";
+	print $changeBuf;
+
+	## Insert blank line if we have bug as well
+	unless( $bugBuf eq ""){
+		print "\n";
+	}
+}
+
+unless( $bugBuf eq ""){
+	print "##### Bug fixes\n";
+	print $bugBuf;
+}
+exit EXIT_OK;
+
+
+##== Extract the related code part
+#$_=$response->{content};
+#s|.*<textarea|<textarea|s ;
+#s|\s*</textarea>.*||s ;
+
+#my ($version)= m|.*Release Notes .*-([0-9][0-9.]*)|;
+#print "## ".$version."\n";
+#s|.*?<h2>|<h2>|s;
+
+##== Convert headers
+#s|\s*<h2>.*Bug.*</h2>\s*<ul>|##### Bug fixes|s ;
+#s|\n\s*</ul>\s*|\n-----------------------|gs;
+#s|<li>\[<a href='(.*?)'>(.*?)\</a>\] -\s*(.*?)\s*</li>| * [\2](\1) - \3|sg;
+#print $_;
+

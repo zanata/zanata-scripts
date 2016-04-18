@@ -231,9 +231,7 @@ ArtifactId=$(get_artifact_id $Module)
 print_status -t prepare -s "Start"
 
 ##  Ensure repo
-if [ ! -d ${WORK_ROOT} ];then
-    mkdir -p ${WORK_ROOT}
-fi
+ensure_repo $Module
 
 ## Determine RELEASING_BRANCH
 : ${RELEASING_BRANCH:=$(get_releasing_branch $Module)}
@@ -242,17 +240,11 @@ print_status " RELEASING_BRANCH for $Module is ${RELEASING_BRANCH}"
 MavenReleaseBranch=$RELEASING_BRANCH
 print_status " Maven release for $Module will be operated on $MavenReleaseBranch"  
 
+checkout_releasing_branch $Module $WORK_ROOT
 cd ${WORK_ROOT}/${Module}
-git fetch
-git fetch --tags
 
 ##=== pre-release  Start ===
 print_status -t pre-release -s "Start"
-
-print_status " updating existing maven release branch ($MavenReleaseBranch)"
-git reset --hard HEAD
-git checkout "$MavenReleaseBranch"
-git pull
 
 print_status " Branch ${MavenReleaseBranch}: merge origin/$MavenReleaseBranch"
 git merge origin/$MavenReleaseBranch --ff-only --quiet
