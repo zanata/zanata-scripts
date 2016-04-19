@@ -259,6 +259,29 @@ else
     MavenActionBranch=$MavenReleaseBranch
 fi
 
+##==== release-notes-prepend ====
+print_status " release-notes-prepend"
+set +e
+zanata-release-notes-prepend -j $ArtifactId $ReleaseVersion
+ExitCode=$?
+set -e
+case $ExitCode in
+    $EXIT_OK )
+	;;
+    $EXIT_FATAL_MISSING_DEPENDENCY )
+	# This usually means the module does not have docs/release-notes.md
+	;;
+    $EXIT_FATAL_UNKNOWN_MODULE )
+	# This usually means that <ArtifactId-$ReleaseVersion> does note exist in Jira
+	;;
+    $EXIT_RETURN_FALSE )
+	# No Jira issues associates to the <ArtifactId-$ReleaseVersion>
+	;;
+    * )
+	failed $ExitCode " Failed to get related jira issues"
+	;;
+esac
+
 ##=== release  Start ===
 print_status -t release -s "Start"
 

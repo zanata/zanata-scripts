@@ -7,9 +7,7 @@
 
 =head1 SYNOPSIS
 
- zanata-jira-get-release-notes [options] <MODULE> <VERSION>
-
- zanata-jira-get-release-notes -u <URL>
+ zanata-jira-get-release-notes [options] <VersionName>
 
 =head1 ARGUMENTS
 
@@ -40,9 +38,7 @@ Returns EXIT_OK (0) when successfully.
 Returns EXIT_FATAL_INVALID_OPTIONS (3) when invalid 
 options or arguments are given
 
-Returns EXIT_FATAL_MISSING_DEPENDENCY (4) when 
-
-Returns EXIT_FATAL_UNKNOWN_MODULE (5) when module does not exists
+Returns EXIT_FATAL_UNKNOWN_MODULE (5) when <VersionName> does not exists
 
 Returns EXIT_FATAL_FAIL (6) generic failure, 
 usually failed to get the resources at the net

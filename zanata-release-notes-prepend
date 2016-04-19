@@ -118,6 +118,7 @@ case $ExitCode in
     $EXIT_RETURN_FALSE )
 	;;
     * )
+	rm -f $TmpFile
 	failed $ExitCode " Failed to get related jira issues"
 	;;
 esac
