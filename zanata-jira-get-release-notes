@@ -35,17 +35,19 @@ This program get list of issue given Version name like 'client-3.8.4'.
 
 =head1 EXIT STATUS
 
-Returns 0 when successfully.
+Returns EXIT_OK (0) when successfully.
 
-Return 40 when Version-name exists, but no issues.
+Returns EXIT_FATAL_INVALID_OPTIONS (3) when invalid 
+options or arguments are given
 
-Return 5 when the Version-Name does not exist.
+Returns EXIT_FATAL_MISSING_DEPENDENCY (4) when 
 
-Return 6 for other error.
+Returns EXIT_FATAL_UNKNOWN_MODULE (5) when module does not exists
 
+Returns EXIT_FATAL_FAIL (6) generic failure, 
+usually failed to get the resources at the net
 
-
-
+Return EXIT_RETURN_FALSE (40) when Version-name exists, but no issues.
 
 =back
 =cut
@@ -131,20 +133,4 @@ unless( $bugBuf eq ""){
 	print $bugBuf;
 }
 exit EXIT_OK;
-
-
-##== Extract the related code part
-#$_=$response->{content};
-#s|.*<textarea|<textarea|s ;
-#s|\s*</textarea>.*||s ;
-
-#my ($version)= m|.*Release Notes .*-([0-9][0-9.]*)|;
-#print "## ".$version."\n";
-#s|.*?<h2>|<h2>|s;
-
-##== Convert headers
-#s|\s*<h2>.*Bug.*</h2>\s*<ul>|##### Bug fixes|s ;
-#s|\n\s*</ul>\s*|\n-----------------------|gs;
-#s|<li>\[<a href='(.*?)'>(.*?)\</a>\] -\s*(.*?)\s*</li>| * [\2](\1) - \3|sg;
-#print $_;
 

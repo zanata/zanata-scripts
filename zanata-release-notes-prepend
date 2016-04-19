@@ -1,15 +1,15 @@
 #!/bin/bash -e
 ### NAME
-###     release-prepend-release-notes - Update the Zanata dependencies
+###     zanata-release-notes-prepend - Update the Zanata dependencies
 ###
 ### SYNOPSIS
-###     release-prepend-release-notes [Option] <module>|<artifact> <version>
+###     zanata-release-notes-prepend [Options] <module>|<artifact> <version>
 ### 
 ### DESCRIPTION
 ###     This program prepends release notes of specified version to release-notes.md
 ###     and create new git commit of it.
 ###
-###     If the version is already in release-notes. It will do nothing but return
+###     If the version is already in release-notes. It will do nothing but returns
 ###     EXIT_RETURN_FAIL (40) and quit.
 ###
 ###     It works on releasing branch.
@@ -26,11 +26,23 @@
 ###         This assumes that current directory is <module> work directory.
 ###         and correct branch is checked out.
 ###     
-### ENVIRONMENT_VARIABLES
-###     EXCLUDE_PROPERTIES: A comma separated list of properties to not update.
-: ${EXCLUDE_PROPERTIES:=zanata.api.compat.version}
-
+### EXIT STATUS
+###    Returns EXIT_OK (0) when successfully.
 ###
+###    Returns EXIT_FATAL_INVALID_OPTIONS (3) when invalid 
+###        options or arguments are given
+###
+###    Returns EXIT_FATAL_MISSING_DEPENDENCY (4) 
+###        when the docs/release-notes.md is missing
+###
+###    Returns EXIT_FATAL_UNKNOWN_MODULE (5) when module does not exists
+###
+###    Returns EXIT_FATAL_FAIL (6) generic failure, 
+###        usually failed to get the resources at the net
+###
+###    Return EXIT_RETURN_FALSE (40) when Version-name exists, but no issues.
+###
+
 shopt -s globstar
 ScriptDir=$(dirname $(readlink  -q -f $0))
 FunctionScriptFile=${ScriptDir}/zanata-functions
@@ -92,7 +104,24 @@ print_status -t Execute -s "Start"
 
 TmpFile=`mktemp zanata-release-notes.XXXXXXXX`
 echo -e "## $Version\n"> $TmpFile
+
+print_status
+##==== Prepend jira issues ====
+print_status " getting jira issues"
+set +e
 zanata-jira-get-release-notes "$ArtifactId-$Version" >> $TmpFile
+ExitCode=$?
+set -e
+case $ExitCode in
+    $EXIT_OK )
+	;;
+    $EXIT_RETURN_FALSE )
+	;;
+    * )
+	failed $ExitCode " Failed to get related jira issues"
+	;;
+esac
+
 echo -e "\n-----------------------\n" >> $TmpFile
 cat $RELEASE_NOTES_FILE >> $TmpFile
 mv $TmpFile $RELEASE_NOTES_FILE
