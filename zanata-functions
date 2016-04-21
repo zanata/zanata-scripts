@@ -527,10 +527,11 @@ function gav_to_maven_artifact_dir(){
 }
 
 ###
-###     print_status [-n] [-s] [-t <Stage>] [message]
+###     print_status [-n] [-q] [-s] [-t <Stage>] [message]
 ###         Print the status message.
 ###         Options:
 ###             -n: Do not print end-of-line in the end.
+###             -q: Quiet, do not output anything
 ###             -s: prepend separation line before message
 ###             -t <Stage>: Specify Stage
 ###         If -s is specified, it will pad separation line before message, like
@@ -550,6 +551,9 @@ function print_status(){
 		optionArray+=( -n )
 		shift
 		optionN=1
+		;;
+	    -q )
+		return
 		;;
 	    -s )
 		optionS=1
