@@ -1,0 +1,114 @@
+#!/bin/bash -e
+### NAME
+###     zanata-version-get-latest - Get the latest version
+###
+### SYNOPSIS
+###     zanata-version-get-latest [Options] -j
+###     zanata-version-get-latest [Options] <module>|<artifact>
+### 
+### DESCRIPTION
+###     This program get the latest version from latest git label.
+###
+### ARGUMENTS
+###     <module>: module name like zanata-api
+###     <artifact>: artifact name like api
+###
+### OPTIONS
+###     -h: Show this help.
+###
+###     -j: Jenkins mode.
+###         This assumes that current directory is <module> work directory.
+###         and correct branch is checked out.
+###
+###     -q: Quiet mode.
+###         Only show the result and error.
+###     
+###     -t: Get tag.
+###         Return the tag instead
+###     
+### EXIT STATUS
+###    Returns EXIT_OK (0) when successfully.
+###
+###    Returns EXIT_FATAL_INVALID_OPTIONS (3) when invalid 
+###        options or arguments are given
+###
+###    Returns EXIT_FATAL_UNKNOWN_MODULE (5) when module does not exists
+###
+###    Returns EXIT_FATAL_FAIL (6) generic failure, 
+###        usually failed to get the resources at the net
+###
+###    Return EXIT_RETURN_FALSE (40) when Version-name exists, but no issues.
+###
+
+shopt -s globstar
+ScriptDir=$(dirname $(readlink  -q -f $0))
+FunctionScriptFile=${ScriptDir}/zanata-functions
+source "${FunctionScriptFile}"
+trap exit_print_error EXIT
+ProgramName=$(basename $0)
+
+##=== parsing Start ===
+JenkinsMode=0
+QuietMode=0
+TagMode=0
+PrintStatusOpt=
+
+while getopts "hjqt" opt;do
+    case $opt in
+	h )
+	    zanata_script_help $0
+	    exit ${EXIT_OK}
+	    ;;
+	j )
+	    JenkinsMode=1
+	    ;;
+	q )
+	    PrintStatusOpt=-q
+	    export QUIET_MODE=1
+	    ;;
+	t )
+	    TagMode=1
+	    ;;
+	* )
+	    failed ${EXIT_FATAL_INVALID_OPTIONS} "$opt"
+	    ;;
+    esac
+done
+print_status $PrintStatusOpt -t "parse" -s "Start"
+shift $((OPTIND-1))
+
+
+##=== prepare  Start ===
+print_status $PrintStatusOpt -t prepare -s "Start"
+## If not JenkinsMode, then checkout should be done here
+moduleResult=$(get_module_from_command $1)
+if [ $JenkinsMode -eq 0 ];then
+    ## Get Module
+    print_status $PrintStatusOpt " moduleResult=$moduleResult"
+    Module=$(sed -e 's/ .*//'<<<"$moduleResult")
+    if [[ $moduleResult == *1 ]];then
+	shift
+    fi
+    print_status $PrintStatusOpt " Module=$Module"
+    ArtifactId=`get_artifact_id $Module`
+    Version=$1
+    ensure_repo ${Module}
+    checkout_releasing_branch $Module $WORK_ROOT
+    cd "$WORK_ROOT/$Module"
+else
+    echo "moduleResult=$moduleResult"
+    if [ -n "$moduleResult" ];then
+	QUIET_MODE=0
+	failed $EXIT_FATAL_INVALID_OPTIONS "-j Cannot be used with module name"
+    fi
+fi
+
+git fetch --tags 1>/dev/stderr
+LatestTag=$(git describe --abbrev=0 --tags)
+if [ $TagMode -eq 1 ];then
+    echo "$LatestTag"
+    exit $EXIT_OK
+fi
+
+
+echo "LatestTag=$LatestTag"
