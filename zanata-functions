@@ -236,14 +236,17 @@ function does_branch_exist(){
     pushd ${parentDir}/${module} >/dev/null
     echo_stderr -n "### Does ${module} has branch ${branch}?..."
 
+    local ret=$EXIT_OK
     if git rev-parse --verify ${branch} &>/dev/null;then
-	echo_stderr "yes" 
-	return 0
+	echo "yes" 
+    elif git ls-remote --heads origin $branch | grep $branch >& /dev/null ;then
+	echo "remote" 
     else
-	echo_stderr "no"
-	return ${EXIT_RETURN_FALSE}
+	echo "no"
+	ret=${EXIT_RETURN_FALSE}
     fi
     popd >/dev/null
+    return $ret
 }
 
 ###
@@ -291,33 +294,36 @@ function exit_if_failed(){
 ###         Environment:
 ###             EXIT_MSG: Error message to print.
 EXIT_MSG=
+QUIET_MODE=0
 function exit_print_error(){
     local exitStatus=$?
-    case $exitStatus in
-	${EXIT_OK} )
-	    echo_stderr "### Done ${EXIT_MSG}"
-	    ;;
-	${EXIT_FATAL_INVALID_OPTIONS} )
-	    zanata_script_help_short $0
-	    echo_stderr "### [FATAL] Invalid Options: ${EXIT_MSG}"
-	    ;;
-	${EXIT_FATAL_MISSING_DEPENDENCIES} )
-	    echo_stderr "### [FATAL] Missing dependencies: ${EXIT_MSG}"
-	    ;;
-	${EXIT_FATAL_UNKNOWN_MODULE} )
-	    zanata_script_help_short $0
-	    echo_stderr "### [FATAL] Unknown or Invalid module: ${EXIT_MSG}"
-	    ;;
-	${EXIT_FATAL_FAIL} )
-	    echo_stderr "### [FATAL] Fail: ${EXIT_MSG}"
-	    ;;
-	${EXIT_RETURN_FALSE} )
-	    echo_stderr "### [RETURN] FALSE: ${EXIT_MSG}"
-	    ;;
-	* )
-	    echo_stderr "### Unexpected Exit: ${EXIT_MSG}"
-	    ;;
-    esac
+    if [ $QUIET_MODE -eq 0 ];then
+	case $exitStatus in
+	    ${EXIT_OK} )
+		echo_stderr "### Done ${EXIT_MSG}"
+		;;
+	    ${EXIT_FATAL_INVALID_OPTIONS} )
+		zanata_script_help_short $0
+		echo_stderr "### [FATAL] Invalid Options: ${EXIT_MSG}"
+		;;
+	    ${EXIT_FATAL_MISSING_DEPENDENCIES} )
+		echo_stderr "### [FATAL] Missing dependencies: ${EXIT_MSG}"
+		;;
+	    ${EXIT_FATAL_UNKNOWN_MODULE} )
+		zanata_script_help_short $0
+		echo_stderr "### [FATAL] Unknown or Invalid module: ${EXIT_MSG}"
+		;;
+	    ${EXIT_FATAL_FAIL} )
+		echo_stderr "### [FATAL] Fail: ${EXIT_MSG}"
+		;;
+	    ${EXIT_RETURN_FALSE} )
+		echo_stderr "### [RETURN] FALSE: ${EXIT_MSG}"
+		;;
+	    * )
+		echo_stderr "### Unexpected Exit: ${EXIT_MSG}"
+		;;
+	esac
+    fi
     exit ${exitStatus}
 }
 
@@ -350,7 +356,6 @@ function get_releasing_branch(){
 ###         Determine DEVEL_BRANCH, the branch for committing new features. 
 ###         It is 'master'.
 function get_devel_branch(){
-    local module=$1
     echo "master"
 }
 

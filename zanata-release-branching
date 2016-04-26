@@ -40,67 +40,75 @@ print_status -t prepare -s "Start"
 
 ensure_repo ${Module}
 cd ${WORK_ROOT}/${Module}
-git fetch
+git fetch -p
 git clean -f -d
+declare -A hasBranch
 
 ## Determine DEVEL_BRANCH
 : ${DEVEL_BRANCH:=$(get_devel_branch $Module)}
-print_status " DEVEL_BRANCH for $Module is $DEVEL_BRANCH"  
-
-print_status " Check the release branch exist"
-for b in origin/release ;do
-    if ! does_branch_exist ${Module} $b ; then
-	print_status " ${Module} does not have $b !"
-	exit ${EXIT_FATAL_MISSING_DEPENDENCY}
-    fi
-done
-
-print_status " Checkout and pull $DEVEL_BRANCH"
-git checkout $DEVEL_BRANCH
+hasBranch[devel]=$DEVEL_BRANCH
+print_status " DEVEL_BRANCH for $Module is ${hasBranch[devel]}"  
+git checkout ${hasBranch[devel]}
 git pull
-git reset --hard origin/$DEVEL_BRANCH
+git reset --hard "origin/${hasBranch[devel]}"
+
+print_status " Determine branches to process"
+
 for b in legacy release ;do
-    if does_branch_exist ${Module} $b ; then
-	echo_stderr "### [prepare] match branch $b with origin for ${Module}"
-	git checkout --track origin/$b
-	git pull
-	git reset --hard origin/$DEVEL_BRANCH
-    fi
+    case $(does_branch_exist ${Module} $b) in
+	yes )
+	    git checkout $b
+	    ;;
+	remote )
+	    git checkout --track origin/$b
+	    ;;
+	* )
+	    continue
+	    ;;
+    esac
+    print_status "  match branch $b with origin for ${Module}"
+    git pull
+    git reset --hard origin/$b
+    hasBranch[$b]=$b
 done
 
-PushRepoArray=()
+if [ "${hasBranch[release]}" = "" ];then
+    failed $EXIT_RETURN_FALSE "No release branch, skip"
+fi
+
 print_status " Done"
 
-if does_branch_exist ${Module} origin/legacy ; then
+##=== branching Start ===
+if [ ! "${hasBranch[legacy]}" = "" ];then
     print_status -t "release->legacy" -s "Start"
+    git checkout "${hasBranch[legacy]}"
     print_status " Point 'legacy' at previous 'release'"
-    if ! git merge origin/release --ff-only; then
+    
+    if ! git merge "origin/${hasBranch[release]}" --ff-only; then
 	print_status " [FATAL] please check for cherry-picked commits in legacy which were never merged into release"
-        exit ${EXIT_FATAL_FAIL}
+	exit ${EXIT_FATAL_FAIL}
     fi
 
-    PushRepoArray+=(legacy)
     print_status " Done"
 fi
 
 print_status -t "${DEVEL_BRANCH}->release" -s "Start"
+git checkout "${hasBranch[release]}"
 print_status " Point 'release' at local $DEVEL_BRANCH"
 if ! git merge $DEVEL_BRANCH --ff-only; then
     EXIT_MSG=" Please check for cherry-picked commits in release which were never merged into $DEVEL_BRANCH"
     exit ${EXIT_FATAL_FAIL}
 fi
-PushRepoArray+=(release)
 
 print_status -t "Final" -s "Start"
 print_status " Update $DEVEL_BRANCH version"
 git checkout $DEVEL_BRANCH
 
 mvn release:update-versions -DautoVersionSubmodules=true -DdevelopmentVersion=${DevelopmentVersion}
-git commit -m "[$ProgramName] prepare for next development iteration" -- **/pom.xml
-PushRepoArray+=($DEVEL_BRANCH)
+git commit -m "[$ProgramName] development version is now ${DevelopmentVersion}" -- **/pom.xml
 
 print_status " Push all the changes back"
-git push origin ${PushRepoArray[@]}
+git push origin ${hasBranch[@]}
 
 cat>/dev/stderr<<END
 Please remember to announce the branching in IRC and zanata-devel.
