@@ -516,7 +516,7 @@ function gav_to_nvr(){
 function gav_to_path_prefix(){
     local groupId=$1
     local artifactId=$2
-    local version=$(sed -e 's/-/_/g' <<<$3)
+    local version=$3
     local retStr=$(sed -e 's|\.|/|' <<< ${groupId})
     retStr+="/${artifactId}/${version}/${artifactId}-${version}"
     echo "$retStr"
@@ -525,7 +525,7 @@ function gav_to_path_prefix(){
 function gav_to_maven_artifact_dir(){
     local groupId=$1
     local artifactId=$2
-    local version=$(sed -e 's/-/_/g' <<<$3)
+    local version=$3
     local retStr=$(sed -e 's|\.|/|g' <<< ${groupId})
     retStr+="/${artifactId}/${version}"
     echo "$retStr"
