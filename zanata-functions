@@ -343,7 +343,8 @@ function failed(){
 ###             'release' if that branch exists; otherwise "master"
 function get_releasing_branch(){
     local module=$1
-    if does_branch_exist ${module} origin/release ;then
+    local ret=$(does_branch_exist ${module} origin/release)
+    if [ "$ret" = "yes" ] ;then
         echo "release"
         return 0
     fi
