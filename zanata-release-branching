@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/bash -eu
 ### NAME
 ###     zanata-release-branching - Do branching for big release (non-point release).
 ###

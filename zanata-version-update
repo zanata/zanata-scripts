@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/bash -eu
 ### NAME
 ###     zanata-version-update - Update the Zanata dependencies
 ###
@@ -50,7 +50,9 @@ print_status -t "parse" -s "Start"
 CommitMode=0
 JenkinsMode=0
 AllowSnapshot=0
-ExtraOptionArray=()
+VersionGoal=use-latest-releases
+declare -a ExtraOptionArray=()
+
 
 while getopts "hcjn" opt;do
     case $opt in
@@ -66,6 +68,7 @@ while getopts "hcjn" opt;do
 	    ;;
 	n )
 	    AllowSnapshot=1
+	    VersionGoal=use-next-versions
 	    ExtraOptionArray+=(-DallowSnapshots=true)
 	    ;;
 	* )
@@ -80,7 +83,7 @@ shift $((OPTIND-1))
 print_status -t prepare  -s "Start"
 ## If not JenkinsMode, then checkout should be done here
 if [ $JenkinsMode -eq 0 ];then
-    ModuleResult=$(get_module_from_command $1)
+    ModuleResult=$(get_module_from_command ${1-})
     echo "ModuleResult=$ModuleResult"
     Module=$(sed -e 's/ .*//'<<<"$ModuleResult")
     if [[ $ModuleResult == *1 ]];then
@@ -91,7 +94,7 @@ if [ $JenkinsMode -eq 0 ];then
     ensure_repo ${Module}
 
     ## Determine branch
-    if [ -n "$1" ];then
+    if [ -n "${1-}" ];then
 	branch=$1
 	shift
     else
@@ -107,18 +110,17 @@ fi
 ##=== update Start ===
 print_status -t update  -s "Start"
 
-print_status " update-parent ${ExtraOptionArray[*]}"
-mvn versions:update-parent "${ExtraOptionArray[@]}"
-if [ $AllowSnapshot -eq 1 ];then
-    print_status " use-next-versions '-Dincludes=org.zanata:*' ${ExtraOptionArray[*]}"
-    mvn versions:use-next-versions '-Dincludes=org.zanata:*' "${ExtraOptionArray[@]}"
-else
-    print_status " use-latest-releases '-Dincludes=org.zanata:*' ${ExtraOptionArray[*]}"
-    mvn versions:use-latest-releases '-Dincludes=org.zanata:*' "${ExtraOptionArray[@]}"
-fi
+CmdOptArray=( versions:update-parent ${ExtraOptionArray[@]-})
+print_status " ${CmdOptArray[*]}"
+mvn "${CmdOptArray[@]}"
 
-print_status " update-properties '-Dincludes=org.zanata:*'  '-DexcludeProperties=${EXCLUDE_PROPERTIES}' ${ExtraOptionArray[*]}"
-mvn versions:update-properties '-Dincludes=org.zanata:*' "-DexcludeProperties=${EXCLUDE_PROPERTIES}" "${ExtraOptionArray[@]}"
+CmdOptArray=( versions:$VersionGoal '-Dincludes=org.zanata:*' ${ExtraOptionArray[@]-} )
+print_status " ${CmdOptArray[*]}"
+mvn "${CmdOptArray[@]}"
+
+CmdOptArray=( versions:update-properties '-Dincludes=org.zanata:*' '-DexcludeProperties=${EXCLUDE_PROPERTIES}' ${ExtraOptionArray[@]-} )
+print_status " ${CmdOptArray[*]}"
+mvn "${CmdOptArray[@]}"
 
 if ! git diff --exit-code ;then
     if [ $CommitMode -ge 1 ];then

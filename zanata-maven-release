@@ -1,17 +1,16 @@
-#!/bin/bash
-set -e
+#!/bin/bash -eu
 ### NAME
-###     zanata-nexus-staging - Staging and Release to Sonatype nexus
+###     zanata-maven-release - Staging and Release to Sonatype nexus
 ###
 ### SYNOPSIS
-###     zanata-nexus-staging [options] <MODULE>
-###     zanata-nexus-staging-openprops [options]
-###     zanata-nexus-staging-jgettext  [options]
-###     zanata-nexus-staging-parent    [options]
-###     zanata-nexus-staging-api       [options]
-###     zanata-nexus-staging-common    [options]
-###     zanata-nexus-staging-client    [options]
-###     zanata-nexus-staging-assets    [options]
+###     zanata-maven-release [options] <MODULE>
+###     zanata-maven-release-openprops [options]
+###     zanata-maven-release-jgettext  [options]
+###     zanata-maven-release-parent    [options]
+###     zanata-maven-release-api       [options]
+###     zanata-maven-release-common    [options]
+###     zanata-maven-release-client    [options]
+###     zanata-maven-release-assets    [options]
 ### 
 ### OPTIONS
 ###     -h: Show this help
@@ -34,12 +33,12 @@ set -e
 ###
 ### USE CASES
 ###  * Normally following is sufficient:
-###    zanata-nexus-staging-<module>
+###    zanata-maven-release-<module>
 ### 
 ###  * If tag is made but release failed, and you fixed it without changing 
 ###    the source, You can resume the release process with 
 ###   
-###    zanata-nexus-staging-<module> -r
+###    zanata-maven-release-<module> -r
 ### 
 ### ENVIRONMENT
 ###     RELEASING_BRANCH
@@ -105,7 +104,7 @@ function release_perform(){
 		VersionUpdateResult=$?
 		if [ "$VersionUpdateResult" = "$EXIT_RETURN_FALSE" ];then
 		    read -p "### Are the change looks alright? Press [Ctrl-C] to break, [Enter] to continue"
-		    git commit -a -m "chore(dependency): [zanata-nexus-staging] Update Zanata dependencies"
+		    git commit -a -m "chore(dependency): [zanata-maven-release] Update Zanata dependencies"
 		elif [ "$VersionUpdateResult" != "$EXIT_OK" ];then
 		    ## Error, pass the error code as-is
 		    exit $VersionUpdateResult
@@ -207,7 +206,7 @@ done
 shift $((OPTIND-1))
 
 ## Get Module
-moduleResult=$(get_module_from_command $1)
+moduleResult=$(get_module_from_command ${1-})
 echo "moduleResult=$moduleResult"
 Module=$(sed -e 's/ .*//'<<<"$moduleResult")
 if [[ $moduleResult == *1 ]];then
@@ -229,6 +228,9 @@ ArtifactId=$(get_artifact_id $Module)
 
 ##=== prepare  Start ===
 print_status -t prepare -s "Start"
+
+## Input gpg passphrase as early as possible
+gpg --clearsign <<<""
 
 ##  Ensure repo
 ensure_repo $Module
@@ -260,27 +262,29 @@ else
 fi
 
 ##==== release-notes-prepend ====
-print_status " release-notes-prepend"
-set +e
-zanata-release-notes-prepend -j $ArtifactId $ReleaseVersion
-ExitCode=$?
-set -e
-case $ExitCode in
-    $EXIT_OK )
-	;;
-    $EXIT_FATAL_MISSING_DEPENDENCY )
-	# This usually means the module does not have docs/release-notes.md
-	;;
-    $EXIT_FATAL_UNKNOWN_MODULE )
-	# This usually means that <ArtifactId-$ReleaseVersion> does note exist in Jira
-	;;
-    $EXIT_RETURN_FALSE )
-	# No Jira issues associates to the <ArtifactId-$ReleaseVersion>
-	;;
-    * )
-	failed $ExitCode " Failed to get related jira issues"
-	;;
-esac
+if [ -r docs/release-notes.md ];then
+    print_status " release-notes-prepend"
+    set +e
+    zanata-release-notes-prepend -j $ArtifactId $ReleaseVersion
+    ExitCode=$?
+    set -e
+    case $ExitCode in
+	$EXIT_OK )
+	    ;;
+	$EXIT_FATAL_MISSING_DEPENDENCY )
+	    # This usually means the module does not have docs/release-notes.md
+	    ;;
+	$EXIT_FATAL_UNKNOWN_MODULE )
+	    # This usually means that <ArtifactId-$ReleaseVersion> does note exist in Jira
+	    ;;
+	$EXIT_RETURN_FALSE )
+	    # No Jira issues associates to the <ArtifactId-$ReleaseVersion>
+	    ;;
+	* )
+	    failed $ExitCode " Failed to get related jira issues"
+	    ;;
+    esac
+fi
 
 ##=== release  Start ===
 print_status -t release -s "Start"

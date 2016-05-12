@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -eu
 ### NAME
 ###     zanata-functions
 ###
@@ -24,7 +24,7 @@ function zanata_help_raw(){
 function zanata_help_list_sections_from_string(){
     local -A idx
     for section in $(sed -n -e '/^[A-Z]/ p' <<<"$1" | xargs); do
-	if [ -z "${idx[$section]}"   ];then
+	if [ -z "${idx[$section]-}"   ];then
 	    idx[$section]=1
 	    echo "$section"
 	fi
@@ -225,7 +225,7 @@ function detect_module_version(){
 function does_branch_exist(){
     local module=$1
     local branch=$2
-    local parentDir=$3
+    local parentDir=${3-}
     [ -z $parentDir ] && parentDir=${WORK_ROOT}
 
     if [ ! -d "${parentDir}/${module}" ];then
@@ -255,7 +255,7 @@ function does_branch_exist(){
 function ensure_repo_generic(){
     local parentDir=$1
     local module=$2
-    local git_repo_url=$3
+    local git_repo_url=${3-}
     echo_stderr "### Ensure the repo $module is at ${parentDir}/${module}"
     if [ -z "$git_repo_url" ];then
 	git_repo_url=$(get_git_url ${module})
@@ -276,7 +276,7 @@ function ensure_repo_generic(){
 ###     ensure_repo <module> [git_repo_url]
 ###         Ensure repo is at $WORK_ROOT/<module>
 function ensure_repo(){
-    ensure_repo_generic "$WORK_ROOT" "$1" "$2"
+    ensure_repo_generic "$WORK_ROOT" "$1" "${2-}"
 }
 
 ###
@@ -298,31 +298,33 @@ QUIET_MODE=0
 function exit_print_error(){
     local exitStatus=$?
     if [ $QUIET_MODE -eq 0 ];then
-	case $exitStatus in
-	    ${EXIT_OK} )
-		echo_stderr "### Done ${EXIT_MSG}"
-		;;
-	    ${EXIT_FATAL_INVALID_OPTIONS} )
-		zanata_script_help_short $0
-		echo_stderr "### [FATAL] Invalid Options: ${EXIT_MSG}"
-		;;
-	    ${EXIT_FATAL_MISSING_DEPENDENCIES} )
-		echo_stderr "### [FATAL] Missing dependencies: ${EXIT_MSG}"
-		;;
-	    ${EXIT_FATAL_UNKNOWN_MODULE} )
-		zanata_script_help_short $0
-		echo_stderr "### [FATAL] Unknown or Invalid module: ${EXIT_MSG}"
-		;;
-	    ${EXIT_FATAL_FAIL} )
-		echo_stderr "### [FATAL] Fail: ${EXIT_MSG}"
-		;;
-	    ${EXIT_RETURN_FALSE} )
-		echo_stderr "### [RETURN] FALSE: ${EXIT_MSG}"
-		;;
-	    * )
-		echo_stderr "### Unexpected Exit: ${EXIT_MSG}"
-		;;
-	esac
+	if [ -n "${exitStatus-}" ];then
+	    case $exitStatus in
+		${EXIT_OK} )
+		    echo_stderr "### Done ${EXIT_MSG}"
+		    ;;
+		${EXIT_FATAL_INVALID_OPTIONS} )
+		    zanata_script_help_short $0
+		    echo_stderr "### [FATAL] Invalid Options: ${EXIT_MSG}"
+		    ;;
+		${EXIT_FATAL_MISSING_DEPENDENCY} )
+		    echo_stderr "### [FATAL] Missing dependencies: ${EXIT_MSG}"
+		    ;;
+		${EXIT_FATAL_UNKNOWN_MODULE} )
+		    zanata_script_help_short $0
+		    echo_stderr "### [FATAL] Unknown or Invalid module: ${EXIT_MSG}"
+		    ;;
+		${EXIT_FATAL_FAIL} )
+		    echo_stderr "### [FATAL] Fail: ${EXIT_MSG}"
+		    ;;
+		${EXIT_RETURN_FALSE} )
+		    echo_stderr "### [RETURN] FALSE: ${EXIT_MSG}"
+		    ;;
+		* )
+		    echo_stderr "### Unexpected Exit: ${EXIT_MSG}"
+		    ;;
+	    esac
+	fi
     fi
     exit ${exitStatus}
 }
@@ -365,7 +367,7 @@ function get_devel_branch(){
 ###         Determine module.
 ###         Print: <module or - for unknown>
 function get_module(){
-    case $1 in
+    case ${1-} in
 	*api)
 	    echo "zanata-api"
 	    ;;
@@ -403,7 +405,7 @@ function get_module(){
 ###             module: module name
 ###             isShift: 1 for need shift, 0 otherwise.
 function get_module_from_command(){
-    local firstArg=$1
+    local firstArg=${1-}
 
     Module=$(get_module $0)
     if [ "x$Module" = "x-" ];then
@@ -583,8 +585,9 @@ function print_status(){
 
     local message="$1"
     outputStr+="$message"
-    echo_stderr ${optionArray[@]} "$outputStr"
-
+    if [ -n "${optionArray-}" ];then
+	echo_stderr ${optionArray[@]} "$outputStr"
+    fi
     ZnatNoEOL=$optionN
 }
 
@@ -633,11 +636,11 @@ declare EXIT_ERROR_FAIL=20
 ###         EXIT_RETURN_FALSE: Script should return false
 declare EXIT_RETURN_FALSE=40
 
-case $1 in
+case ${1-} in
     help )
-        zanata_script_help $0
+	zanata_script_help $0
 	exit ${EXIT_OK}
-        ;;
+	;;
     help-section )
 	zanata_help_section $0 $2
 	exit ${EXIT_OK}

@@ -20,7 +20,7 @@ function spec_update(){
     local version=$2
     local specRelease="$3"
     local maintainerEmail="$4"
-    local changeLogMsg="$5"
+    local changeLogMsg="${5-}"
     SpecModified=0
 
     test -r $specPath
@@ -129,9 +129,9 @@ function branches_to_koji_targets(){
 ExitStatus=${EXIT_OK}
 for dep in awk koji fedpkg bodhi rpmbuild mock; do
     if ! which $dep &>/dev/null ; then
-	ExitStatus=${EXIT_FATAL_MISSING_DEPENDENCIES}
+	ExitStatus=${EXIT_FATAL_MISSING_DEPENDENCY}
 	EXIT_MSG+=" $dep"
     fi
 done
-exit_if_failed "${ExitStatus}" ${EXIT_FATAL_MISSING_DEPENDENCIES} "$EXIT_MSG"
+exit_if_failed "${ExitStatus}" ${EXIT_FATAL_MISSING_DEPENDENCY} "$EXIT_MSG"
 

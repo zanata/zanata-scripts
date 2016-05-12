@@ -1,17 +1,22 @@
-#!/bin/bash -e
+#!/bin/bash -eu
+shopt -s globstar
 ### NAME
 ###     zanata-translate-pull Download zanata translation.
 ###
 ### SYNOPSIS
-###     zanata-translate-pull <module> <branch> [ZanataMvnOption]
-### 
+###     zanata-translate-pull [Options] <module> <branch> [ZanataMvnOption]
+###
+### OPTIONS
+###     -h: Show this help
+###
+###     -i: Interactive mode
+###         It will pause before commit.
+###
 ### DESCRIPTION
+###     This program 
 ###     This script performs branching chores for big releases of
 ###     zanata-client and zanata-server.
 ###
-
-## globstar enable **/* glob match
-shopt -s globstar
 
 SCRIPT_DIR=$(dirname $(readlink  -q -f $0))
 FUNCTION_SCRIPT_FILE=${SCRIPT_DIR}/zanata-functions
@@ -19,45 +24,65 @@ source "${FUNCTION_SCRIPT_FILE}"
 trap exit_print_error EXIT
 PROGRAM_NAME=$(basename $0)
 
+Interactive=0
+
+while getopts "hi" opt;do
+    case $opt in
+	h )
+	    zanata_script_help $0
+	    exit ${EXIT_OK}
+	    ;;
+	i )
+	    Interactive=1
+	    ;;
+	* )
+	    failed ${EXIT_FATAL_INVALID_OPTIONS} "$opt"
+	    ;;
+    esac
+done
+
+shift $((OPTIND-1))
+
 if [ $# -lt 2 ];then
     zanata_script_help $0
     exit ${EXIT_FATAL_INVALID_OPTIONS}
 fi
 
-Module=$1
-Branch=$2
-shift 2
+## Get Module
+moduleResult=$(get_module_from_command $1)
+echo "moduleResult=$moduleResult"
+Module=$(sed -e 's/ .*//'<<<"$moduleResult")
+if [[ $moduleResult == *1 ]];then
+    shift
+fi
+print_status " Module=$Module"
+Branch=$1
+shift
 
 ##=== prepare Start ===
 print_status -t prepare -s "Start"
 
 ensure_repo ${Module}
+checkout_branch ${Module} ${Branch} ${WORK_ROOT}
 cd ${WORK_ROOT}/${Module}
-git fetch
-print_status " Check branch $Branch exist"
-if ! does_branch_exist ${Module} $Branch ; then
-    EXIT_MSG=" ${Module} does not have $Branch"
-    exit ${EXIT_FATAL_MISSING_DEPENDENCY}
+
+if [ ! -r zanata.xml ];then
+    failed $EXIT_FATAL_MISSING_DEPENDNECY "zanata.xml does not exist."
 fi
 
-git checkout $Branch
 print_status -t "translation update" -s "Start"
-if [ -r zanata.xml ];then
-    print_status " reset to origin/${Branch}"
-    git reset --hard origin/$Branch
+print_status " pull translation from Zanata"
+mvn -B org.zanata:zanata-maven-plugin:pull -Dzanata.projectVersion=$Branch $@
 
-    print_status " pull translation from Zanata"
-    mvn -B org.zanata:zanata-maven-plugin:pull $@
+print_status " Validate translation"
+mvn -B com.googlecode.l10n-maven-plugin:l10n-maven-plugin:validate -pl zanata-war
 
-    print_status " Validate translation"
-    mvn -q com.googlecode.l10n-maven-plugin:l10n-maven-plugin:validate -pl zanata-war
-
-
-    print_status " Push translation"
-    git add **/src/main/resources/**/*_*.properties
-    git commit -m "Fetch updated translations from translate.zanata.org"
-    git push origin $Branch
-else
-    print_status " No zanata.xml, translation pull skipped."
+print_status " Push translation"
+git add **/src/main/resources/**/*_*.properties
+if [ $Interactive -eq 1 ];then
+    git diff HEAD
+    read -p "### Press [Ctrl-C] to break, [Enter] to continue"
 fi
+git commit -m "Fetch updated translations from translate.zanata.org"
+git push origin $Branch
 

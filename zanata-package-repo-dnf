@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/bash -eu
 LANG=C
 ### NAME
 ###     zanata-package-repo-dnf - Release package in repo-dnf
@@ -104,6 +104,7 @@ function update_dnf_repo_dir(){
     if [ $NewRepoMetadata -eq 0 ];then
 	opts="--update"
     fi
+    print_status " createrepo $opts $CREATEREPO_OPTS $repoDir"
     createrepo $opts $CREATEREPO_OPTS "$repoDir"
     popd 1>/dev/null
 }
@@ -140,7 +141,7 @@ done
 shift $((OPTIND-1))
 
 ## Get Module
-moduleResult=$(get_module_from_command $1)
+moduleResult=$(get_module_from_command ${1-})
 Module=$(sed -e 's/ .*//'<<<"$moduleResult")
 if [[ $moduleResult == *1 ]];then
     shift
@@ -195,11 +196,11 @@ print_status " check depending programs"
 ExitStatus=${EXIT_OK}
 for dep in rpmbuild mock createrepo; do
     if ! which $dep &>/dev/null ; then
-	ExitStatus=${EXIT_FATAL_MISSING_DEPENDENCIES}
+	ExitStatus=${EXIT_FATAL_MISSING_DEPENDENCY}
 	EXIT_MSG+=" $dep"
     fi
 done
-exit_if_failed "${ExitStatus}" ${EXIT_FATAL_MISSING_DEPENDENCIES} "$EXIT_MSG"
+exit_if_failed "${ExitStatus}" ${EXIT_FATAL_MISSING_DEPENDENCY} "$EXIT_MSG"
 
 ## Ensure work space
 create_missing_dir "${LOCAL_DIR}"
@@ -239,11 +240,10 @@ fi
 
 
 ##=== rpmbuild Start ===
-print_status -t "rpmbuild" -s "Start"
 
 ## For each koji-target
 for fr in ${FEDORA_RELEASES}; do
-    print_status " Fedora release: $fr"
+    print_status -t "$fr" -s "Start"
     DistTag=$(fedora_release_to_dist_tag "$fr")
 
     ## Create missing SRPMS
@@ -272,8 +272,13 @@ for fr in ${FEDORA_RELEASES}; do
 	    if [[ "$SpecArch" = "noarch" && "$arch" == i?86 ]];then
 		## noarch in i?86 can just link to  x86_64.rpm
 		Rpm64RelativePath="../x86_64/${RpmFilename}"
-		print_status " linking ${Rpm64RelativePath} to ${RpmPath}"
-		ln -sf ${Rpm64RelativePath} ${RpmPath}
+		if [ -r "$Rpm64RelativePath" ];then
+		    print_status " linking ${Rpm64RelativePath} to ${RpmPath}"
+		    ln -sf ${Rpm64RelativePath} ${RpmPath}
+		else
+		    print_status " ${Rpm64RelativePath} does not exist, remove ${RpmPath}"
+		    rm -f ${Rpm64RelativePath} ${RpmPath}
+		fi
 	    else
 		print_status " creating ${RpmPath}"
 		mock  -r "${fr}-${arch}" -D "dist .${DistTag}" --resultdir "${RESULT_DIR}" --rebuild "${SrpmPath}"
