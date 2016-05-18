@@ -457,6 +457,28 @@ function get_artifact_id(){
 }
 
 ###
+###     is_maven_packaging [str]
+function is_maven_packaging(){
+    case $1 in
+	pom | jar | maven-plugin | ejb | war | ear | rar | par )
+	    return 0
+	    ;;
+    esac
+    return 1
+}
+
+###
+###     is_maven_scope [str]
+function is_maven_scope(){
+    case $1 in
+	compile | provided | runtime | test | system )
+	    return 0
+	    ;;
+    esac
+    return 1
+}
+
+###
 ###     parse_gav <GAV>
 ###         Parse GAV
 ###         GAV can either in following formats
@@ -468,16 +490,57 @@ function parse_gav(){
     local gav=$1
     GroupId=$(awk -F ':' '{print $1}'<<<$gav)
     ArtifactId=$(awk -F ':' '{print $2}'<<<$gav)
+    Packaging=
+    Classifier=
+    Scope=
     local c3=$(awk -F ':' '{print $3}'<<<$gav)
     local c4=$(awk -F ':' '{print $4}'<<<$gav)
     local c5=$(awk -F ':' '{print $5}'<<<$gav)
-    if [[ "$c3" != jar && "$c3" != pom && "$c3" != ejb ]];then
-        Version=$c3
-    elif [[ "$c4" != source* && "$c4" != compat && "$c4" != ejb ]];then
-        Version=$c4
-    else
-        Version=$c5
+    local c6=$(awk -F ':' '{print $6}'<<<$gav)
+    if [[ -n "$c6" ]];then
+	if ! is_maven_scope $c6 ;then
+	    failed $EXIT_ERROR_FAIL "Invalid scope $c6 from $gav"
+	fi
+	Scope=$c6
     fi
+
+    if [[ -n "$c5" ]];then
+	## c5 can either be scope or version
+	if [[ -n "$c6" ]];then
+	    Version=$c5
+	elif is_maven_scope $c5 ;then
+	    Scope=$c5
+	else
+	    Version=$c5
+	fi
+    fi
+
+    if [[ -n "$c4" ]];then
+	## c4 can either be classifier, version or scope
+	if [[ -n "$Version" ]];then
+	    Classifier=$c4
+	elif [[ -n "$Scope" ]];then
+	    Version=$c4
+	elif is_maven_scope $c4 ;then
+	    Scope=$c4
+	else
+	    Version=$c4
+	fi
+    fi
+
+    if [[ -z "$c3" ]];then
+	failed $EXIT_FATAL_INVALID_OPTIONS "Invalid gav $gav"
+    fi
+
+    ## c3 can either be packaging, or version
+    if is_maven_packaging $c3 ;then
+	Packaging=$c3
+    elif [[ -n "$Version" ]];then
+	failed $EXIT_FATAL_INVALID_OPTIONS "Invalid maven packaging $c3 from gav $gav"
+    else
+	Version=$c3
+    fi  
+  
     test -n "$GroupId" -a -n "$ArtifactId" -a -n "$Version"
     exit_if_failed $? ${EXIT_FATAL_INVALID_OPTIONS} "GAV $gav is invalid, should be in groupId:artifactId:version"
     Gav="$GroupId:$ArtifactId:$Version"
@@ -513,18 +576,6 @@ function gav_to_nvr(){
     echo "$(gav_to_nv $1 $2 $3)-$release"
 }
 
-###
-###     gav_to_path_prefix <GroupId> <artifactId> <version>
-###        Return path prefix, when given GroupId, ArtifactId, and Version
-function gav_to_path_prefix(){
-    local groupId=$1
-    local artifactId=$2
-    local version=$3
-    local retStr=$(sed -e 's|\.|/|' <<< ${groupId})
-    retStr+="/${artifactId}/${version}/${artifactId}-${version}"
-    echo "$retStr"
-}
-
 function gav_to_maven_artifact_dir(){
     local groupId=$1
     local artifactId=$2
@@ -532,6 +583,24 @@ function gav_to_maven_artifact_dir(){
     local retStr=$(sed -e 's|\.|/|g' <<< ${groupId})
     retStr+="/${artifactId}/${version}"
     echo "$retStr"
+}
+
+###
+###     gav_to_maven_artifact_file <GroupId> <artifactId> <Version> [Packaging] [Classifier]
+###        Return the artifact file when given Gav
+###        release is always 1
+###        Note the release does not include dist tag (.el7)
+function gav_to_maven_artifact_file(){
+    local groupId=$1
+    local artifactId=$2
+    local version=$3
+    local packaging=${4-}
+    local classifier=${5-}
+
+    if [ -z "$packaging" ];then
+	packaging=jar
+    fi
+    echo "${artifactId}-${version}${classifier:+-${classifier}}.${packaging}"
 }
 
 ###
@@ -647,6 +716,11 @@ case ${1-} in
 	;;
     help-list-sections )
 	zanata_help_list_sections $0
+	exit ${EXIT_OK}
+	;;
+    gav_to_maven_artifact_file )
+	shift
+	gav_to_maven_artifact_file $@
 	exit ${EXIT_OK}
 	;;
 esac
