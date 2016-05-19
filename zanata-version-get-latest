@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/bash -eu
 ### NAME
 ###     zanata-version-get-latest - Get the latest version
 ###
@@ -52,6 +52,7 @@ JenkinsMode=0
 QuietMode=0
 TagMode=0
 PrintStatusOpt=
+DetectModuleTagOpt=
 
 while getopts "hjqt" opt;do
     case $opt in
@@ -63,8 +64,10 @@ while getopts "hjqt" opt;do
 	    JenkinsMode=1
 	    ;;
 	q )
+	    QuietMode=1
 	    PrintStatusOpt=-q
-	    export QUIET_MODE=1
+	    DetectModuleTagOpt=-q
+	    export ZANATA_QUIET_MODE=1
 	    ;;
 	t )
 	    TagMode=1
@@ -74,41 +77,33 @@ while getopts "hjqt" opt;do
 	    ;;
     esac
 done
-print_status $PrintStatusOpt -t "parse" -s "Start"
+print_status -t "parse" -s "Start"
 shift $((OPTIND-1))
 
 
 ##=== prepare  Start ===
-print_status $PrintStatusOpt -t prepare -s "Start"
-## If not JenkinsMode, then checkout should be done here
-moduleResult=$(get_module_from_command $1)
+print_status -t prepare -s "Start"
 if [ $JenkinsMode -eq 0 ];then
+    moduleResult=$(get_module_from_command ${1-})
+    print_status "moduleResult=$moduleResult"
     ## Get Module
-    print_status $PrintStatusOpt " moduleResult=$moduleResult"
     Module=$(sed -e 's/ .*//'<<<"$moduleResult")
     if [[ $moduleResult == *1 ]];then
 	shift
     fi
-    print_status $PrintStatusOpt " Module=$Module"
-    ArtifactId=`get_artifact_id $Module`
-    Version=$1
-    ensure_repo ${Module}
-    checkout_releasing_branch $Module $WORK_ROOT
-    cd "$WORK_ROOT/$Module"
-else
-    echo "moduleResult=$moduleResult"
-    if [ -n "$moduleResult" ];then
-	QUIET_MODE=0
-	failed $EXIT_FATAL_INVALID_OPTIONS "-j Cannot be used with module name"
-    fi
+    print_status " Module=$Module"
+
+    ensure_repo_generic ${WORK_ROOT} ${Module}
+    checkout_releasing_branch ${Module} ${WORK_ROOT} 1>/dev/stderr
+
+    cd ${WORK_ROOT}/${Module} >/dev/null
 fi
 
-git fetch --tags 1>/dev/stderr
-LatestTag=$(git describe --abbrev=0 --tags)
+LatestTag=$(detect_module_tag $DetectModuleTagOpt -j)
 if [ $TagMode -eq 1 ];then
     echo "$LatestTag"
     exit $EXIT_OK
 fi
 
+sed -e 's/^[a-zA-Z-]*//' <<<$LatestTag
 
-echo "LatestTag=$LatestTag"
