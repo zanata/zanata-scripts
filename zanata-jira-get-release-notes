@@ -27,6 +27,12 @@ Version name in Jira, e.g. client-3.9.0, python-client-3.9.0
 
 Show this help
 
+=item B<-v>
+
+Show verbose message
+
+=back
+
 =head1 DESCRIPTION
 
 This program get list of issue given Version name like 'client-3.8.4'.
@@ -45,7 +51,6 @@ usually failed to get the resources at the net
 
 Return EXIT_RETURN_FALSE (40) when Version-name exists, but no issues.
 
-=back
 =cut
 
 #== Common use ==
@@ -58,8 +63,8 @@ use Pod::Usage qw(pod2usage);
 
 my $scriptDir;
 BEGIN{
-	$scriptDir=dirname(abs_path($0));
-	push @INC, $scriptDir
+    $scriptDir=dirname(abs_path($0));
+    push @INC, $scriptDir
 };
 use ZanataScriptsCommon ;
 
@@ -69,29 +74,32 @@ use JSON::XS;
 
 ##== Parse options ==
 my %opts = ();
-getopts('h', \%opts );
+getopts('hv', \%opts );
 
 pod2usage(-verbose =>3, -output=> \*STDERR ) if $opts{'h'};
 pod2usage(-verbose =>2, -exitval => EXIT_FATAL_UNKNOWN_MODULE, -output=> \*STDERR) if (@ARGV == 0 );
 my $versionName=$ARGV[0];
+
+my $verboseMode=0;
+$verboseMode=1 if $opts{'v'};
 
 ##== Download JSON using REST
 my $response = HTTP::Tiny->new->get(JIRA_SERVER_URL . "/rest/api/2/search?jql=fixVersion=$versionName");
 
 if ($response->{status}==200){
 }elsif ($response->{status}=~/40.*/){
-	$!=EXIT_FATAL_UNKNOWN_MODULE;
-	die "[FATAL] $versionName does not exists. " . $response->{status} . " " . $response->{reason};
+    $!=EXIT_FATAL_UNKNOWN_MODULE;
+    die "[FATAL] $versionName does not exists. " . $response->{status} . " " . $response->{reason};
 }else{
-	$!=EXIT_FATAL_FAIL;
-	die "[FATAL] Failed with " . $response->{status} . " " . $response->{reason};
+    $!=EXIT_FATAL_FAIL;
+    die "[FATAL] Failed with " . $response->{status} . " " . $response->{reason};
 }
 
 ##== Extract from JSon
 my $versionHashRef = decode_json $response->{content};
 if ($versionHashRef->{total} == 0){
-	$!=EXIT_RETURN_FALSE;
-	die "[FALSE] No issue associate with Version-Name $versionName";
+    $!=EXIT_RETURN_FALSE;
+    die "[FALSE] No issue associate with Version-Name $versionName";
 }
 
 ##== Issue split 
@@ -101,12 +109,67 @@ my $changeBuf="";
 my $bugBuf="";
 
 sub add_issue{
-	my ($bufRef, $issue) = @_;
-	$$bufRef .= " * [" . $issue->{key} . "](" . JIRA_SERVER_URL . "/browse/". $issue->{key} . ") - " . $issue->{fields}->{summary} . "\n";
+    my ($bufRef, $issue) = @_;
+    # includeMode: 1 for include, -1 for exclude, 0 for undecided.
+    my $includeMode = 0;
+
+    print "@@@@@@@@@@@@@ key ".$issue->{key} ."\n"  if $verboseMode;
+    if ($issue->{fields}->{labels}){
+	foreach my $l (@{$issue->{fields}->{labels}}){
+	    my $label=lc $l;
+	    print "@ level=$label\n";
+	    if ( $label =~ /^release.*note[s]?/){
+		$includeMode=1;
+	    }elsif ($label =~ /no.*release.*note[s]?/){
+		$includeMode=-1;
+	    }elsif ($label eq "chore" ){
+		$includeMode=-1;
+	    }elsif ($label eq "design" ){
+		$includeMode=-1;
+	    }elsif ($label eq "jenkins" ){
+		$includeMode=-1;
+	    }
+	}
+    }
+
+    if ($includeMode == 0){
+	foreach my $component (@{$issue->{fields}->{components}}){
+	    my $componentName=lc $component->{name};
+	    print "@ componentName=$componentName\n" if $verboseMode;
+	    if ($componentName eq 'chore'){
+		$includeMode=-1;
+	    }elsif ($componentName eq 'deployment'){
+		$includeMode=-1;
+	    }elsif ($componentName eq 'drupalplugin'){
+		$includeMode=-1;
+	    }elsif ($componentName eq 'jenkins'){
+		$includeMode=-1;
+	    }elsif ($componentName eq 'zanata-scripts'){
+		$includeMode=-1;
+	    }
+	}
+    }
+
+    if ($includeMode == 0){
+	my $issueType=lc $issue->{fields}->{issuetype}->{name};
+	# print "@ issueType=$issueType\n";
+	if ($issueType eq "epic"){
+	    $includeMode=-1;
+	}elsif ($issueType eq "feedback"){
+	    $includeMode=-1;
+	}elsif ($issueType eq "sub-type"){
+	    $includeMode=-1;
+	}
+    }
+    print "@ includeMode=$includeMode\n" if $verboseMode;
+
+    return if $includeMode < 0;
+
+    $$bufRef .= " * [" . $issue->{key} . "](" . JIRA_SERVER_URL . "/browse/". $issue->{key} . ") - " . $issue->{fields}->{summary} . "\n";
 }
 
 foreach my $issue (@{$versionHashRef->{issues}}){
-	if ($issue->{fields}->{issuetype}->{name} eq "Bug"){
+	if (lc $issue->{fields}->{issuetype}->{name} eq "bug"){
 		add_issue(\$bugBuf, $issue);
 	}else{
 		add_issue(\$changeBuf, $issue);
@@ -125,7 +188,7 @@ unless( $changeBuf eq ""){
 }
 
 unless( $bugBuf eq ""){
-	print "##### Bug fixes\n";
+	print "##### Bug Fixes\n";
 	print $bugBuf;
 }
 exit EXIT_OK;
