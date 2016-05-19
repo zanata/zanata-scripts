@@ -1,18 +1,25 @@
-#!/bin/bash
+#!/bin/bash -eu
 ### NAME
 ###     zanata-rpm-functions
 ###
 ### SYNOPSIS
-###     zanata-rpm-functions [help|exit-status-help]
-### 
+###     zanata-rpm-functions help
+###     zanata-rpm-functions run <function> [function parameters ...]
+###
 ### DESCRIPTION
 ###     The script contain function to build RPM.
-###     
+###
 ###     This script depends on zanata-funtions
 ###
 
 ##=== function definitions Start ===
 ### FUNCTIONS
+
+###     koji_get_rawhide_version
+###         Get the version that rawhide targeting to.
+function koji_get_rawhide_version(){
+    koji list-targets | sed -n -e '/^rawhide\s/ s/^.*\sf\([0-9]*\).*$/\1/p'
+}
 
 ###     spec_update <specPath> <version> <specRelease> <maintainerEmail> [changeLogMsg]
 function spec_update(){
@@ -30,41 +37,42 @@ function spec_update(){
 	changeLogMsg="- Upgrade to upstream version ${Version}"
     fi
 
-    TmpSpecPath=${TMP_ROOT}/$(basename ${specPath})
+    local tmpSpecPath=${TMP_ROOT}/$(basename ${specPath})
 
     ## Update changelog
-    local changelogMatchStr=$(sed -n -e '/^%changelog/,$ p' ${specPath} | sed -n -e "/^\* .* ${Version}-${SpecRelease}/ p")
+    local changelogMatchStr=$(sed -n -e '/^%changelog/,$ p' ${specPath} | sed -n -e "/^\* .* ${version}-${specRelease}/ p")
     if [ -z "$changelogMatchStr" ];then
 	print_status " updating changelog"
-	sed -e '/^%changelog/a *'" $(date '+%a %b %d %Y') $maintainerEmail $version-$specRelease\n$changeLogMsg\n" "${specPath}" > ${TmpSpecPath}.changelog
+	sed -e '/^%changelog/a *'" $(date '+%a %b %d %Y') $maintainerEmail $version-$specRelease\n$changeLogMsg\n" "${specPath}" > ${tmpSpecPath}.changelog
 	SpecModified=1
     else
-	cp "${specPath}" ${TmpSpecPath}.changelog
+	cp "${specPath}" ${tmpSpecPath}.changelog
     fi
 
-    ## Update version 
-    local versionMatchStr=$(sed -n -e '/^Version:/ s/^Version:\s*\([0-9]*\.[0-9]*\.[0-9]*\).*$/\1/ p' ${TmpSpecPath}.changelog)
+    ## Update version
+    local versionMatchStr=$(sed -n -e '/^Version:/ s/^Version:\s*\([0-9.]*\)/\1/ p' ${tmpSpecPath}.changelog)
     if [ "${versionMatchStr}" != "$version" ];then
 	print_status " updating version to $version"
-	sed -e '/^Version:/ s/[0-9]*\.[0-9]*\.[0-9]*/'$version'/' ${TmpSpecPath}.changelog > ${TmpSpecPath}.version
+	sed -e '/^Version:/ s/^\(Version:\s*\).*$/\1'$version'/' ${tmpSpecPath}.changelog > ${tmpSpecPath}.version
 	SpecModified=1
     else
-	cp "${TmpSpecPath}.changelog" "${TmpSpecPath}.version"
+	cp "${tmpSpecPath}.changelog" "${tmpSpecPath}.version"
     fi
 
     ## Update SpecRelease
-    local releaseMatchStr=$(sed -n -e '/^Release:/ s/^Release:\s*\([0-9][0-9]*\).*$/\1/ p' ${TmpSpecPath}.changelog)
+    local releaseMatchStr=$(sed -n -e '/^Release:/ s/^Release:\s*\([0-9][0-9]*\).*$/\1/ p' ${tmpSpecPath}.version)
     if [ "${releaseMatchStr}" != "${specRelease}" ];then
 	print_status " updating SPEC release to ${specRelease}"
-	sed -e '/^Release:/ s/[0-9][0-9]*/'$specRelease'/' ${TmpSpecPath}.version > ${TmpSpecPath}
+	sed -e '/^Release:/ s/[0-9][0-9]*/'$specRelease'/' ${tmpSpecPath}.version > ${tmpSpecPath}
 	SpecModified=1
     else
-	cp "${TmpSpecPath}.version" "${TmpSpecPath}"
+	cp "${tmpSpecPath}.version" "${tmpSpecPath}"
     fi
 
     print_status " checking generated SPEC"
-    rpmlint ${TmpSpecPath} 1>/dev/stderr
+    rpmlint ${tmpSpecPath} 1>/dev/stderr
     exit_if_failed "$?" $EXIT_FATAL_FAIL "rpmlint check failed"
+    cp $tmpSpecPath $specPath
 }
 
 ###
@@ -74,11 +82,11 @@ function spec_update(){
 function branch_to_bodhi_branch(){
     local branch=$1
     if [ "$branch" = "master" ];then
-	branch=${RawhideKojiTarget}
+	branch=f${RawhideVersion}
     fi
 
     local num=$(sed -e 's/[^0-9]*//' <<< $branch)
-    
+
     case $branch in
 	f* )
 	    echo "fc$num"
@@ -97,7 +105,7 @@ function branches_to_koji_targets(){
     local first=1
     for branch in "$@"; do
 	if [ "$branch" = "master" ];then
-	    branch=${RawhideKojiTarget}
+	    branch=f${RawhideVersion}
 	fi
 
 	local num=$(sed -e 's/[^0-9]*//' <<< $branch)
@@ -105,18 +113,18 @@ function branches_to_koji_targets(){
 	if [ $first -eq 1 ];then
 	    first=0
 	else
-	    echo " "
+	    echo -n " "
 	fi
 
 	case $branch in
 	    f* )
-		echo "f$num"
+		echo -n "f$num"
 		;;
 	    e* )
 		if [ $num -ge 7 ];then
-		    echo "epel$num"
+		    echo -n "epel$num"
 		else
-		    echo "el$num"
+		    echo -n "el$num"
 		fi
 		;;
 	esac
@@ -124,9 +132,19 @@ function branches_to_koji_targets(){
 }
 
 ##=== function definitions End ===
+ProgramName=$(basename ${BASH_SOURCE[0]})
+RawhideVersion=$(koji_get_rawhide_version)
+if [ "$ProgramName" = "zanata-rpm-functions" ];then
+    ## Running as standalone
+    ScriptDir=$(dirname $(readlink  -q -f $0))
+    FunctionScriptFile=${ScriptDir}/zanata-functions
+    source "${FunctionScriptFile}"
+    trap exit_print_error EXIT
+fi
+
 
 ## Check depending programs
-ExitStatus=${EXIT_OK}
+ExitStatus=$EXIT_OK
 for dep in awk koji fedpkg bodhi rpmbuild mock; do
     if ! which $dep &>/dev/null ; then
 	ExitStatus=${EXIT_FATAL_MISSING_DEPENDENCY}
@@ -134,4 +152,5 @@ for dep in awk koji fedpkg bodhi rpmbuild mock; do
     fi
 done
 exit_if_failed "${ExitStatus}" ${EXIT_FATAL_MISSING_DEPENDENCY} "$EXIT_MSG"
+
 
