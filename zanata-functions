@@ -3,11 +3,14 @@
 ###     zanata-functions
 ###
 ### SYNOPSIS
-###     zanata-functions [help|exit-status-help]
-### 
+###     zanata-functions help
+###     zanata-functions help-list-sections
+###     zanata-functions help-section <section>
+###     zanata-functions run <function> [function arguments..]
+###
 ### DESCRIPTION
 ###     This script is basically for source (include) from other script.
-### 
+###
 ### FUNCTIONS
 function zanata_functions_get_path(){
     shopt -s extdebug
@@ -45,16 +48,16 @@ function zanata_help_section_from_string(){
     local headerPrinted=0
     IFS_BAK="${IFS}"
     IFS=''
-    echo "$buf" | while read line ; do 
+    echo "$buf" | while read line ; do
         ## update currentHeader
-	if [[ "$line" =~ ^[A-Z].* ]];then 
-	    currentHeader=$(sed -e 's/\s*$//' <<< "$line") 
-	fi 
+	if [[ "$line" =~ ^[A-Z].* ]];then
+	    currentHeader=$(sed -e 's/\s*$//' <<< "$line")
+	fi
 
 	## print if current Header is section
 	if [[ "$currentHeader" = "$section" ]];then
 	    ## print section header if not already
-	    if [[ "$line" =~ $section\s* ]];then 
+	    if [[ "$line" =~ $section\s* ]];then
 		if [ $headerPrinted -eq 0 ];then
 		    headerPrinted=1
 		    echo "$line"
@@ -67,12 +70,12 @@ function zanata_help_section_from_string(){
     IFS="${IFS_BAK}"
 }
 
-###     zanata_help_section <script> <section> 
+###     zanata_help_section <script> <section>
 function zanata_help_section(){
     local script=$1
     local section=$2
     zanata_help_section_from_string "$section" "$(zanata_help_raw $script)"
-    
+
 }
 
 function zanata_script_help_short(){
@@ -124,7 +127,7 @@ function zanata_script_help(){
 	echo
     done
 }
-    
+
 function echo_stderr(){
     if [ $ZANATA_QUIET_MODE -eq 0 ];then
 	echo "$@" > /dev/stderr
@@ -190,7 +193,7 @@ function detect_module_tag(){
     fi
     if [ "$1" = "-j" ];then
 	jenkinsMode=1;
-    else 
+    else
 	module=$1
     fi
     if [ $jenkinsMode -eq 0 ];then
@@ -210,7 +213,7 @@ function detect_module_tag(){
     echo "${latestTag}"
 }
 
-###         
+###
 ###     detect_module_version [-q] <-j|module>
 ###         Print latest tagged module version.
 function detect_module_version(){
@@ -269,9 +272,9 @@ function does_branch_exist(){
     echo_stderr -n "### Does ${module} has branch ${branch}?..."
     local ret=$EXIT_OK
     if git rev-parse --verify ${branch} &>/dev/null;then
-	echo "yes" 
+	echo "yes"
     elif git ls-remote --heads origin $branch | grep $branch >& /dev/null ;then
-	echo "remote" 
+	echo "remote"
     else
 	echo "no"
 	ret=${EXIT_RETURN_FALSE}
@@ -320,7 +323,7 @@ function exit_if_failed(){
 
 ###
 ###     exit_print_error <exitStatus>
-###         Print error message just before exit. 
+###         Print error message just before exit.
 ###         This function does not meant to call directly.
 ###         Environment:
 ###             EXIT_MSG: Error message to print.
@@ -370,7 +373,7 @@ function failed(){
 
 ###
 ###     get_releasing_branch <module>
-###         Determine RELEASING_BRANCH, the branch that we recommend downstream to use, 
+###         Determine RELEASING_BRANCH, the branch that we recommend downstream to use,
 ###         and release process should mainly happen here.
 ###         It is:
 ###             'release' if that branch exists; otherwise "master"
@@ -387,7 +390,7 @@ function get_releasing_branch(){
 
 ###
 ###     get_devel_branch <module>
-###         Determine DEVEL_BRANCH, the branch for committing new features. 
+###         Determine DEVEL_BRANCH, the branch for committing new features.
 ###         It is 'master'.
 function get_devel_branch(){
     echo "master"
@@ -513,8 +516,8 @@ function is_maven_scope(){
 ###     parse_gav <GAV>
 ###         Parse GAV
 ###         GAV can either in following formats
-###             commons-cli:commons-cli:1.0 
-###             commons-cli:commons-cli:jar:1.0 
+###             commons-cli:commons-cli:1.0
+###             commons-cli:commons-cli:jar:1.0
 ###             commons-cli:commons-cli:jar:1.0:test
 ###             commons-cli:commons-cli:jar:source:1.0:test
 function parse_gav(){
@@ -570,8 +573,8 @@ function parse_gav(){
 	failed $EXIT_FATAL_INVALID_OPTIONS "Invalid maven packaging $c3 from gav $gav"
     else
 	Version=$c3
-    fi  
-  
+    fi
+
     test -n "$GroupId" -a -n "$ArtifactId" -a -n "$Version"
     exit_if_failed $? ${EXIT_FATAL_INVALID_OPTIONS} "GAV $gav is invalid, should be in groupId:artifactId:version"
     Gav="$GroupId:$ArtifactId:$Version"
@@ -597,7 +600,7 @@ function gav_to_nv(){
 ###        GroupId-ArtifactId-Version to RPM name-version-release
 ###        release is always 1
 ###        Note the release does not include dist tag (.el7)
-###        
+###
 function gav_to_nvr(){
     local release=1
 #    if [[ "$version" =~ _SNAPSHOT ]];then
@@ -715,7 +718,7 @@ declare EXIT_OK=0
 
 ###
 ###     Fatal that should stop immediately:
-###         EXIT_FATAL_UNSPECIFIED: Unspecified fatal error, 
+###         EXIT_FATAL_UNSPECIFIED: Unspecified fatal error,
 ###             usually indicate a bug in our scripts.
 declare EXIT_FATAL_UNSPECIFIED=1
 
@@ -740,25 +743,6 @@ declare EXIT_ERROR_FAIL=20
 ###         EXIT_RETURN_FALSE: Script should return false
 declare EXIT_RETURN_FALSE=40
 
-case ${1-} in
-    help )
-	zanata_script_help $0
-	exit ${EXIT_OK}
-	;;
-    help-section )
-	zanata_help_section $0 $2
-	exit ${EXIT_OK}
-	;;
-    help-list-sections )
-	zanata_help_list_sections $0
-	exit ${EXIT_OK}
-	;;
-    gav_to_maven_artifact_file )
-	shift
-	gav_to_maven_artifact_file $@
-	exit ${EXIT_OK}
-	;;
-esac
 
 ###
 ### ENVIRONMENT
@@ -766,6 +750,7 @@ esac
 ###         Root of temporary directories and files, and expected to be clean
 ###         Default: /tmp/zanata
 : ${TMP_ROOT:=/tmp/zanata}
+export TMP_ROOT
 create_missing_dir "${TMP_ROOT}"
 
 ###
@@ -778,7 +763,7 @@ create_missing_dir "${REPO_LOCAL_DIR}"
 ###
 ###     DEVEL_ROOT:
 ###         Root of development project directories.
-###	    For example,  Git Repo zanata-scripts is expected to be in 
+###	    For example,  Git Repo zanata-scripts is expected to be in
 ###         ${DEVEL_ROOT}/zanata-scripts
 ###         Default: ${HOME}/devel
 : ${DEVEL_ROOT:=$HOME/devel}
@@ -804,4 +789,29 @@ create_missing_dir "${WORK_ROOT}"
 ###         Repository for maven
 ###         Default: ${HOME}/.m2/repository
 : ${M2_REPOSITORY_DIR:=$HOME/.m2/repository}
+
+ProgramName=$(basename ${BASH_SOURCE[$((${#BASH_SOURCE[@]}-1))]})
+case $ProgramName in
+    *-functions )
+	case ${1-} in
+	    help )
+		zanata_script_help $0
+		exit ${EXIT_OK}
+		;;
+	    help-section )
+		zanata_help_section $0 $2
+		exit ${EXIT_OK}
+		;;
+	    help-list-sections )
+		zanata_help_list_sections $0
+		exit ${EXIT_OK}
+		;;
+	    run )
+		shift
+		$@
+		exit $?
+		;;
+	esac
+    ;;
+esac
 
