@@ -126,7 +126,9 @@ function zanata_script_help(){
 }
     
 function echo_stderr(){
-    echo "$@" > /dev/stderr
+    if [ $ZANATA_QUIET_MODE -eq 0 ];then
+	echo "$@" > /dev/stderr
+    fi
 }
 
 function get_git_url(){
@@ -146,7 +148,6 @@ function checkout_branch(){
     git pull
     popd >/dev/null
 }
-
 
 ###     checkout_releasing_branch <module> [parentDir]
 ###         checkout RELEASING_BRANCH, the branch that we recommend downstream to use.
@@ -177,46 +178,77 @@ function create_missing_dir(){
 }
 
 ###
-###     detect_module_tag <module>
+###     detect_module_tag [-q] <-j|module>
 ###         Print latest tag of module
 function detect_module_tag(){
-    local module=$1
-    ensure_repo_generic ${WORK_ROOT} ${module}
-
-    pushd ${WORK_ROOT}/${module} >/dev/null
-    checkout_releasing_branch ${module} ${WORK_ROOT} 1>/dev/stderr
-
+    local module=
+    local jenkinsMode=0
+    local quietMode=0
+    if [ "$1" = "-q" ];then
+	quietMode=1
+	shift
+    fi
+    if [ "$1" = "-j" ];then
+	jenkinsMode=1;
+    else 
+	module=$1
+    fi
+    if [ $jenkinsMode -eq 0 ];then
+	ensure_repo_generic ${WORK_ROOT} ${module}
+	checkout_releasing_branch ${module} ${WORK_ROOT} 1>/dev/stderr
+	pushd ${WORK_ROOT}/${module} >/dev/null
+    fi
     git fetch --tags 1>/dev/stderr
     local latestTag=$(git describe --abbrev=0 --tags)
-    popd >/dev/null
+    if [ $jenkinsMode -eq 0 ];then
+        popd >/dev/null
+    fi
 
-    echo_stderr "### detect_module_version: ${module}: Latest tag: $latestTag"
+    if [ $quietMode -eq 0 ];then
+	echo_stderr "### detect_module_tag: ${module:+${module}:} Latest tag: $latestTag"
+    fi
     echo "${latestTag}"
 }
 
 ###         
-###     detect_module_version <module>
+###     detect_module_version [-q] <-j|module>
 ###         Print latest tagged module version.
 function detect_module_version(){
-    local module=$1
-    ensure_repo_generic ${WORK_ROOT} ${module}
+    local module=
+    local jenkinsMode=0
+    local quietMode=0
+    if [ "$1" = "-q" ];then
+	quietMode=1
+	shift
+    fi
 
-    pushd ${WORK_ROOT}/${module} >/dev/null
-    checkout_releasing_branch ${module} ${WORK_ROOT} 1>/dev/stderr
+    if [ "$1" = "-j" ];then
+	jenkinsMode=1
+    else
+	module=$1
+    fi
+    if [ $jenkinsMode -eq 0 ];then
+	ensure_repo_generic ${WORK_ROOT} ${module}
+	checkout_releasing_branch ${module} ${WORK_ROOT} 1>/dev/stderr
+	pushd ${WORK_ROOT}/${module} >/dev/null
+    fi
 
-    git fetch --tags 1>/dev/stderr
-    local latestTag=$(git describe --abbrev=0 --tags)
+    local latestTag=$(detect_module_tag -j)
     git checkout $latestTag
     local version=$(mvn -q -Dexec.executable="echo"  -Dexec.args='${project.version}' --non-recursive org.codehaus.mojo:exec-maven-plugin:exec)
 
-    ## Restore branch
+    ## Restore branch to releasing
     checkout_releasing_branch ${module} ${WORK_ROOT} 1>/dev/stderr
-    popd >/dev/null
 
     test -n "$version"
     exit_if_failed "$?" ${EXIT_FATAL_FAIL} "Failed to get version from ${module}"
 
-    echo_stderr "### detect_module_version: ${module}: Version: $version"
+    if [ $jenkinsMode -eq 0 ];then
+	popd >/dev/null
+    fi
+    if [ $quietMode -eq 0 ];then
+	echo_stderr "### detect_module_version: ${module:+${module}:} Version: $version"
+    fi
     echo "$version"
 }
 
@@ -235,7 +267,6 @@ function does_branch_exist(){
 
     pushd ${parentDir}/${module} >/dev/null
     echo_stderr -n "### Does ${module} has branch ${branch}?..."
-
     local ret=$EXIT_OK
     if git rev-parse --verify ${branch} &>/dev/null;then
 	echo "yes" 
@@ -256,7 +287,7 @@ function ensure_repo_generic(){
     local parentDir=$1
     local module=$2
     local git_repo_url=${3-}
-    echo_stderr "### Ensure the repo $module is at ${parentDir}/${module}"
+    print_status "### Ensure the repo $module is at ${parentDir}/${module}"
     if [ -z "$git_repo_url" ];then
 	git_repo_url=$(get_git_url ${module})
     fi
@@ -294,10 +325,10 @@ function exit_if_failed(){
 ###         Environment:
 ###             EXIT_MSG: Error message to print.
 EXIT_MSG=
-QUIET_MODE=0
+ZANATA_QUIET_MODE=0
 function exit_print_error(){
     local exitStatus=$?
-    if [ $QUIET_MODE -eq 0 ];then
+    if [ $ZANATA_QUIET_MODE -eq 0 ];then
 	if [ -n "${exitStatus-}" ];then
 	    case $exitStatus in
 		${EXIT_OK} )
@@ -621,6 +652,10 @@ function print_status(){
     local optionArray=()
     local optionN=0
     local optionS=0
+
+    if [ $ZANATA_QUIET_MODE -eq 0 ];then
+	return
+    fi
 
     while [[ $1 == -* ]]; do
 	case $1 in
