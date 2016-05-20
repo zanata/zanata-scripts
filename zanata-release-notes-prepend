@@ -4,7 +4,7 @@
 ###
 ### SYNOPSIS
 ###     zanata-release-notes-prepend [Options] <module>|<artifact> <version>
-### 
+###
 ### DESCRIPTION
 ###     This program prepends release notes of specified version to release-notes.md
 ###     and create new git commit of it.
@@ -25,19 +25,19 @@
 ###     -j: Jenkins mode.
 ###         This assumes that current directory is <module> work directory.
 ###         and correct branch is checked out.
-###     
+###
 ### EXIT STATUS
 ###    Returns EXIT_OK (0) when successfully.
 ###
-###    Returns EXIT_FATAL_INVALID_OPTIONS (3) when invalid 
+###    Returns EXIT_FATAL_INVALID_OPTIONS (3) when invalid
 ###        options or arguments are given
 ###
-###    Returns EXIT_FATAL_MISSING_DEPENDENCY (4) 
+###    Returns EXIT_FATAL_MISSING_DEPENDENCY (4)
 ###        when the docs/release-notes.md is missing
 ###
 ###    Returns EXIT_FATAL_UNKNOWN_MODULE (5) when module does not exists
 ###
-###    Returns EXIT_FATAL_FAIL (6) generic failure, 
+###    Returns EXIT_FATAL_FAIL (6) generic failure,
 ###        usually failed to get the resources at the net
 ###
 ###    Return EXIT_RETURN_FALSE (40) when Version-name exists, but no issues.
@@ -72,7 +72,6 @@ shift $((OPTIND-1))
 
 ## Get Module
 moduleResult=$(get_module_from_command $1)
-echo "moduleResult=$moduleResult"
 Module=$(sed -e 's/ .*//'<<<"$moduleResult")
 if [[ $moduleResult == *1 ]];then
     shift
@@ -95,21 +94,15 @@ if [ ! -r $RELEASE_NOTES_FILE ];then
     failed $EXIT_FATAL_MISSING_DEPENDENCY "docs/release-notes.md does not exist"
 fi
 
-if grep -f "## $Version" $RELEASE_NOTES_FILE >& /dev/null;then
-    failed $EXIT_RETURN_FALSE "Version $Version is already in $RELEASE_NOTE_FILE"
-fi
+##== Execute Start ==
+print_status -t "execute" -s "Start"
 
-##=== Execute  Start ===
-print_status -t Execute -s "Start"
+##=== prepend jira  Start ===
+print_status " prepend Jira"
+TmpFileJira=`mktemp ${TMP_ROOT}/zanata-release-notes.jira.XXXXXXXX`
 
-TmpFile=`mktemp zanata-release-notes.XXXXXXXX`
-echo -e "## $Version\n"> $TmpFile
-
-print_status
-##==== Prepend jira issues ====
-print_status " getting jira issues"
 set +e
-zanata-jira-get-release-notes "$ArtifactId-$Version" >> $TmpFile
+zanata-jira-get-release-notes "$ArtifactId-$Version" > $TmpFileJira
 ExitCode=$?
 set -e
 case $ExitCode in
@@ -118,12 +111,79 @@ case $ExitCode in
     $EXIT_RETURN_FALSE )
 	;;
     * )
-	rm -f $TmpFile
+	rm -f $TmpFileJira
 	failed $ExitCode " Failed to get related jira issues"
 	;;
 esac
 
+##=== Split  Start ===
+print_status " split previous release-notes"
+## greater: greater version
+TmpFileGreater=`mktemp ${TMP_ROOT}/zanata-release-notes.greater.XXXXXXXX`
+TmpFileThis=`mktemp ${TMP_ROOT}/zanata-release-notes.this.XXXXXXXX`
+TmpFileLesser=`mktemp ${TMP_ROOT}/zanata-release-notes.lesser.XXXXXXXX`
+
+Mode=g
+Keep=0
+while IFS= read -r l ;do
+    line=$(sed -e 's/\s*$//' <<<"$l")
+    if [ "$line" = "## $Version" ];then
+	Mode=t
+    elif [[ $Mode = "t" && "$line" =~ ^##\ [0-9] ]];then
+	Mode=l
+    fi
+    case $Mode in
+	g )
+	    echo "$line" >> $TmpFileGreater
+	    ;;
+	t )
+	    if [[ $Mode = "t" && "$line" =~ ^##\ [0-9] ]];then
+		Keep=0
+	    elif [[ "$line" =~ ^###*\ [Bb]ug\ [Ff]ix ]];then
+		## Do not keep "Bug fixes" and "Changes"
+		Keep=0
+	    elif [[ "$line" =~ ^###*\ [Cc]hanges? ]];then
+		Keep=0
+	    elif [[ "$line" =~ ^###*\  ]];then
+		Keep=1
+	    elif [[ "$line" =~ ^----* ]];then
+		## Remove split line
+		Keep=0
+	    fi
+	    if [ $Keep -eq 1 ];then
+		echo "$line" >> $TmpFileThis
+	    fi
+	    ;;
+	l )
+	    echo "$line" >> $TmpFileLesser
+	    ;;
+    esac
+done < <(cat $RELEASE_NOTES_FILE)
+
+##=== Combine Start ===
+print_status " combine release-notes"
+TmpFile=`mktemp ${TMP_ROOT}/zanata-release-notes.XXXXXXXX`
+if [ -s $TmpFileGreater ];then
+    cat $TmpFileGreater > $TmpFile
+fi
+
+echo "## $Version">> $TmpFile
+if [ -s $TmpFileThis ];then
+    cat $TmpFileThis >> $TmpFile
+fi
+
+if [ -s $TmpFileJira ];then
+    cat $TmpFileJira >> $TmpFile
+fi
 echo -e "\n-----------------------\n" >> $TmpFile
-cat $RELEASE_NOTES_FILE >> $TmpFile
+
+cat $TmpFileLesser >> $TmpFile
 mv $TmpFile $RELEASE_NOTES_FILE
-git commit -m "doc(release): Prepend release notes for version $Version" -- $RELEASE_NOTES_FILE
+rm -f $TmpFileJira $TmpFileGreater $TmpFileThis $TmpFileLesser
+
+if git diff --exit-code ;then
+    failed ${EXIT_RETURN_FALSE} " $RELEASE_NOTES_FILE does not need to change."
+fi
+git commit -m "doc(release): Prepend $RELEASE_NOTES_FILE for version $Version" -- $RELEASE_NOTES_FILE
+exit ${EXIT_OK}
+
