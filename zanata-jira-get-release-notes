@@ -113,53 +113,53 @@ sub add_issue{
     # includeMode: 1 for include, -1 for exclude, 0 for undecided.
     my $includeMode = 0;
 
-    print "@@@@@@@@@@@@@ key ".$issue->{key} ."\n"  if $verboseMode;
+    print "@@@@@@@@@@@@@ key ".$issue->{key} ."\n" if $verboseMode;
     if ($issue->{fields}->{labels}){
-	foreach my $l (@{$issue->{fields}->{labels}}){
-	    my $label=lc $l;
-	    print "@ level=$label\n";
-	    if ( $label =~ /^release.*note[s]?/){
-		$includeMode=1;
-	    }elsif ($label =~ /no.*release.*note[s]?/){
-		$includeMode=-1;
-	    }elsif ($label eq "chore" ){
-		$includeMode=-1;
-	    }elsif ($label eq "design" ){
-		$includeMode=-1;
-	    }elsif ($label eq "jenkins" ){
-		$includeMode=-1;
-	    }
-	}
+        foreach my $l (@{$issue->{fields}->{labels}}){
+            my $label=lc $l;
+            print "@ level=$label\n" if $verboseMode;
+            if ( $label =~ /^release.*note[s]?/){
+                $includeMode=1;
+            }elsif ($label =~ /no.*release.*note[s]?/){
+                $includeMode=-1;
+            }elsif ($label eq "chore" ){
+                $includeMode=-1;
+            }elsif ($label eq "design" ){
+                $includeMode=-1;
+            }elsif ($label eq "jenkins" ){
+                $includeMode=-1;
+            }
+        }
     }
 
     if ($includeMode == 0){
-	foreach my $component (@{$issue->{fields}->{components}}){
-	    my $componentName=lc $component->{name};
-	    print "@ componentName=$componentName\n" if $verboseMode;
-	    if ($componentName eq 'chore'){
-		$includeMode=-1;
-	    }elsif ($componentName eq 'deployment'){
-		$includeMode=-1;
-	    }elsif ($componentName eq 'drupalplugin'){
-		$includeMode=-1;
-	    }elsif ($componentName eq 'jenkins'){
-		$includeMode=-1;
-	    }elsif ($componentName eq 'zanata-scripts'){
-		$includeMode=-1;
-	    }
-	}
+        foreach my $component (@{$issue->{fields}->{components}}){
+            my $componentName=lc $component->{name};
+            print "@ componentName=$componentName\n" if $verboseMode;
+            if ($componentName eq 'chore'){
+                $includeMode=-1;
+            }elsif ($componentName eq 'deployment'){
+                $includeMode=-1;
+            }elsif ($componentName eq 'drupalplugin'){
+                $includeMode=-1;
+            }elsif ($componentName eq 'jenkins'){
+                $includeMode=-1;
+            }elsif ($componentName eq 'zanata-scripts'){
+                $includeMode=-1;
+            }
+        }
     }
 
     if ($includeMode == 0){
-	my $issueType=lc $issue->{fields}->{issuetype}->{name};
-	# print "@ issueType=$issueType\n";
-	if ($issueType eq "epic"){
-	    $includeMode=-1;
-	}elsif ($issueType eq "feedback"){
-	    $includeMode=-1;
-	}elsif ($issueType eq "sub-type"){
-	    $includeMode=-1;
-	}
+        my $issueType=lc $issue->{fields}->{issuetype}->{name};
+        # print "@ issueType=$issueType\n";
+        if ($issueType eq "epic"){
+            $includeMode=-1;
+        }elsif ($issueType eq "feedback"){
+            $includeMode=-1;
+        }elsif ($issueType eq "sub-type"){
+            $includeMode=-1;
+        }
     }
     print "@ includeMode=$includeMode\n" if $verboseMode;
 
@@ -169,27 +169,27 @@ sub add_issue{
 }
 
 foreach my $issue (@{$versionHashRef->{issues}}){
-	if (lc $issue->{fields}->{issuetype}->{name} eq "bug"){
-		add_issue(\$bugBuf, $issue);
-	}else{
-		add_issue(\$changeBuf, $issue);
-	}
+    if (lc $issue->{fields}->{issuetype}->{name} eq "bug"){
+        add_issue(\$bugBuf, $issue);
+    }else{
+        add_issue(\$changeBuf, $issue);
+    }
 }
 
 ##== Print result
 unless( $changeBuf eq ""){
     print "##### Changes\n";
-	print $changeBuf;
+    print $changeBuf;
 
-	## Insert blank line if we have bug as well
-	unless( $bugBuf eq ""){
-		print "\n";
-	}
+    ## Insert blank line if we have bug as well
+    unless( $bugBuf eq ""){
+        print "\n";
+    }
 }
 
 unless( $bugBuf eq ""){
-	print "##### Bug Fixes\n";
-	print $bugBuf;
+    print "##### Bug Fixes\n";
+    print $bugBuf;
 }
 exit EXIT_OK;
 
