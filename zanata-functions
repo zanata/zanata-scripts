@@ -656,7 +656,7 @@ function print_status(){
     local optionN=0
     local optionS=0
 
-    if [ $ZANATA_QUIET_MODE -eq 0 ];then
+    if [ $ZANATA_QUIET_MODE -eq 1 ];then
 	return
     fi
 
