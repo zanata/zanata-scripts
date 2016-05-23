@@ -526,6 +526,7 @@ function parse_gav(){
     ArtifactId=$(awk -F ':' '{print $2}'<<<$gav)
     Packaging=
     Classifier=
+    Version=
     Scope=
     local c3=$(awk -F ':' '{print $3}'<<<$gav)
     local c4=$(awk -F ':' '{print $4}'<<<$gav)
