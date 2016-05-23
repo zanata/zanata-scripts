@@ -9,7 +9,7 @@ You can install them through following command:
 sudo yum -y install $(sed -n -e '/^===.*dnf/,/^==/ s/^*\(.*\)/\1/p' README | xargs)
 
 * cmake-fedora
+* fedora-packager
 * groovy
 * perl-JSON-XS
-
 
