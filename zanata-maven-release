@@ -100,10 +100,10 @@ function release_perform(){
 	    *)
 		print_status " Update Zanata dependencies"
 		set +e
-		$ScriptDir/zanata-version-update -j
+		$ScriptDir/zanata-version-update -i -j
 		VersionUpdateResult=$?
 		if [ "$VersionUpdateResult" = "$EXIT_RETURN_FALSE" ];then
-		    read -p "### Are the change looks alright? Press [Ctrl-C] to break, [Enter] to continue"
+		    read -p "### Uncommitted files detected. Commit them? Press [Ctrl-C] to break, [Enter] to continue"
 		    git commit -a -m "chore(dependency): [zanata-maven-release] Update Zanata dependencies"
 		elif [ "$VersionUpdateResult" != "$EXIT_OK" ];then
 		    ## Error, pass the error code as-is
