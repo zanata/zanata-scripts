@@ -11,7 +11,7 @@
 ###     zanata-maven-release-common    [options]
 ###     zanata-maven-release-client    [options]
 ###     zanata-maven-release-assets    [options]
-### 
+###
 ### OPTIONS
 ###     -h: Show this help
 ###
@@ -25,7 +25,7 @@
 ###
 ###     -r <releaseVersion>
 ###         Release Vesion like: 3.9.0
-### 
+###
 ### DESCRIPTION
 ###     This program releases version in maven and submit to sonatype.
 ### It operates upon releasing branch by default.
@@ -34,39 +34,39 @@
 ### USE CASES
 ###  * Normally following is sufficient:
 ###    zanata-maven-release-<module>
-### 
-###  * If tag is made but release failed, and you fixed it without changing 
-###    the source, You can resume the release process with 
-###   
+###
+###  * If tag is made but release failed, and you fixed it without changing
+###    the source, You can resume the release process with
+###
 ###    zanata-maven-release-<module> -r
-### 
+###
 ### ENVIRONMENT
 ###     RELEASING_BRANCH
-###       The branch that we recommend downstream to use, and 
+###       The branch that we recommend downstream to use, and
 ###       release process should mainly happen here.
 ###       It is:
 ###          'release' if that branch exists; otherwise 'master'
-###  
-###     DEVEL_BRANCH 
+###
+###     DEVEL_BRANCH
 ###       The branch for committing new features. It is 'master'
-### 
+###
 ###     REPO_LOCAL_DIR (Optional)
 ###       The directory for maven repo
 ###       This should NOT be your normal work maven repo
-### 
+###
 ###     WORK_ROOT
 ###       The base directory for repository checkout
 ###       As maven release plugin generally require a clean git working tree
 ###       This script will clean it for you.
 ###       Thus it is better not use normal development directory.
-### 	
+###
 
 ScriptDir=$(dirname $(readlink  -q -f $0))
 FunctionScriptFile=${ScriptDir}/zanata-functions
 source "$FunctionScriptFile"
 trap exit_print_error EXIT
 
-### 
+###
 ###     MAVEN_RELEASE_OPTIONS
 ###       The maven options to be use in this scripts
 ###       Default: -e -Dmaven.repo.local=$REPO_LOCAL_DIR -Dgpg.useagent -Prelease -DupdateReleaseInfo=true
@@ -99,22 +99,18 @@ function release_perform(){
 		;;
 	    *)
 		print_status " Update Zanata dependencies"
-		set +e
 		$ScriptDir/zanata-version-update -i -j
-		VersionUpdateResult=$?
-		if [ "$VersionUpdateResult" = "$EXIT_RETURN_FALSE" ];then
-		    read -p "### Uncommitted files detected. Commit them? Press [Ctrl-C] to break, [Enter] to continue"
-		    git commit -a -m "chore(dependency): [zanata-maven-release] Update Zanata dependencies"
-		elif [ "$VersionUpdateResult" != "$EXIT_OK" ];then
-		    ## Error, pass the error code as-is
-		    exit $VersionUpdateResult
-		fi
-		set -e
 		;;
 	esac
 
+	## Update Zanata Translation
+	if [ -r zanata.xml ];then
+	    print_status " Update Zanata translation"
+	    $ScriptDir/zanata-translate-pull -i -j
+	fi
+
 	print_status " Dry-run: release:prepare release:perform"
-        mvn ${MAVEN_RELEASE_OPTIONS} release:clean release:prepare -DdryRun=true 
+        mvn ${MAVEN_RELEASE_OPTIONS} release:clean release:prepare -DdryRun=true
 
         print_status " Real-run: it should sign artifacts, push $Module to nexus, then close it"
         mvn ${MAVEN_RELEASE_OPTIONS} release:clean release:prepare release:perform
@@ -218,10 +214,10 @@ print_status " Module=$Module"
 if [ "$Module" = "zanata-assets" ];then
     if [ -z "$ReleaseVersion" ];then
 	failed $EXIT_FATAL_INVALID_OPTIONS "assets requires -r <releaseVersion>"
-    fi	
+    fi
     if [ -z "$DevelopmentVersion" ];then
 	failed $EXIT_FATAL_INVALID_OPTIONS "assets requires -d <developmentVersion>"
-    fi	
+    fi
 fi
 
 ArtifactId=$(get_artifact_id $Module)
@@ -237,10 +233,10 @@ ensure_repo $Module
 
 ## Determine RELEASING_BRANCH
 : ${RELEASING_BRANCH:=$(get_releasing_branch $Module)}
-print_status " RELEASING_BRANCH for $Module is ${RELEASING_BRANCH}"  
+print_status " RELEASING_BRANCH for $Module is ${RELEASING_BRANCH}"
 
 MavenReleaseBranch=$RELEASING_BRANCH
-print_status " Maven release for $Module will be operated on $MavenReleaseBranch"  
+print_status " Maven release for $Module will be operated on $MavenReleaseBranch"
 
 checkout_releasing_branch $Module $WORK_ROOT
 cd ${WORK_ROOT}/${Module}

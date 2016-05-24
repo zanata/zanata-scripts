@@ -4,7 +4,7 @@ shopt -s globstar
 ###     zanata-translate-pull Download zanata translation.
 ###
 ### SYNOPSIS
-###     zanata-translate-pull [Options] <module> <branch> [ZanataMvnOption]
+###     zanata-translate-pull [Options] [<module>|<artifact> [<branch> [ZanataMvnOption]]]
 ###
 ### OPTIONS
 ###     -h: Show this help
@@ -12,8 +12,15 @@ shopt -s globstar
 ###     -i: Interactive mode
 ###         It will pause before commit.
 ###
+###     -j: Jenkins mode.
+###         This assumes that current directory is <module> work directory.
+###         and correct branch is checked out.
+###
+###     -p: Push after commit
+###         Git push when it has commit.
+###
 ### DESCRIPTION
-###     This program 
+###     This program
 ###     This script performs branching chores for big releases of
 ###     zanata-client and zanata-server.
 ###
@@ -24,9 +31,13 @@ source "${FUNCTION_SCRIPT_FILE}"
 trap exit_print_error EXIT
 PROGRAM_NAME=$(basename $0)
 
+##=== parsing Start ===
+print_status -t parsing -s "Start"
 Interactive=0
+JenkinsMode=0
+PushMode=0
 
-while getopts "hi" opt;do
+while getopts "hijp" opt;do
     case $opt in
 	h )
 	    zanata_script_help $0
@@ -34,6 +45,12 @@ while getopts "hi" opt;do
 	    ;;
 	i )
 	    Interactive=1
+	    ;;
+	j )
+	    JenkinsMode=1
+	    ;;
+	p )
+	    PushMode=1
 	    ;;
 	* )
 	    failed ${EXIT_FATAL_INVALID_OPTIONS} "$opt"
@@ -43,46 +60,61 @@ done
 
 shift $((OPTIND-1))
 
-if [ $# -lt 2 ];then
-    zanata_script_help $0
-    exit ${EXIT_FATAL_INVALID_OPTIONS}
-fi
+##=== prepare Start ===
+print_status -t prepare  -s "Start"
+## If not JenkinsMode, then checkout should be done here
+if [ $JenkinsMode -eq 0 ];then
+    ModuleResult=$(get_module_from_command ${1-})
+    Module=$(sed -e 's/ .*//'<<<"$ModuleResult")
+    if [[ $ModuleResult == *1 ]];then
+	shift
+    fi
+    print_status " Module=$Module"
 
-## Get Module
-moduleResult=$(get_module_from_command $1)
-echo "moduleResult=$moduleResult"
-Module=$(sed -e 's/ .*//'<<<"$moduleResult")
-if [[ $moduleResult == *1 ]];then
-    shift
+    ensure_repo ${Module}
+
+    ## Determine branch
+    if [ -n "${1-}" ];then
+	Branch=$1
+	shift
+    else
+	## Determine RELEASING_BRANCH
+	Branch=$(get_releasing_branch $Module)
+    fi
+    print_status " Branch is $Branch"
+
+    checkout_branch $Module "$Branch" $WORK_ROOT
+    cd "$WORK_ROOT/$Module"
+else
+    Branch=$(git name-rev --name-only HEAD)
 fi
-print_status " Module=$Module"
-Branch=$1
-shift
 
 ##=== prepare Start ===
-print_status -t prepare -s "Start"
-
-ensure_repo ${Module}
-checkout_branch ${Module} ${Branch} ${WORK_ROOT}
-cd ${WORK_ROOT}/${Module}
-
 if [ ! -r zanata.xml ];then
     failed $EXIT_FATAL_MISSING_DEPENDNECY "zanata.xml does not exist."
 fi
 
+##=== translation update Start ===
 print_status -t "translation update" -s "Start"
 print_status " pull translation from Zanata"
-mvn -B org.zanata:zanata-maven-plugin:pull -Dzanata.projectVersion=$Branch $@
+mvn -B -e org.zanata:zanata-maven-plugin:pull -Dzanata.projectVersion=$Branch $@
 
 print_status " Validate translation"
-mvn -B com.googlecode.l10n-maven-plugin:l10n-maven-plugin:validate -pl zanata-war
+mvn -B -e com.googlecode.l10n-maven-plugin:l10n-maven-plugin:validate -pl zanata-war $@
 
-print_status " Push translation"
-git add **/src/main/resources/**/*_*.properties
-if [ $Interactive -eq 1 ];then
-    git diff HEAD
-    read -p "### Press [Ctrl-C] to break, [Enter] to continue"
+if ! git diff --exit-code ;then
+    if [ $Interactive -eq 1 ];then
+	read -p "### Press [Ctrl-C] to break, [Enter] to continue"
+    fi
+    git add **/src/main/resources/**/*_*.properties
+    git commit -m "trans(pull): Update translation"
+    if [ $PushMode -ge 1 ];then
+	git push
+    else
+	exit ${EXIT_RETURN_FALSE}
+    fi
+else
+    print_status " No change detected"
 fi
-git commit -m "Fetch updated translations from translate.zanata.org"
-git push origin $Branch
+exit ${EXIT_OK}
 
