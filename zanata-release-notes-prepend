@@ -49,6 +49,25 @@ FunctionScriptFile=${ScriptDir}/zanata-functions
 source "${FunctionScriptFile}"
 trap exit_print_error EXIT
 ProgramName=$(basename $0)
+##== function start ==
+## version_greater ver1 ver2
+##     return 0 when ver1 > ver2
+function version_greater(){
+    local IFS=.
+    local ver1=($1)
+    local ver2=($2)
+    local i=0
+    for ((i=0; i<${#ver1[@]} ; i++));do
+	if (i>=${#ver2[@]});then
+	    return 0
+	elif [ ${ver1[$i]} -gt ${ver2[$i]} ];then
+	    return 0
+	elif  [ ${ver1[$i]} -lt ${ver2[$i]} ];then
+	    return 1
+	fi
+    done
+    return 1
+}
 
 ##=== parsing Start ===
 print_status -t "parse" -s "Start"
@@ -129,8 +148,13 @@ while IFS= read -r l ;do
     line=$(sed -e 's/\s*$//' <<<"$l")
     if [ "$line" = "## $Version" ];then
 	Mode=t
-    elif [[ $Mode = "t" && "$line" =~ ^##\ [0-9] ]];then
-	Mode=l
+    elif [[ "$line" =~ ^##\ [0-9] ]];then
+	v=$(sed -e 's/^## \(.*\)\s*$/\1/'<<<"$line")
+	if version_greater $v $Version;then
+	    Mode=g
+	else
+	    Mode=l
+	fi
     fi
     case $Mode in
 	g )
@@ -158,6 +182,7 @@ while IFS= read -r l ;do
 	    echo "$line" >> $TmpFileLesser
 	    ;;
     esac
+    echo "$Mode$Keepline=$line"
 done < <(cat $RELEASE_NOTES_FILE)
 
 ##=== Combine Start ===
