@@ -67,6 +67,7 @@ BEGIN{
     push @INC, $scriptDir
 };
 use ZanataScriptsCommon ;
+use constant JIRA_JQL_MAX_RESULTS=>50;
 
 ##== Program dependency ==
 use HTTP::Tiny;
@@ -84,29 +85,47 @@ my $verboseMode=0;
 $verboseMode=1 if $opts{'v'};
 
 ##== Download JSON using REST
-my $response = HTTP::Tiny->new->get(JIRA_SERVER_URL . "/rest/api/2/search?jql=fixVersion=$versionName");
+## Note that by default, Jira only return 50 results
+## So we may need to retrieve more than once.
 
-if ($response->{status}==200){
-}elsif ($response->{status}=~/40.*/){
-    $!=EXIT_FATAL_UNKNOWN_MODULE;
-    die "[FATAL] $versionName does not exists. " . $response->{status} . " " . $response->{reason};
-}else{
-    $!=EXIT_FATAL_FAIL;
-    die "[FATAL] Failed with " . $response->{status} . " " . $response->{reason};
-}
-
-##== Extract from JSon
-my $versionHashRef = decode_json $response->{content};
-if ($versionHashRef->{total} == 0){
-    $!=EXIT_RETURN_FALSE;
-    die "[FALSE] No issue associate with Version-Name $versionName";
-}
-
-##== Issue split 
-## Two types of issues, Bug for "Bugs fix", "Changes" for other types.
+my $total = -1;
+my $startAt = 0;
 
 my $changeBuf="";
 my $bugBuf="";
+
+while($total < 0 or $startAt < $total){
+	my $response = HTTP::Tiny->new->get(JIRA_SERVER_URL . "/rest/api/2/search?jql=fixVersion=$versionName&startAt=$startAt&maxResults=". JIRA_JQL_MAX_RESULTS);
+
+	if ($response->{status}==200){
+	}elsif ($response->{status}=~/40.*/){
+		$!=EXIT_FATAL_UNKNOWN_MODULE;
+		die "[FATAL] $versionName does not exists. " . $response->{status} . " " . $response->{reason};
+	}else{
+		$!=EXIT_FATAL_FAIL;
+		die "[FATAL] Failed with " . $response->{status} . " " . $response->{reason};
+	}
+	##== Extract from JSon
+	my $versionHashRef = decode_json $response->{content};
+	$total=$versionHashRef->{total};
+
+	if ( $total == 0 ){
+		$!=EXIT_RETURN_FALSE;
+		die "[FALSE] No issue associate with Version-Name $versionName";
+	}
+
+	##== Issue split 
+	## Two types of issues, Bug for "Bugs fix", "Changes" for other types.
+	foreach my $issue (@{$versionHashRef->{issues}}){
+		if (lc $issue->{fields}->{issuetype}->{name} eq "bug"){
+			add_issue(\$bugBuf, $issue);
+		}else{
+			add_issue(\$changeBuf, $issue);
+		}
+	}
+
+	$startAt+= JIRA_JQL_MAX_RESULTS;
+}
 
 sub add_issue{
     my ($bufRef, $issue) = @_;
@@ -166,14 +185,6 @@ sub add_issue{
     return if $includeMode < 0;
 
     $$bufRef .= " * [" . $issue->{key} . "](" . JIRA_SERVER_URL . "/browse/". $issue->{key} . ") - " . $issue->{fields}->{summary} . "\n";
-}
-
-foreach my $issue (@{$versionHashRef->{issues}}){
-    if (lc $issue->{fields}->{issuetype}->{name} eq "bug"){
-        add_issue(\$bugBuf, $issue);
-    }else{
-        add_issue(\$changeBuf, $issue);
-    }
 }
 
 ##== Print result
