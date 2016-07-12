@@ -813,6 +813,7 @@ case $ProgramName in
 		exit $?
 		;;
 	esac
+	zanata_script_help $0
     ;;
 esac
 
