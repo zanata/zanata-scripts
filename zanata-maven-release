@@ -99,7 +99,18 @@ function release_perform(){
 		;;
 	    *)
 		print_status " Update Zanata dependencies"
+		set +e
 		$ScriptDir/zanata-version-update -i -j
+		case $? in
+		    $EXIT_OK )
+			;;
+		    $EXIT_RETURN_FALSE )
+			;;
+		    * )
+			failed $? "Failed to Update Zanata dependencies"
+			;;
+		esac
+		set -e
 		;;
 	esac
 
