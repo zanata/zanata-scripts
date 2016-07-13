@@ -234,8 +234,7 @@ if [ -z "${StartFrom}" ];then
     spec_update ${SpecFilename} ${Version} ${SpecRelease} "${MAINTAINER_EMAIL}"
 
     print_status " spectool: Downloading source file(s)"
-    spectool -g -S "${TmpSpecPath}" -C ${CACHE_DIR}
-    cp -v ${TmpSpecPath} ${SpecFilename}
+    spectool -g -S "${SpecFilename}" -C ${CACHE_DIR}
 fi
 
 
