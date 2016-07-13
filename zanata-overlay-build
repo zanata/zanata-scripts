@@ -33,7 +33,6 @@ PROGRAM_NAME=$(basename $0)
 
 DEPENDENFCIES_wildfly=(https://bintray.com/artifact/download/sflanigan/generic/wildfly-module-hibernate-main-4.2.20.Final.zip)
 
-
 ##=== function definition Start ===
 function maven_jar_download(){
     local name=$1
@@ -71,11 +70,13 @@ function overlay_pack(){
     fi
 
     zip -x '*.zip' -9 -r ../zanata-$Version-$distro.zip *
+    OverlayBuiltArray+=($OverlayWorkDir/$VersionTag/zanata-$Version-$distro.zip)
 }
 ##=== parsing Start ===
 print_status -t parsing -s "Start"
 AutoDetect=0
 War=
+OverlayBuiltArray=()
 
 while getopts "haw:" opt;do
     case $opt in
@@ -160,4 +161,11 @@ fi
 print_status -t "zip" -s "Start"
 overlay_pack eap-6
 overlay_pack wildfly
+
+##=== summary Start ===
+print_status -t "summary" -s "Start"
+print_status "Built overlay files are:"
+for f in "${OverlayBuiltArray[@]}";do
+    echo_stderr $f
+done
 
