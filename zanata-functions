@@ -695,6 +695,8 @@ function print_status(){
     outputStr+="$message"
     if [ -n "${optionArray-}" ];then
 	echo_stderr ${optionArray[@]} "$outputStr"
+    else
+	echo_stderr "$outputStr"
     fi
     ZnatNoEOL=$optionN
 }
