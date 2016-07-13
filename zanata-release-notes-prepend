@@ -58,7 +58,7 @@ function version_greater(){
     local ver2=($2)
     local i=0
     for ((i=0; i<${#ver1[@]} ; i++));do
-	if (i>=${#ver2[@]});then
+	if [ $i -ge ${#ver2[@]} ];then
 	    return 0
 	elif [ ${ver1[$i]} -gt ${ver2[$i]} ];then
 	    return 0
@@ -209,6 +209,6 @@ rm -f $TmpFileJira $TmpFileGreater $TmpFileThis $TmpFileLesser
 if git diff --exit-code ;then
     failed ${EXIT_RETURN_FALSE} " $RELEASE_NOTES_FILE does not need to change."
 fi
-git commit -m "doc(release): Prepend $RELEASE_NOTES_FILE for version $Version" -- $RELEASE_NOTES_FILE
+git commit -m "doc(release): Update $RELEASE_NOTES_FILE for version $Version" -- $RELEASE_NOTES_FILE
 exit ${EXIT_OK}
 
