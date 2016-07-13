@@ -11,5 +11,8 @@ sudo yum -y install $(sed -n -e '/^===.*dnf/,/^==/ s/^*\(.*\)/\1/p' README.md | 
 * cmake-fedora
 * fedora-packager
 * groovy
+* perl-File-Slurp
+* perl-HTTP-Message
 * perl-JSON-XS
-
+* perl-LWP-Protocol-https
+* perl-libwww-perl

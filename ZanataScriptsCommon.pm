@@ -1,9 +1,9 @@
-#!/usr/bin/env perl 
+#!/usr/bin/env perl
 #===============================================================================
 #
 #         FILE: zanata-common-perl.pl
 #
-#        USAGE: ./zanata-common-perl.pl  
+#        USAGE: ./zanata-common-perl.pl
 #
 #  DESCRIPTION:  Zanata Perl common definitions and subroutine
 #
@@ -19,30 +19,179 @@ package ZanataScriptsCommon;
 use strict;
 use warnings;
 use utf8;
+use Data::Dumper qw(Dumper);
 
 use constant {
-	EXIT_OK=>0,
-	EXIT_FATAL_UNSPECIFIED=>1,
-	EXIT_FATAL_INVALID_OPTIONS=>3,
-	EXIT_FATAL_MISSING_DEPENDENCY=>4,
-	EXIT_FATAL_UNKNOWN_MODULE=>5,
-	EXIT_FATAL_FAIL=>6,
+    EXIT_OK                       => 0,
+    EXIT_FATAL_UNSPECIFIED        => 1,
+    EXIT_FATAL_INVALID_OPTIONS    => 3,
+    EXIT_FATAL_MISSING_DEPENDENCY => 4,
+    EXIT_FATAL_UNKNOWN_MODULE     => 5,
+    EXIT_FATAL_FAIL               => 6,
 
-	EXIT_ERROR_FAIL=>20,
-	EXIT_RETURN_FALSE=>40
+    EXIT_ERROR_FAIL   => 20,
+    EXIT_RETURN_FALSE => 40
 };
 
-use constant JIRA_SERVER_URL => 'https://zanata.atlassian.net';
-use constant JIRA_PROJECT => 'ZNTA';
+use constant JIRA_SERVER_URL    => 'https://zanata.atlassian.net';
+use constant JIRA_PROJECT       => 'ZNTA';
+use constant GITHUB_REST_SERVER => 'api.github.com';
 
+##== Subroutines Start ==
+use HTTP::Tiny;
+use HTTP::Request;
+use HTTP::Response;
+use LWP::Protocol::https;
+use LWP::UserAgent;
+$HTTP::Request::Common::DYNAMIC_FILE_UPLOAD = 1;
+
+my $userAgent = LWP::UserAgent->new();
+
+sub make_request {
+    my ( $method, $url, $header, $content ) = @_;
+    return HTTP::Request->new( $method, $url, $header, $content );
+}
+
+sub rest_response {
+    my ( $method, $url, $header, $content, $contentCb, $readSizeHint ) = @_;
+    my $request = make_request( $method, $url, $header, $content );
+    return $userAgent->request( $request, $contentCb, $readSizeHint );
+}
+
+sub response_die_if_error {
+    my ( $response, $prompt ) = @_;
+    die $prompt . " Code: " . $response->code . "  Message: " . $response->message
+      unless ( $response->is_success );
+}
+
+my %zanataScriptsIniHash;
+my $zanataScriptsIni = $ENV{'HOME'} . '/.config/zanata-scripts.ini';
+
+sub zanata_scripts_ini_load {
+    die "$zanataScriptsIni not found" unless ( -r $zanataScriptsIni );
+    open( my $fh, '<', $zanataScriptsIni )
+      or die "Cannont open $zanataScriptsIni: $!";
+    while ( my $line = <$fh> ) {
+        chomp $line;
+        if ( $line =~ /^[A-Za-z].*=.*$/ ) {
+            my ( $key, $value ) = split( /=/, $line, 2 );
+            $zanataScriptsIniHash{$key} = $value;
+        }
+    }
+}
+
+sub github_credential_has_value {
+    my $hashSize = keys %zanataScriptsIniHash;
+    zanata_scripts_ini_load if $hashSize == 0;
+
+    die "github_username is not defined, "
+      . "please put 'gitub_username=<USERNAME>' in $zanataScriptsIni"
+      unless zanata_scripts_ini_key_get_value('github_username');
+
+    die "github_token is not defined, "
+      . "please put 'gitub_token=<TOKEN>' in $zanataScriptsIni"
+      unless zanata_scripts_ini_key_get_value('github_token');
+}
+
+sub zanata_scripts_ini_key_is_defined {
+    my ($key) = @_;
+    return defined $zanataScriptsIniHash{$key};
+}
+
+sub zanata_scripts_ini_key_get_value {
+    my ($key) = @_;
+    return $zanataScriptsIniHash{$key};
+}
+
+sub github_rest_response {
+    my ( $method, $path, $header, $content, $contentCb, $readSizeHint ) = @_;
+    my $request =
+      make_request( $method, "https://" . GITHUB_REST_SERVER . $path,
+        $header, $content );
+    return $userAgent->request( $request, $contentCb, $readSizeHint );
+}
+
+sub github_logined_rest_response {
+    my ( $method, $path, $header, $content, $contentCb, $readSizeHint ) = @_;
+    github_credential_has_value;
+
+    my $url =
+        "https://"
+      . zanata_scripts_ini_key_get_value('github_username') . ':'
+      . zanata_scripts_ini_key_get_value('github_token') . '@'
+      . GITHUB_REST_SERVER
+      . $path;
+
+    my $request = make_request( $method, $url, $header, $content );
+    return $userAgent->request( $request, $contentCb, $readSizeHint );
+}
+
+BEGIN {
+    my $ZnatNoEOL = 0;
+    my $StageLast;
+
+    sub print_status {
+        if ( defined $ENV{'ZANATA_QUIET_MODE'}
+            and $ENV{'ZANATA_QUIET_MODE'} == 1 )
+        {
+            return;
+        }
+        my ( $stage, $message, $optionStr ) = @_;
+        $StageLast = $stage if $stage;
+        my %optionHash;
+        if ($optionStr) {
+            foreach my $o ( split( '', $optionStr ) ) {
+                return if ( $o eq 'q' );
+                $optionHash{$o} = 1;
+            }
+        }
+
+        my $outputStr;
+        if ( $ZnatNoEOL == 0 ) {
+            ## Previous line already ended
+            $outputStr .= "### [$StageLast]";
+        }
+
+        if ( defined $optionHash{'s'} ) {
+            $outputStr .= "==============================";
+        }
+
+        $outputStr .= "$message";
+        print STDERR $outputStr;
+        unless ( defined $optionHash{'n'} ) {
+            print STDERR "\n";
+        }
+        $ZnatNoEOL = ( defined $optionHash{'n'} ) ? 1 : 0;
+    }
+}
+
+##== Subroutines End  ==
+##== Export ==
 require Exporter;
-our @ISA = 'Exporter';
+our @ISA    = 'Exporter';
 our @EXPORT = qw(EXIT_OK EXIT_FATAL_UNSPECIFIED EXIT_FATAL_INVALID_OPTIONS
-    EXIT_FATAL_MISSING_DEPENDENCY EXIT_FATAL_UNKNOWN_MODULE
-    EXIT_FATAL_FAIL
+  EXIT_FATAL_MISSING_DEPENDENCY EXIT_FATAL_UNKNOWN_MODULE
+  EXIT_FATAL_FAIL
 
-    EXIT_ERROR_FAIL EXIT_RETURN_FALSE 
-	JIRA_SERVER_URL JIRA_PROJECT
-	);
+  EXIT_ERROR_FAIL EXIT_RETURN_FALSE
+  JIRA_SERVER_URL JIRA_PROJECT
+
+  GITHUB_REST_URL
+
+  print_status
+  github_credential_has_value
+  github_logined_post_form
+  github_logined_rest_response
+  github_rest_response
+  make_request
+  progress_bar_set_total_size
+  progress_bar_cb
+
+  rest_response
+  response_die_if_error
+
+  zanata_scripts_ini_key_is_defined
+  zanata_scripts_ini_key_get_value
+);
 
 1;

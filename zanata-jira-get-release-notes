@@ -1,4 +1,5 @@
 #!/usr/bin/env perl
+
 =pod
 
 =head1 NAME
@@ -62,143 +63,176 @@ use Getopt::Std qw(getopts);
 use Pod::Usage qw(pod2usage);
 
 my $scriptDir;
-BEGIN{
-    $scriptDir=dirname(abs_path($0));
-    push @INC, $scriptDir
-};
-use ZanataScriptsCommon ;
-use constant JIRA_JQL_MAX_RESULTS=>50;
+
+BEGIN {
+    $scriptDir = dirname( abs_path($0) );
+    push @INC, $scriptDir;
+}
+use ZanataScriptsCommon;
+use constant JIRA_JQL_MAX_RESULTS => 50;
 
 ##== Program dependency ==
-use HTTP::Tiny;
+use HTTP::Request;
+use HTTP::Response;
+use LWP::UserAgent;
 use JSON::XS;
 
 ##== Parse options ==
 my %opts = ();
-getopts('hv', \%opts );
+getopts( 'hv', \%opts );
 
-pod2usage(-verbose =>3, -output=> \*STDERR ) if $opts{'h'};
-pod2usage(-verbose =>2, -exitval => EXIT_FATAL_UNKNOWN_MODULE, -output=> \*STDERR) if (@ARGV == 0 );
-my $versionName=$ARGV[0];
+pod2usage( -verbose => 3, -output => \*STDERR ) if $opts{'h'};
+pod2usage(
+    -verbose => 2,
+    -exitval => EXIT_FATAL_UNKNOWN_MODULE,
+    -output  => \*STDERR
+) if ( @ARGV == 0 );
+my $versionName = $ARGV[0];
 
-my $verboseMode=0;
-$verboseMode=1 if $opts{'v'};
+my $verboseMode = 0;
+$verboseMode = 1 if $opts{'v'};
 
 ##== Download JSON using REST
 ## Note that by default, Jira only return 50 results
 ## So we may need to retrieve more than once.
 
-my $total = -1;
+my $total   = -1;
 my $startAt = 0;
 
-my $changeBuf="";
-my $bugBuf="";
+my $changeBuf = "";
+my $bugBuf    = "";
 
-while($total < 0 or $startAt < $total){
-	my $response = HTTP::Tiny->new->get(JIRA_SERVER_URL . "/rest/api/2/search?jql=fixVersion=$versionName&startAt=$startAt&maxResults=". JIRA_JQL_MAX_RESULTS);
+while ( $total < 0 or $startAt < $total ) {
+    my $response = rest_response( 'GET',
+            JIRA_SERVER_URL
+          . "/rest/api/2/search?"
+          . "jql=fixVersion=$versionName&startAt=$startAt&maxResults="
+          . JIRA_JQL_MAX_RESULTS );
 
-	if ($response->{status}==200){
-	}elsif ($response->{status}=~/40.*/){
-		$!=EXIT_FATAL_UNKNOWN_MODULE;
-		die "[FATAL] $versionName does not exists. " . $response->{status} . " " . $response->{reason};
-	}else{
-		$!=EXIT_FATAL_FAIL;
-		die "[FATAL] Failed with " . $response->{status} . " " . $response->{reason};
-	}
-	##== Extract from JSon
-	my $versionHashRef = decode_json $response->{content};
-	$total=$versionHashRef->{total};
+    if ( $response->code == 200 ) {
+    }
+    elsif ( $response->code =~ /40.*/ ) {
+        $! = EXIT_FATAL_UNKNOWN_MODULE;
+        die "[FATAL] $versionName does not exists. "
+          . $response->code . " "
+          . $response->message;
+    }
+    else {
+        $! = EXIT_FATAL_FAIL;
+        die "[FATAL] Failed with " . $response->code . " " . $response->message;
+    }
+    ##== Extract from JSon
+    my $versionHashRef = decode_json $response->content;
+    $total = $versionHashRef->{total};
 
-	if ( $total == 0 ){
-		$!=EXIT_RETURN_FALSE;
-		die "[FALSE] No issue associate with Version-Name $versionName";
-	}
+    if ( $total == 0 ) {
+        $! = EXIT_RETURN_FALSE;
+        die "[FALSE] No issue associate with Version-Name $versionName";
+    }
 
-	##== Issue split 
-	## Two types of issues, Bug for "Bugs fix", "Changes" for other types.
-	foreach my $issue (@{$versionHashRef->{issues}}){
-		if (lc $issue->{fields}->{issuetype}->{name} eq "bug"){
-			add_issue(\$bugBuf, $issue);
-		}else{
-			add_issue(\$changeBuf, $issue);
-		}
-	}
+    ##== Issue split
+    ## Two types of issues, Bug for "Bugs fix", "Changes" for other types.
+    foreach my $issue ( @{ $versionHashRef->{issues} } ) {
+        if ( lc $issue->{fields}->{issuetype}->{name} eq "bug" ) {
+            add_issue( \$bugBuf, $issue );
+        }
+        else {
+            add_issue( \$changeBuf, $issue );
+        }
+    }
 
-	$startAt+= JIRA_JQL_MAX_RESULTS;
+    $startAt += JIRA_JQL_MAX_RESULTS;
 }
 
-sub add_issue{
-    my ($bufRef, $issue) = @_;
+sub add_issue {
+    my ( $bufRef, $issue ) = @_;
+
     # includeMode: 1 for include, -1 for exclude, 0 for undecided.
     my $includeMode = 0;
 
-    print "@@@@@@@@@@@@@ key ".$issue->{key} ."\n" if $verboseMode;
-    if ($issue->{fields}->{labels}){
-        foreach my $l (@{$issue->{fields}->{labels}}){
-            my $label=lc $l;
+    print "@@@@@@@@@@@@@ key " . $issue->{key} . "\n" if $verboseMode;
+    if ( $issue->{fields}->{labels} ) {
+        foreach my $l ( @{ $issue->{fields}->{labels} } ) {
+            my $label = lc $l;
             print "@ level=$label\n" if $verboseMode;
-            if ( $label =~ /^release.*note[s]?/){
-                $includeMode=1;
-            }elsif ($label =~ /no.*release.*note[s]?/){
-                $includeMode=-1;
-            }elsif ($label eq "chore" ){
-                $includeMode=-1;
-            }elsif ($label eq "design" ){
-                $includeMode=-1;
-            }elsif ($label eq "jenkins" ){
-                $includeMode=-1;
+            if ( $label =~ /^release.*note[s]?/ ) {
+                $includeMode = 1;
+            }
+            elsif ( $label =~ /no.*release.*note[s]?/ ) {
+                $includeMode = -1;
+            }
+            elsif ( $label eq "chore" ) {
+                $includeMode = -1;
+            }
+            elsif ( $label eq "design" ) {
+                $includeMode = -1;
+            }
+            elsif ( $label eq "jenkins" ) {
+                $includeMode = -1;
             }
         }
     }
 
-    if ($includeMode == 0){
-        foreach my $component (@{$issue->{fields}->{components}}){
-            my $componentName=lc $component->{name};
+    if ( $includeMode == 0 ) {
+        foreach my $component ( @{ $issue->{fields}->{components} } ) {
+            my $componentName = lc $component->{name};
             print "@ componentName=$componentName\n" if $verboseMode;
-            if ($componentName eq 'chore'){
-                $includeMode=-1;
-            }elsif ($componentName eq 'deployment'){
-                $includeMode=-1;
-            }elsif ($componentName eq 'drupalplugin'){
-                $includeMode=-1;
-            }elsif ($componentName eq 'jenkins'){
-                $includeMode=-1;
-            }elsif ($componentName eq 'zanata-scripts'){
-                $includeMode=-1;
+            if ( $componentName eq 'chore' ) {
+                $includeMode = -1;
+            }
+            elsif ( $componentName eq 'deployment' ) {
+                $includeMode = -1;
+            }
+            elsif ( $componentName eq 'drupalplugin' ) {
+                $includeMode = -1;
+            }
+            elsif ( $componentName eq 'jenkins' ) {
+                $includeMode = -1;
+            }
+            elsif ( $componentName eq 'zanata-scripts' ) {
+                $includeMode = -1;
             }
         }
     }
 
-    if ($includeMode == 0){
-        my $issueType=lc $issue->{fields}->{issuetype}->{name};
+    if ( $includeMode == 0 ) {
+        my $issueType = lc $issue->{fields}->{issuetype}->{name};
+
         # print "@ issueType=$issueType\n";
-        if ($issueType eq "epic"){
-            $includeMode=-1;
-        }elsif ($issueType eq "feedback"){
-            $includeMode=-1;
-        }elsif ($issueType eq "sub-type"){
-            $includeMode=-1;
+        if ( $issueType eq "epic" ) {
+            $includeMode = -1;
+        }
+        elsif ( $issueType eq "feedback" ) {
+            $includeMode = -1;
+        }
+        elsif ( $issueType eq "sub-type" ) {
+            $includeMode = -1;
         }
     }
     print "@ includeMode=$includeMode\n" if $verboseMode;
 
     return if $includeMode < 0;
 
-    $$bufRef .= " * [" . $issue->{key} . "](" . JIRA_SERVER_URL . "/browse/". $issue->{key} . ") - " . $issue->{fields}->{summary} . "\n";
+    $$bufRef .= " * ["
+      . $issue->{key} . "]("
+      . JIRA_SERVER_URL
+      . "/browse/"
+      . $issue->{key} . ") - "
+      . $issue->{fields}->{summary} . "\n";
 }
 
 ##== Print result
-unless( $changeBuf eq ""){
+unless ( $changeBuf eq "" ) {
     print "##### Changes\n";
     print $changeBuf;
 
     ## Insert blank line if we have bug as well
-    unless( $bugBuf eq ""){
+    unless ( $bugBuf eq "" ) {
         print "\n";
     }
 }
 
-unless( $bugBuf eq ""){
+unless ( $bugBuf eq "" ) {
     print "##### Bug Fixes\n";
     print $bugBuf;
 }
