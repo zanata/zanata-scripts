@@ -20,8 +20,7 @@ shopt -s globstar
 ###         Git push when it has commit.
 ###
 ### DESCRIPTION
-###     This program
-###     This script performs branching chores for big releases of
+###     This program performs branching chores for big releases of
 ###     zanata-client and zanata-server.
 ###
 
