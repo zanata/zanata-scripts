@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/bash -eu
 ### NAME
 ###     zanata-release-notes-prepend - Update the Zanata dependencies
 ###
@@ -25,6 +25,9 @@
 ###     -j: Jenkins mode.
 ###         This assumes that current directory is <module> work directory.
 ###         and correct branch is checked out.
+###
+###     -v: Verbose mode.
+###         Show verbose message.
 ###
 ### EXIT STATUS
 ###    Returns EXIT_OK (0) when successfully.
@@ -69,11 +72,13 @@ function version_greater(){
     return 1
 }
 
-##=== parsing Start ===
+##== parsing Start ==
 print_status -t "parse" -s "Start"
 JenkinsMode=0
+VerboseMode=0
+JiraGetReleaseNoteOptArray=()
 
-while getopts "hj" opt;do
+while getopts "hjv" opt;do
     case $opt in
          h )
 	     zanata_script_help $0
@@ -81,6 +86,10 @@ while getopts "hj" opt;do
 	     ;;
 	 j )
 	     JenkinsMode=1
+	     ;;
+	 v )
+	     VerboseMode=1
+	     JiraGetReleaseNoteOptArray+=(-v)
 	     ;;
 	 * )
 	     failed ${EXIT_FATAL_INVALID_OPTIONS} "$opt"
@@ -90,7 +99,7 @@ done
 shift $((OPTIND-1))
 
 ## Get Module
-moduleResult=$(get_module_from_command $1)
+moduleResult=$(get_module_from_command ${1-1})
 Module=$(sed -e 's/ .*//'<<<"$moduleResult")
 if [[ $moduleResult == *1 ]];then
     shift
@@ -99,7 +108,7 @@ print_status " Module=$Module"
 ArtifactId=`get_artifact_id $Module`
 Version=$1
 
-##=== prepare  Start ===
+##== prepare  Start ==
 print_status -t prepare -s "Start"
 ## If not JenkinsMode, then checkout should be done here
 if [ $JenkinsMode -eq 0 ];then
@@ -113,15 +122,12 @@ if [ ! -r $RELEASE_NOTES_FILE ];then
     failed $EXIT_FATAL_MISSING_DEPENDENCY "docs/release-notes.md does not exist"
 fi
 
-##== Execute Start ==
-print_status -t "execute" -s "Start"
-
-##=== prepend jira  Start ===
-print_status " prepend Jira"
+##== retrieve Jira  Start ==
+print_status -t "jira" -s "Start"
 TmpFileJira=`mktemp ${TMP_ROOT}/zanata-release-notes.jira.XXXXXXXX`
 
 set +e
-zanata-jira-get-release-notes "$ArtifactId-$Version" > $TmpFileJira
+zanata-jira-get-release-notes ${JiraGetReleaseNoteOptArray[@]-} "$ArtifactId-$Version" > $TmpFileJira
 ExitCode=$?
 set -e
 case $ExitCode in
@@ -135,8 +141,8 @@ case $ExitCode in
 	;;
 esac
 
-##=== Split  Start ===
-print_status " split previous release-notes"
+##== Split  Start ==
+print_status -t "release-notes parse"  -s "Start"
 ## greater: greater version
 TmpFileGreater=`mktemp ${TMP_ROOT}/zanata-release-notes.greater.XXXXXXXX`
 TmpFileThis=`mktemp ${TMP_ROOT}/zanata-release-notes.this.XXXXXXXX`
@@ -182,11 +188,14 @@ while IFS= read -r l ;do
 	    echo "$line" >> $TmpFileLesser
 	    ;;
     esac
-    echo "$Mode$Keepline=$line"
+    if [ $VerboseMode -eq 1 ];then
+	echo "$Mode$Keep=$line"
+    fi
 done < <(cat $RELEASE_NOTES_FILE)
 
-##=== Combine Start ===
-print_status " combine release-notes"
+##== Combine Start ==
+print_status -t "release-notes combine"  -s "Start"
+
 TmpFile=`mktemp ${TMP_ROOT}/zanata-release-notes.XXXXXXXX`
 if [ -s $TmpFileGreater ];then
     cat $TmpFileGreater > $TmpFile

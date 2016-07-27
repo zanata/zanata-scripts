@@ -144,17 +144,23 @@ while ( $total < 0 or $startAt < $total ) {
     $startAt += JIRA_JQL_MAX_RESULTS;
 }
 
+sub echo_stderr{
+    if ($verboseMode){
+	print {*STDERR} @_;
+    }
+}
+
 sub add_issue {
     my ( $bufRef, $issue ) = @_;
 
     # includeMode: 1 for include, -1 for exclude, 0 for undecided.
     my $includeMode = 0;
 
-    print "@@@@@@@@@@@@@ key " . $issue->{key} . "\n" if $verboseMode;
+    echo_stderr "@@@@@@@@@@@@@ key " . $issue->{key} . "\n";
     if ( $issue->{fields}->{labels} ) {
         foreach my $l ( @{ $issue->{fields}->{labels} } ) {
             my $label = lc $l;
-            print "@ level=$label\n" if $verboseMode;
+	    echo_stderr "@ level=$label\n";
             if ( $label =~ /^release.*note[s]?/ ) {
                 $includeMode = 1;
             }
@@ -176,7 +182,7 @@ sub add_issue {
     if ( $includeMode == 0 ) {
         foreach my $component ( @{ $issue->{fields}->{components} } ) {
             my $componentName = lc $component->{name};
-            print "@ componentName=$componentName\n" if $verboseMode;
+	    echo_stderr "@ componentName=$componentName\n";
             if ( $componentName eq 'chore' ) {
                 $includeMode = -1;
             }
@@ -198,7 +204,7 @@ sub add_issue {
     if ( $includeMode == 0 ) {
         my $issueType = lc $issue->{fields}->{issuetype}->{name};
 
-        # print "@ issueType=$issueType\n";
+	echo_stderr "@ issueType=$issueType\n";
         if ( $issueType eq "epic" ) {
             $includeMode = -1;
         }
@@ -209,7 +215,7 @@ sub add_issue {
             $includeMode = -1;
         }
     }
-    print "@ includeMode=$includeMode\n" if $verboseMode;
+    echo_stderr "@ includeMode=$includeMode\n";
 
     return if $includeMode < 0;
 
