@@ -20,7 +20,7 @@ Destintation release tag like C<server-4.0.0>
 
 =item <file> ...
 
-Files to be uploaded.
+Files to be uploaded. Separate multiple files with spaces.
 
 =back
 
@@ -30,30 +30,41 @@ Files to be uploaded.
 
 =item B<-h>
 
-Show complete help
+Show complete help.
 
 =item B<-d>
 
-Create a draft GitHub release
+Create a new draft GitHub release.
+This program does not find existing draft release,
+so run this program multiple times creates multiple draft releases.
 
 =item B<-v>
 
 Verbose mode.
+This shows detail debuge messages like which module it is processing,
+and full HTTP responde structure.
 
 =back
 
 =head1 DESCRIPTION
 
-This program upload the files to GitHub release.
+This program uploads the files to GitHub release.
 It will create the release if it does not exists,
 then upload files to GitHub release.
 
-You can try this program by creating draft release.
+Before uploading, the release tag (e.g. server-4.0.0) should exist,
+otherwise it prints error.
+
+You can try this program by creating draft releases.
 Specify option C<-d> to create draft release.
 
-GitHub credential is required for uploading so this program loads
-the GitHub credential from ${HOME}/.config/zanata-scripts.ini.
-The format is explained in section FILES. 
+GitHub credentials are required for uploading so this program loads
+the GitHub credentials in ${HOME}/.config/zanata-scripts.ini.
+The format is explained in section FILES.
+
+Note that this program does not yet find existing draft releases,
+so you need to login GitHub Web UI to remove drafts or promote drafts as
+real releases.
 
 =head1 FILES
 
@@ -115,6 +126,9 @@ if ( @ARGV < 2 ) {
 }
 my $releaseTag = $ARGV[0];
 my ($artifact) = split( /-/, $releaseTag, 2 );
+
+## module is actually GitHub repository
+## such as zanata-parent, zanata-server
 my $module = `$scriptDir/zanata-functions run get_module $artifact`;
 chomp($module);
 print STDERR "module=$module\n" if $verbose;
@@ -125,9 +139,15 @@ foreach my $f (@ARGV) {
     die "$f is not readable. $!" unless ( -r $f );
 }
 
+##== Check Existing Tags ==
+my $response = github_rest_response( 'GET',
+    "/repos/zanata/$module/git/refs/tags/$releaseTag" );
+print STDERR Dumper($response) if $verbose;
+response_die_if_error( $response, "Tag $releaseTag does not exists." );
+
 ##== Create Release ==
 print_status( "Create Release", "Start", 's' );
-my $response = github_logined_rest_response( 'GET',
+$response = github_logined_rest_response( 'GET',
     "/repos/zanata/$module/releases/tags/$releaseTag" );
 print STDERR Dumper($response) if $verbose;
 my $uploadUrl = undef;
@@ -167,11 +187,13 @@ else {
 ##== Upload ==
 print_status( "Upload", "Start", 's' );
 $uploadUrl =~ s/^(http.*\/releases\/[0-9]+\/assets).*$/$1/;
-my ( $uploadProtocal, $uploadPath ) = split( /:\/\//, $uploadUrl, 2 );
-print_status( undef, " protocal=$uploadProtocal  path=$uploadPath" )
+my ( $uploadProtocol, $uploadPath ) = split( /:\/\//, $uploadUrl, 2 );
+print_status( undef, " protocol=$uploadProtocol  path=$uploadPath" )
   if $verbose;
 
-## Previous responseed upload_url is required to upload
+## github_upload(<filePath>, [label])
+##    filePath: Location of the file to be upload
+##    label: (Optional) GitHub release label
 sub github_upload {
     my ( $filePath, $label ) = @_;
     my $name = basename($filePath);
@@ -180,17 +202,16 @@ sub github_upload {
     github_credential_has_value;
 
     my $url =
-        $uploadProtocal . "://"
+        $uploadProtocol . "://"
       . zanata_scripts_ini_key_get_value('github_username') . ':'
       . zanata_scripts_ini_key_get_value('github_token') . '@'
       . $uploadPath
       . "?name="
       . uri_escape($name);
     $url .= "&label=" . uri_escape($label) if ($label);
-    my @cmd =
-		qw( curl -i -o /tmp/request.txt -X POST);
-	push @cmd,  '-H', 'Content-Type: application/octet-stream';
-	push @cmd, '--data-binary', "@" . $filePath , $url;
+    my @cmd = qw( curl -i -o /tmp/request.txt -X POST);
+    push @cmd, '-H', 'Content-Type: application/octet-stream';
+    push @cmd, '--data-binary', "@" . $filePath, $url;
     system(@cmd) == 0
       or die "system @cmd failed: $?";
 }

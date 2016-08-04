@@ -58,10 +58,18 @@ sub rest_response {
     return $userAgent->request( $request, $contentCb, $readSizeHint );
 }
 
+## Exit code
 sub response_die_if_error {
     my ( $response, $prompt ) = @_;
-    die $prompt . " Code: " . $response->code . "  Message: " . $response->message
-      unless ( $response->is_success );
+    unless ( $response->is_success ) {
+        my ( $package, $filename, $line ) = caller;
+        die $prompt
+          . " Code: "
+          . $response->code
+          . "  Message: "
+          . $response->message . "\n"
+          . "  at $package::$filename, line $line\n";
+    }
 }
 
 my %zanataScriptsIniHash;

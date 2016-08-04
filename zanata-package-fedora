@@ -196,3 +196,12 @@ exit_if_failed $? $EXIT_FATAL_FAIL " Failed to create SRPM $Srpm"
 print_status -t "Build" -s "Start"
 cmake-fedora-fedpkg $Srpm fedora
 
+##=== Buildroot Override ===
+if [ $Module != "zanata-server" ];then
+    print_status -t "Buildroot Override" -s "Start"
+    for bodhiBranch in $(cmake-fedora-koji bodhi-branch fedora | xargs );do
+	bodhi --buildroot-override $Module-$Version-$SpecRelease.$bodhiBranch
+    done
+    bodhi --buildroot-override 
+fi
+
