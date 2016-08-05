@@ -36,7 +36,7 @@ Show complete help.
 
 Create a new draft GitHub release.
 This program does not find existing draft release,
-so run this program multiple times creates multiple draft releases.
+so running this program multiple times creates multiple draft releases.
 
 =item B<-v>
 
@@ -133,6 +133,9 @@ my $module = `$scriptDir/zanata-functions run get_module $artifact`;
 chomp($module);
 print STDERR "module=$module\n" if $verbose;
 shift;
+die "Invalid releaseTag $releaseTag. \n"
+    . "  Valid releaseTag looks like server-4.0.0 or client-4.0.0"
+	if ($module eq '-');
 
 ## Check whether the files are readable.
 foreach my $f (@ARGV) {

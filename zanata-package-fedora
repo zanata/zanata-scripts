@@ -72,8 +72,8 @@ function is_branch_build_in_koji(){
     print_status -n " koji: is ${pkgBuild} in? ... "
 
     if koji buildinfo $pkgBuild | grep -qcs -i "State: COMPLETE" ;then
-	print_status "yes, skip"
-	return 0
+        print_status "yes, skip"
+        return 0
     fi
     print_status "no, will submit it"
     return 1
@@ -87,7 +87,7 @@ function is_branch_build_in_bodhi(){
     local pkgBuild="$Nvr.${bodhiBranch}"
     print_status -n " bodhi: is ${pkgBuild} in? ... "
     if bodhi "${pkgBuild}" | grep -qcs -i "Submit" > /dev/null;then
-	print_status "yes, skip"
+        print_status "yes, skip"
     fi
     print_status "no, will submit it"
     return 1
@@ -103,16 +103,16 @@ SpecRelease=
 AutoDetect=0
 while getopts "ha" opt;do
     case $opt in
-	h )
-	    zanata_script_help $0
-	    exit ${EXIT_OK}
-	    ;;
-	a )
-	    AutoDetect=1
-	    ;;
-	* )
-	    exit_if_failed ${EXIT_FATAL_INVALID_OPTIONS} ${EXIT_FATAL_INVALID_OPTIONS} "$opt"
-	    ;;
+        h )
+            zanata_script_help $0
+            exit ${EXIT_OK}
+            ;;
+        a )
+            AutoDetect=1
+            ;;
+        * )
+            exit_if_failed ${EXIT_FATAL_INVALID_OPTIONS} ${EXIT_FATAL_INVALID_OPTIONS} "$opt"
+            ;;
     esac
 done
 shift $((OPTIND-1))
@@ -128,9 +128,9 @@ print_status " Module=$Module"
 ## Get Version
 if [ ${AutoDetect} -eq 0 ];then
     if [ -z "${1-}" ];then
-	zanata_script_help $0
-	EXIT_MSG="Requires version-release. Please either specify version-release or use option -a"
-	exit ${EXIT_FATAL_INVALID_OPTIONS}
+        zanata_script_help $0
+        EXIT_MSG="Requires version-release. Please either specify version-release or use option -a"
+        exit ${EXIT_FATAL_INVALID_OPTIONS}
     fi
     VersionRelease=$1
 
@@ -200,7 +200,7 @@ cmake-fedora-fedpkg $Srpm fedora
 if [ $Module != "zanata-server" ];then
     print_status -t "Buildroot Override" -s "Start"
     for bodhiBranch in $(cmake-fedora-koji bodhi-branch fedora | xargs );do
-	bodhi --buildroot-override $Module-$Version-$SpecRelease.$bodhiBranch
+        bodhi --buildroot-override $Module-$Version-$SpecRelease.$bodhiBranch
     done
     bodhi --buildroot-override 
 fi
