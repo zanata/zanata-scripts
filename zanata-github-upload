@@ -1,0 +1,226 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+zanata-github-upload - Upload files to GitHub
+
+=head1 SYNOPSIS
+
+zanata-github-upload [Option] E<lt>releaseTagE<gt> E<lt>fileE<gt> ...
+
+=head1 ARGUMENTS
+
+=over 4
+
+=item E<lt>releaseTagE<gt>
+
+Destintation release tag like C<server-4.0.0>
+
+=item <file> ...
+
+Files to be uploaded. Separate multiple files with spaces.
+
+=back
+
+=head1 OPTIONS
+
+=over 4
+
+=item B<-h>
+
+Show complete help.
+
+=item B<-d>
+
+Create a new draft GitHub release.
+This program does not find existing draft release,
+so running this program multiple times creates multiple draft releases.
+
+=item B<-v>
+
+Verbose mode.
+This shows detail debuge messages like which module it is processing,
+and full HTTP responde structure.
+
+=back
+
+=head1 DESCRIPTION
+
+This program uploads the files to GitHub release.
+It will create the release if it does not exists,
+then upload files to GitHub release.
+
+Before uploading, the release tag (e.g. server-4.0.0) should exist,
+otherwise it prints error.
+
+You can try this program by creating draft releases.
+Specify option C<-d> to create draft release.
+
+GitHub credentials are required for uploading so this program loads
+the GitHub credentials in ${HOME}/.config/zanata-scripts.ini.
+The format is explained in section FILES.
+
+Note that this program does not yet find existing draft releases,
+so you need to login GitHub Web UI to remove drafts or promote drafts as
+real releases.
+
+=head1 FILES
+
+=over 4
+
+=item ${HOME}/.config/zanata-scripts.ini
+
+This file configures the zanata-scripts, including the GitHub credentials.
+
+The format looks like:
+
+    github_username=<USERNAME>
+    github_token=<TOKEN>
+
+As this file is plain text, use an access token instead of login password.
+To get an access token, see:
+https://help.github.com/articles/creating-an-access-token-for-command-line-use/
+
+=back
+
+=cut
+
+#== Common use ==
+use strict;
+use Cwd 'abs_path';
+use Data::Dumper qw(Dumper);
+use File::Basename;
+use Getopt::Std qw(getopts);
+use Pod::Usage qw(pod2usage);
+
+my $scriptDir;
+
+BEGIN {
+    $scriptDir = dirname( abs_path($0) );
+    push @INC, $scriptDir;
+}
+use ZanataScriptsCommon;
+
+##== Program dependency ==
+use File::Slurp;
+use HTTP::Tiny;
+use JSON::XS;
+use URI::Escape;
+$HTTP::Request::Common::DYNAMIC_FILE_UPLOAD = 1;
+
+##== Parse options ==
+my %opts = ();
+getopts( 'hdv', \%opts );
+my $verbose = ( exists $opts{'v'} ) ? 1 : 0;
+
+pod2usage( -verbose => 3, -output => \*STDERR ) if $opts{'h'};
+if ( @ARGV < 2 ) {
+    pod2usage(
+        -verbose => 1,
+        -output  => \*STDERR,
+        -exitval => EXIT_FATAL_INVALID_OPTIONS,
+        -message => "Require <releaseTag> and <file> ... \n"
+    );
+}
+my $releaseTag = $ARGV[0];
+my ($artifact) = split( /-/, $releaseTag, 2 );
+
+## module is actually GitHub repository
+## such as zanata-parent, zanata-server
+my $module = `$scriptDir/zanata-functions run get_module $artifact`;
+chomp($module);
+print STDERR "module=$module\n" if $verbose;
+shift;
+die "Invalid releaseTag $releaseTag. \n"
+    . "  Valid releaseTag looks like server-4.0.0 or client-4.0.0"
+	if ($module eq '-');
+
+## Check whether the files are readable.
+foreach my $f (@ARGV) {
+    die "$f is not readable. $!" unless ( -r $f );
+}
+
+##== Check Existing Tags ==
+my $response = github_rest_response( 'GET',
+    "/repos/zanata/$module/git/refs/tags/$releaseTag" );
+print STDERR Dumper($response) if $verbose;
+response_die_if_error( $response, "Tag $releaseTag does not exists." );
+
+##== Create Release ==
+print_status( "Create Release", "Start", 's' );
+$response = github_logined_rest_response( 'GET',
+    "/repos/zanata/$module/releases/tags/$releaseTag" );
+print STDERR Dumper($response) if $verbose;
+my $uploadUrl = undef;
+
+if ( $response->code == 200 ) {
+    ##=== Release Already created ===
+    print_status( '', "Release $releaseTag already created.", '' );
+    my $contentHRef = decode_json $response->content;
+    $uploadUrl = $contentHRef->{'upload_url'};
+}
+elsif ( $response->code == 404 ) {
+    ##=== Creating new release ===
+    print_status( '', "Creating release $releaseTag", '' );
+    my $draft = ( exists $opts{'d'} ) ? 'true' : 'false';
+    $response = github_logined_rest_response(
+        'POST',
+        "/repos/zanata/$module/releases",
+        [
+            Accept         => 'application/json',
+            'Content-Type' => 'application/json'
+        ],
+        qq({
+            "tag_name": "$releaseTag",
+            "draft": $draft,
+            "prerelease": false
+        })
+    );
+    print STDERR Dumper($response) if $verbose;
+    my $contentHRef = decode_json $response->content;
+    $uploadUrl = $contentHRef->{'upload_url'};
+    response_die_if_error( $response, "Failed to create release." );
+}
+else {
+    response_die_if_error( $response, "Failed to query release." );
+}
+
+##== Upload ==
+print_status( "Upload", "Start", 's' );
+$uploadUrl =~ s/^(http.*\/releases\/[0-9]+\/assets).*$/$1/;
+my ( $uploadProtocol, $uploadPath ) = split( /:\/\//, $uploadUrl, 2 );
+print_status( undef, " protocol=$uploadProtocol  path=$uploadPath" )
+  if $verbose;
+
+## github_upload(<filePath>, [label])
+##    filePath: Location of the file to be upload
+##    label: (Optional) GitHub release label
+sub github_upload {
+    my ( $filePath, $label ) = @_;
+    my $name = basename($filePath);
+    my $content = read_file( $filePath, binmode => ':raw' );
+
+    github_credential_has_value;
+
+    my $url =
+        $uploadProtocol . "://"
+      . zanata_scripts_ini_key_get_value('github_username') . ':'
+      . zanata_scripts_ini_key_get_value('github_token') . '@'
+      . $uploadPath
+      . "?name="
+      . uri_escape($name);
+    $url .= "&label=" . uri_escape($label) if ($label);
+    my @cmd = qw( curl -i -o /tmp/request.txt -X POST);
+    push @cmd, '-H', 'Content-Type: application/octet-stream';
+    push @cmd, '--data-binary', "@" . $filePath, $url;
+    system(@cmd) == 0
+      or die "system @cmd failed: $?";
+}
+
+foreach my $f (@ARGV) {
+    print_status( undef, " Uploading $f" );
+    github_upload($f);
+}
+
