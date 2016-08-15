@@ -41,6 +41,8 @@ HPoHeader
 HPoTargetHeader
 HPotEntryData
 HProject
+HProject_LocaleMember
+HProject_Member
 HProjectIteration
 HProjectIteration_Locale
 HProjectIteration_LocaleAlias
@@ -62,6 +64,7 @@ HTextFlowTargetContentHistory
 HTextFlowTargetHistory
 HTextFlowTargetReviewComment
 IterationGroup_Locale
+LanguageRequest
 TransMemory
 TransMemoryUnit
 TransMemoryUnitVariant
