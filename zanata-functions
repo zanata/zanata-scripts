@@ -749,7 +749,7 @@ declare EXIT_RETURN_FALSE=40
 
 ###
 ### ENVIRONMENT
-###     TMP_ROOT:
+###     TMP_ROOT
 ###         Root of temporary directories and files, and expected to be clean
 ###         Default: /tmp/zanata
 : ${TMP_ROOT:=/tmp/zanata}
@@ -757,14 +757,15 @@ export TMP_ROOT
 create_missing_dir "${TMP_ROOT}"
 
 ###
-###     REPO_LOCAL_DIR:
+###     REPO_LOCAL_DIR
 ###         Temporary maven repo
+###         This should NOT be your normal work maven repo
 ###         Default: /tmp/maven-central-release-repo
 : ${REPO_LOCAL_DIR:=${TMP_ROOT}/maven-central-release-repo}
 create_missing_dir "${REPO_LOCAL_DIR}"
 
 ###
-###     DEVEL_ROOT:
+###     DEVEL_ROOT
 ###         Root of development project directories.
 ###	    For example,  Git Repo zanata-scripts is expected to be in
 ###         ${DEVEL_ROOT}/zanata-scripts
@@ -773,7 +774,7 @@ create_missing_dir "${REPO_LOCAL_DIR}"
 create_missing_dir "${DEVEL_ROOT}"
 
 ###
-###     WORK_ROOT:
+###     WORK_ROOT
 ###         Root of working directories, whose content is expected to be changed by scripts.
 ###         So normally this should NOT be your development directory.
 ###         You can also clean it by removing it, it should rebuild when running any scripts use it.
@@ -782,7 +783,7 @@ create_missing_dir "${DEVEL_ROOT}"
 create_missing_dir "${WORK_ROOT}"
 
 ###
-###     ZANATA_GIT_URL_PREFIX:
+###     ZANATA_GIT_URL_PREFIX
 ###         Prefix of Zanata Git URL
 ###         Default: git@github.com:zanata
 : ${ZANATA_GIT_URL_PREFIX:=git@github.com:zanata}
