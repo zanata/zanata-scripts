@@ -1,9 +1,9 @@
 #!/bin/bash -eu
 ### NAME
-###     zanata-maven-release - Staging and Release to Sonatype nexus
+###     zanata-maven-release - Release in maven
 ###
 ### SYNOPSIS
-###     zanata-maven-release [options] <MODULE>
+###     zanata-maven-release [options] <Module>
 ###     zanata-maven-release-openprops [options]
 ###     zanata-maven-release-jgettext  [options]
 ###     zanata-maven-release-parent    [options]
@@ -18,18 +18,30 @@
 ###     -d <developmentVersion>:
 ###         Development Vesion like: 3.10.0-SNAPSHOT
 ###
+###     -n:
+###         Dry-run
+###
 ###     -p: Use PR instead of modify in RELEASING_BRANCH
 ###         and generate pr-<artifactId>-<version> branch
 ###
-###     -s: Skip release plugin
+###     -q:
+###         Quick mode. It skips dry-run and only does the real build.
 ###
 ###     -r <releaseVersion>
 ###         Release Vesion like: 3.9.0
 ###
 ### DESCRIPTION
-###     This program releases version in maven and submit to sonatype.
-### It operates upon releasing branch by default.
-### To change that, use environment RELEASING_BRANCH.
+###     This program releases a Zanata module in SCM (git) and maven.
+###
+### Before release, it also does pre-release chores like
+### Update release-notes.md, pull translations.
+###
+### After maven release, it deploys maven artifacts.
+### zanata-parent, zanata-api, zanata-common, zanata-client deploy
+### to sonatype, others deploy to cloudbees.
+###
+### By default, it dry-run first, then does the real build.
+### Use "-n" to dry-run only, or use "-q" to do the quick build without dry-run.
 ###
 ### USE CASES
 ###  * Normally following is sufficient:
@@ -50,16 +62,6 @@
 ###     DEVEL_BRANCH
 ###       The branch for committing new features. It is 'master'
 ###
-###     REPO_LOCAL_DIR (Optional)
-###       The directory for maven repo
-###       This should NOT be your normal work maven repo
-###
-###     WORK_ROOT
-###       The base directory for repository checkout
-###       As maven release plugin generally require a clean git working tree
-###       This script will clean it for you.
-###       Thus it is better not use normal development directory.
-###
 
 ScriptDir=$(dirname $(readlink  -q -f $0))
 FunctionScriptFile=${ScriptDir}/zanata-functions
@@ -68,70 +70,45 @@ trap exit_print_error EXIT
 
 ###
 ###     MAVEN_RELEASE_OPTIONS
-###       The maven options to be use in this scripts
-###       Default: -e -Dmaven.repo.local=$REPO_LOCAL_DIR -Dgpg.useagent -Prelease -DupdateReleaseInfo=true
-: ${MAVEN_RELEASE_OPTIONS:="-e -Dmaven.repo.local=$REPO_LOCAL_DIR -Dgpg.useagent -Prelease -DupdateReleaseInfo=true"}
-: ${NEXUS_STAGING_PLUGIN:=org.sonatype.plugins:nexus-staging-maven-plugin}
+###       The maven options for release plugin
+: ${MAVEN_RELEASE_OPTIONS:="-e -Dmaven.repo.local=$REPO_LOCAL_DIR -Dgpg.useagent -Prelease -DupdateReleaseInfo=true -Dresume=false -DskipTests -DskipArqTests -DskipFuncTests -Dgwt.validateOnly -Dfindbugs.skip"}
+
+###
+###     NEXUS_STAGING_OPTIONS
+###       The maven options for nexus plugin
 : ${NEXUS_STAGING_OPTIONS:="-e -DnexusUrl=https://oss.sonatype.org/ -DserverId=sonatype-nexus-staging -Prelease"}
+
+NEXUS_STAGING_PLUGIN=org.sonatype.plugins:nexus-staging-maven-plugin
 
 ##=== function definitions Start ===
 function release_perform(){
-    if [ $SkipReleasePlugin -eq 0 ];then
-	print_status -t release-tagging -s "Start"
-	if [ -n "$DevelopmentVersion" ];then
-	    MAVEN_RELEASE_OPTIONS+=" -DdevelopmentVersion=$DevelopmentVersion"
-	fi
-
-	if [ -n "$ReleaseVersion" ];then
-	    MAVEN_RELEASE_OPTIONS+=" -DreleaseVersion=$ReleaseVersion"
-	    MAVEN_RELEASE_OPTIONS+=" -Dtag=$(get_artifact_id $Module)-$ReleaseVersion"
-	fi
-
-	git clean -f -d
-
-        ## Update Zanata Dependencies
-	case $Module in
-            jgettext)
-                ;;
-            openprops)
-                ;;
-	    zanata-assets)
-		;;
-	    *)
-		print_status " Update Zanata dependencies"
-		set +e
-		$ScriptDir/zanata-version-update -i -j
-		case $? in
-		    $EXIT_OK )
-			;;
-		    $EXIT_RETURN_FALSE )
-			;;
-		    * )
-			failed $? "Failed to Update Zanata dependencies"
-			;;
-		esac
-		set -e
-		;;
-	esac
-
-	## Update Zanata Translation
-	if [ -r zanata.xml ];then
-	    print_status " Update Zanata translation"
-	    $ScriptDir/zanata-translate-pull -i -j
-	fi
-
-	print_status " Dry-run: release:prepare release:perform"
-        mvn ${MAVEN_RELEASE_OPTIONS} release:clean release:prepare -DdryRun=true
-
-        print_status " Real-run: it should sign artifacts, push $Module to nexus, then close it"
-        mvn ${MAVEN_RELEASE_OPTIONS} release:clean release:prepare release:perform
-
-	if [ $? -ne 0 ];then
-	    EXIT_MSG="release goals failed"
-	    exit ${EXIT_FATAL_FAIL}
-	fi
-	print_status " Done"
+    print_status -t maven-release -s "Start"
+    if [ -n "$DevelopmentVersion" ];then
+	MAVEN_RELEASE_OPTIONS+=" -DdevelopmentVersion=$DevelopmentVersion"
     fi
+
+    if [ -n "$ReleaseVersion" ];then
+	MAVEN_RELEASE_OPTIONS+=" -DreleaseVersion=$ReleaseVersion"
+	MAVEN_RELEASE_OPTIONS+=" -Dtag=$(get_artifact_id $Module)-$ReleaseVersion"
+    fi
+
+    git clean -f -d
+
+    if [ $QuickMode -eq 0 ];then
+	print_status " Dry-run: release:prepare release:perform"
+	mvn ${MAVEN_RELEASE_OPTIONS} release:clean release:prepare -DdryRun=true
+    fi
+
+    if [ $DryRunMode -eq 0 ];then
+	print_status " Real-run: release:prepare release:perform"
+	mvn ${MAVEN_RELEASE_OPTIONS} release:clean release:prepare release:perform
+    fi
+
+    if [ $? -ne 0 ];then
+	EXIT_MSG="release goals failed"
+	exit ${EXIT_FATAL_FAIL}
+    fi
+
     return 0
 }
 
@@ -180,13 +157,14 @@ function nexus_release(){
 ##=== parsing Start ===
 print_status -t parsing -s "Start"
 
-PullRequestMode=0
-SkipReleasePlugin=0
 MavenReleaseBranch=
 DevelopmentVersion=
+DryRunMode=0
+PullRequestMode=0
+QuickMode=0
 ReleaseVersion=
 
-while getopts "hd:pr:s" opt;do
+while getopts "hd:npqr:" opt;do
     case $opt in
 	h )
 	    zanata_script_help $0
@@ -195,14 +173,17 @@ while getopts "hd:pr:s" opt;do
 	d )
 	    DevelopmentVersion=$OPTARG
 	    ;;
+	n )
+	    DryRunMode=1
+	    ;;
 	p )
 	    PullRequestMode=1
 	    ;;
 	r )
 	    ReleaseVersion=$OPTARG
 	    ;;
-	s )
-	    SkipReleasePlugin=1
+	q )
+	    QuickMode=1
 	    ;;
 	* )
             failed ${EXIT_FATAL_INVALID_OPTIONS} "$opt"
@@ -211,6 +192,10 @@ while getopts "hd:pr:s" opt;do
 done
 
 shift $((OPTIND-1))
+
+if [ $DryRunMode -eq 1 -a $QuickMode -eq -1 ];then
+    failed ${EXIT_FATAL_INVALID_OPTIONS} " Dry-run '-n' and Quick '-q' cannot use together!"
+fi
 
 ## Get Module
 moduleResult=$(get_module_from_command ${1-})
@@ -268,6 +253,39 @@ else
     MavenActionBranch=$MavenReleaseBranch
 fi
 
+##==== Update org.zanata dependencies ====
+print_status " Update org.zanata dependencies"
+case $Module in
+    jgettext)
+	;;
+    openprops)
+	;;
+    zanata-assets)
+	;;
+    *)
+	print_status " Update Zanata dependencies"
+	set +e
+	$ScriptDir/zanata-version-update -i -j
+	case $? in
+	    $EXIT_OK )
+		;;
+	    $EXIT_RETURN_FALSE )
+		;;
+	    * )
+		failed $? "Failed to Update Zanata dependencies"
+		;;
+	esac
+	set -e
+	;;
+esac
+
+##==== Update translations ====
+print_status " Update ttranslations"
+if [ -r zanata.xml ];then
+    print_status " Update Zanata translation"
+    $ScriptDir/zanata-translate-pull -i -j
+fi
+
 ##==== release-notes-prepend ====
 if [ -r docs/release-notes.md ];then
     print_status " release-notes-prepend"
@@ -293,9 +311,8 @@ if [ -r docs/release-notes.md ];then
     esac
 fi
 
-##=== release  Start ===
-print_status -t release -s "Start"
 
+##=== release  Start ===
 case $Module in
     zanata-assets )
 	print_status -t release-tagging -s "Start"
