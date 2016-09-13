@@ -39,6 +39,8 @@
 ###     EXCLUDE_PROPERTIES: A comma separated list of properties to not update.
 : ${EXCLUDE_PROPERTIES:=zanata.api.compat.version}
 
+VERSIONS_PLUGIN="org.codehaus.mojo:versions-maven-plugin:2.3"
+
 ###
 shopt -s globstar
 ScriptDir=$(dirname $(readlink  -q -f $0))
@@ -115,15 +117,15 @@ fi
 ##=== update Start ===
 print_status -t update  -s "Start"
 
-CmdOptArray=( versions:update-parent ${ExtraOptionArray[@]-})
+CmdOptArray=( ${VERSIONS_PLUGIN}:update-parent ${ExtraOptionArray[@]-})
 print_status " ${CmdOptArray[*]}"
 mvn "${CmdOptArray[@]}"
 
-CmdOptArray=( versions:$VersionGoal '-Dincludes=org.zanata:*' ${ExtraOptionArray[@]-} )
+CmdOptArray=( ${VERSIONS_PLUGIN}:$VersionGoal '-Dincludes=org.zanata:*' ${ExtraOptionArray[@]-} )
 print_status " ${CmdOptArray[*]}"
 mvn "${CmdOptArray[@]}"
 
-CmdOptArray=( versions:update-properties '-Dincludes=org.zanata:*' '-DexcludeProperties=${EXCLUDE_PROPERTIES}' ${ExtraOptionArray[@]-} )
+CmdOptArray=( ${VERSIONS_PLUGIN}:update-properties '-Dincludes=org.zanata:*' '-DexcludeProperties=${EXCLUDE_PROPERTIES}' ${ExtraOptionArray[@]-} )
 print_status " ${CmdOptArray[*]}"
 mvn "${CmdOptArray[@]}"
 
