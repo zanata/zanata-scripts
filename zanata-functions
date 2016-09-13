@@ -684,7 +684,7 @@ function print_status(){
     done
     if [ $ZnatNoEOL -eq 0 ];then
 	## Previous line already ended
-	outputStr+="### [$Stage]"
+	outputStr+="### [${Stage-}]"
     fi
 
     if [ $optionS -eq 1 ];then
