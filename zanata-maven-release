@@ -18,6 +18,10 @@
 ###     -d <developmentVersion>:
 ###         Development Vesion like: 3.10.0-SNAPSHOT
 ###
+###     -j: Jenkins mode.
+###         This assumes that current directory is <module> work directory.
+###         and correct branch is checked out.
+###
 ###     -n:
 ###         Dry-run
 ###
@@ -160,11 +164,12 @@ print_status -t parsing -s "Start"
 MavenReleaseBranch=
 DevelopmentVersion=
 DryRunMode=0
+JenkinsMode=0
 PullRequestMode=0
 QuickMode=0
 ReleaseVersion=
 
-while getopts "hd:npqr:" opt;do
+while getopts "hd:jnpqr:" opt;do
     case $opt in
 	h )
 	    zanata_script_help $0
@@ -172,6 +177,9 @@ while getopts "hd:npqr:" opt;do
 	    ;;
 	d )
 	    DevelopmentVersion=$OPTARG
+	    ;;
+	j )
+	    JenkinsMode=1
 	    ;;
 	n )
 	    DryRunMode=1
@@ -224,18 +232,27 @@ print_status -t prepare -s "Start"
 ## Input gpg passphrase as early as possible
 gpg --clearsign <<<""
 
-##  Ensure repo
-ensure_repo $Module
-
 ## Determine RELEASING_BRANCH
 : ${RELEASING_BRANCH:=$(get_releasing_branch $Module)}
 print_status " RELEASING_BRANCH for $Module is ${RELEASING_BRANCH}"
 
-MavenReleaseBranch=$RELEASING_BRANCH
-print_status " Maven release for $Module will be operated on $MavenReleaseBranch"
+if [ $JenkinsMode -eq 1 ];then
+    MavenReleaseBranch=$(git rev-parse --abbrev-ref HEAD)
+    print_status " Maven release for $Module will be operated on current branch ($MavenReleaseBranch)"
+else
+    ##  Ensure repo
+    ensure_repo $Module
 
-checkout_releasing_branch $Module $WORK_ROOT
-cd ${WORK_ROOT}/${Module}
+    ## Determine RELEASING_BRANCH
+    : ${RELEASING_BRANCH:=$(get_releasing_branch $Module)}
+    print_status " RELEASING_BRANCH for $Module is ${RELEASING_BRANCH}"
+
+    MavenReleaseBranch=$RELEASING_BRANCH
+    print_status " Maven release for $Module will be operated on $MavenReleaseBranch"
+
+    checkout_releasing_branch $Module $WORK_ROOT
+    cd ${WORK_ROOT}/${Module}
+fi
 
 ##=== pre-release  Start ===
 print_status -t pre-release -s "Start"
@@ -249,8 +266,6 @@ if [ $PullRequestMode -eq 1 ];then
 
     git branch $MavenActionBranch
     git checkout $MavenActionBranch
-else
-    MavenActionBranch=$MavenReleaseBranch
 fi
 
 ##==== Update org.zanata dependencies ====
