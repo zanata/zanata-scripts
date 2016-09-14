@@ -96,7 +96,7 @@ function release_perform(){
 	MAVEN_RELEASE_OPTIONS+=" -Dtag=$(get_artifact_id $Module)-$ReleaseVersion"
     fi
 
-    git clean -f -d
+    git clean -f -d -x
 
     if [ $QuickMode -eq 0 ];then
 	print_status " Dry-run: release:prepare release:perform"
@@ -298,7 +298,18 @@ esac
 print_status " Update ttranslations"
 if [ -r zanata.xml ];then
     print_status " Update Zanata translation"
+    set +e
     $ScriptDir/zanata-translate-pull -i -j
+    case $? in
+	$EXIT_OK )
+	    ;;
+	$EXIT_RETURN_FALSE )
+	    ;;
+	* )
+	    failed $? "Failed to pull translation"
+	    ;;
+    esac
+    set -e
 fi
 
 ##==== release-notes-prepend ====
