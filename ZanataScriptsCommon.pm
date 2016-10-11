@@ -93,11 +93,11 @@ sub github_credential_has_value {
     zanata_scripts_ini_load if $hashSize == 0;
 
     die "github_username is not defined, "
-      . "please put 'gitub_username=<USERNAME>' in $zanataScriptsIni"
+      . "please put 'github_username=<USERNAME>' in $zanataScriptsIni"
       unless zanata_scripts_ini_key_get_value('github_username');
 
     die "github_token is not defined, "
-      . "please put 'gitub_token=<TOKEN>' in $zanataScriptsIni"
+      . "please put 'github_token=<TOKEN>' in $zanataScriptsIni"
       unless zanata_scripts_ini_key_get_value('github_token');
 }
 
@@ -132,6 +132,34 @@ sub github_logined_rest_response {
 
     my $request = make_request( $method, $url, $header, $content );
     return $userAgent->request( $request, $contentCb, $readSizeHint );
+}
+
+sub artifactory_credential_has_value {
+	my $hashSize = keys %zanataScriptsIniHash;
+	zanata_scripts_ini_load if $hashSize == 0;
+
+	die "artifactory_username is not defined, "
+	. "please put 'gitub_username=<USERNAME>' in $zanataScriptsIni"
+	unless zanata_scripts_ini_key_get_value('artifactory_username');
+
+	die "artifactory_token is not defined, "
+	. "please put 'gitub_token=<TOKEN>' in $zanataScriptsIni"
+	unless zanata_scripts_ini_key_get_value('artifactory_token');
+}
+
+sub artifactory_logined_rest_response {
+	my ( $method, $serverBase, $path, $header, $content, $contentCb, $readSizeHint ) = @_;
+	artifactory_credential_has_value;
+
+	my $url =
+	"http://"
+	. zanata_scripts_ini_key_get_value('artifactory_username') . ':'
+	. zanata_scripts_ini_key_get_value('artifactory_token') . '@'
+	. $serverBase
+	. $path;
+
+	my $request = make_request( $method, $url, $header, $content );
+	return $userAgent->request( $request, $contentCb, $readSizeHint );
 }
 
 BEGIN {
@@ -187,6 +215,7 @@ our @EXPORT = qw(EXIT_OK EXIT_FATAL_UNSPECIFIED EXIT_FATAL_INVALID_OPTIONS
   GITHUB_REST_URL
 
   print_status
+  artifactory_logined_rest_response
   github_credential_has_value
   github_logined_post_form
   github_logined_rest_response
