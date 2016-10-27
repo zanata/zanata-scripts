@@ -159,7 +159,7 @@ print_status " SpecRelease=$SpecRelease"
 print_status -t prepare -s "Start"
 
 print_status " Prepare fedpkg ${Module} git repo"
-create_missing_dir ${FEDPKG_DIR}
+mkdir -p ${FEDPKG_DIR}
 cd ${FEDPKG_DIR}
 
 if [ -d ${Module} ];then

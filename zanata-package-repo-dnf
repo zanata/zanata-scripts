@@ -84,9 +84,9 @@ source "${SCRIPT_DIR}/zanata-rpm-functions"
 : ${CREATEREPO_OPTS:=-vd --delta -s sha}
 
 ProgramName=$(basename $0)
-create_missing_dir "${RESULT_DIR}"
+mkdir -p "${RESULT_DIR}"
 CACHE_DIR="${WORK_ROOT}/${ProgramName}"
-create_missing_dir "${CACHE_DIR}"
+mkdir -p "${CACHE_DIR}"
 
 ##=== function definitions Start ===
 function fedora_release_to_dist_tag(){
@@ -203,7 +203,7 @@ done
 exit_if_failed "${ExitStatus}" ${EXIT_FATAL_MISSING_DEPENDENCY} "$EXIT_MSG"
 
 ## Ensure work space
-create_missing_dir "${LOCAL_DIR}"
+mkdir -p "${LOCAL_DIR}"
 cd ${LOCAL_DIR}
 
 if [ -z "${StartFrom}" ];then
@@ -212,7 +212,7 @@ if [ -z "${StartFrom}" ];then
 
     print_status "  Create missing directories and links"
     for fr in ${FEDORA_RELEASES}; do
-	create_missing_dir "$fr"
+	mkdir -p "$fr"
 
 	## RHEL usually use something like epel-7Server 
 	for e in Client Workstation Server; do
@@ -222,7 +222,7 @@ if [ -z "${StartFrom}" ];then
 	done
 
 	for arch in SRPMS i386 x86_64; do
-	    create_missing_dir "$fr/$arch"
+	    mkdir -p "$fr/$arch"
 	done
     done
 fi
@@ -250,7 +250,7 @@ for fr in ${FEDORA_RELEASES}; do
     SRpmDir="$fr/SRPMS"
     SrpmPath="$SRpmDir/${SRpmFilename}"
 
-    create_missing_dir "${SRpmDir}"
+    mkdir -p "${SRpmDir}"
     if [ ! -r "${SrpmPath}" ];then
 	## Create srpm
 	print_status " creating SRPM: ${SrpmPath}"

@@ -136,17 +136,17 @@ git checkout $VersionTag
 ##=== Download Dependencies Start ===
 print_status -t "download dependency" -s "Start"
 OverlayWorkDir=${WORK_ROOT}/overlay
-create_missing_dir ${OverlayWorkDir}
+mkdir -p ${OverlayWorkDir}
 cd ${OverlayWorkDir}
 DeployVerDir=${OverlayWorkDir}/$VersionTag/standalone/deployments
-create_missing_dir ${DeployVerDir}
+mkdir -p ${DeployVerDir}
 
 for depUrl in "${DEPENDENFCIES_wildfly[@]}";do
     wget -c "$depUrl"
 done
 
 DeployCommonDir=${OverlayWorkDir}/deployments
-create_missing_dir ${DeployCommonDir}
+mkdir -p ${DeployCommonDir}
 maven_jar_download mysql-connector-java ${MYSQL_CONNECTOR_JAVA_VER}
 cp mysql-connector-java-${MYSQL_CONNECTOR_JAVA_VER}.jar ${DeployCommonDir}/mysql-connector-java.jar
 

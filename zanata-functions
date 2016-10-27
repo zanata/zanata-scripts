@@ -6,10 +6,16 @@
 ###     zanata-functions help
 ###     zanata-functions help-list-sections
 ###     zanata-functions help-section <section>
-###     zanata-functions run <function> [function arguments..]
+###     zanata-functions run <function> [functionArguments] ...
 ###
 ### DESCRIPTION
-###     This script is basically for source (include) from other script.
+###     This program can be sourced by other program and serve as library,
+###     or run the individual function.
+###
+###     You can just source this program to use all the functions.
+###     Or run as standalone by using:
+###
+###         zanata-functions run <function> [functionArguments]
 ###
 ### FUNCTIONS
 function zanata_functions_get_path(){
@@ -18,6 +24,9 @@ function zanata_functions_get_path(){
     shopt -u extdebug
 }
 
+###
+###     zanata_help_raw <script>
+###         Print raw help (the lines start with '###') of a script.
 function zanata_help_raw(){
     local script="$1"
     [ -z "$script" ] && script=$0
@@ -34,7 +43,9 @@ function zanata_help_list_sections_from_string(){
     done
 }
 
+###
 ###     zanata_help_list_sections <script>
+###         List the help sections of a script.
 function zanata_help_list_sections(){
     local script="$1"
     zanata_help_list_sections_from_string "$(zanata_help_raw $script)"
@@ -70,14 +81,18 @@ function zanata_help_section_from_string(){
     IFS="${IFS_BAK}"
 }
 
+###
 ###     zanata_help_section <script> <section>
+###         Print the specified help section of a script.
 function zanata_help_section(){
     local script=$1
     local section=$2
     zanata_help_section_from_string "$section" "$(zanata_help_raw $script)"
-
 }
 
+###
+###     zanata_script_help_short <script> <section>
+###         Print the short help of a script.
 function zanata_script_help_short(){
     local script=$1
     local buf=$(zanata_help_raw $script)
@@ -109,6 +124,9 @@ function zanata_script_help_short(){
     done
 }
 
+###
+###     zanata_script_help <script> <section>
+###         Print the detail help of a script.
 function zanata_script_help(){
     local script=$1
     local buf=$(zanata_help_raw $script)
@@ -128,16 +146,17 @@ function zanata_script_help(){
     done
 }
 
+###
+###     echo_stderr [args] ...
+###         Echo to stderr. Args are same with echo.
+###         If ZANATA_QUITE_MODE=1, this function does nothing.
 function echo_stderr(){
-    if [ $ZANATA_QUIET_MODE -eq 0 ];then
+    if [[ ${ZANATA_QUIET_MODE-} != 1 ]];then
 	echo "$@" > /dev/stderr
     fi
 }
 
-function get_git_url(){
-    echo "${ZANATA_GIT_URL_PREFIX}/$1.git"
-}
-
+###
 ###     checkout_branch <module> <branch> [parentDir]
 ###         checkout <branch> for <module>
 function checkout_branch(){
@@ -145,13 +164,14 @@ function checkout_branch(){
     local branch=$2
     local parentDir=$3
     [ -z $parentDir ] && parentDir=${PWD}
-    pushd ${parentDir}/${module} >/dev/null
+    cd ${parentDir}/${module}
     git remote update origin
     git checkout ${branch}
     git pull
-    popd >/dev/null
+    cd -
 }
 
+###
 ###     checkout_releasing_branch <module> [parentDir]
 ###         checkout RELEASING_BRANCH, the branch that we recommend downstream to use.
 function checkout_releasing_branch(){
@@ -161,6 +181,7 @@ function checkout_releasing_branch(){
     checkout_branch ${module} ${branch} $@
 }
 
+###
 ###     checkout_devel_branch <module>  [parentDir]
 ###         checkout DEVEL_BRANCH, the branch the branch for committing new features.
 function checkout_devel_branch(){
@@ -168,16 +189,6 @@ function checkout_devel_branch(){
     shift
     local branch=$(get_devel_branch $module)
     checkout_branch ${module} ${branch} $@
-}
-
-###
-###     create_missing_dir <dir>
-###         Create missing directory
-function create_missing_dir(){
-    local dir=$1
-    if [ ! -d $dir ];then
-	mkdir -p $dir
-    fi
 }
 
 ###
@@ -198,17 +209,18 @@ function detect_module_tag(){
     fi
     if [ $jenkinsMode -eq 0 ];then
 	ensure_repo_generic ${WORK_ROOT} ${module}
-	checkout_releasing_branch ${module} ${WORK_ROOT} 1>/dev/stderr
-	pushd ${WORK_ROOT}/${module} >/dev/null
+	cd ${WORK_ROOT}/${module}
     fi
     git fetch --tags 1>/dev/stderr
-    local latestTag=$(git describe --abbrev=0 --tags)
+
+    ## This tell you the latest tag of all branch.
+    local latestTag=$(git describe $( git rev-list --tags --max-count 1))
     if [ $jenkinsMode -eq 0 ];then
-        popd >/dev/null
+        cd - >/dev/null
     fi
 
     if [ $quietMode -eq 0 ];then
-	echo_stderr "### detect_module_tag: ${module:+${module}:} Latest tag: $latestTag"
+	print_status " detect_module_tag: ${module:+${module}:} Latest tag: $latestTag"
     fi
     echo "${latestTag}"
 }
@@ -216,47 +228,22 @@ function detect_module_tag(){
 ###
 ###     detect_module_version [-q] <-j|module>
 ###         Print latest tagged module version.
+###         This chops the alphabet part of detect_module_tag and
+###         return strings that start with number.
+###         e.g. platform-4.0.0-m-7 -> 4.0.0-m-7
 function detect_module_version(){
-    local module=
-    local jenkinsMode=0
-    local quietMode=0
-    if [ "$1" = "-q" ];then
-	quietMode=1
-	shift
-    fi
-
-    if [ "$1" = "-j" ];then
-	jenkinsMode=1
-    else
-	module=$1
-    fi
-    if [ $jenkinsMode -eq 0 ];then
-	ensure_repo_generic ${WORK_ROOT} ${module}
-	checkout_releasing_branch ${module} ${WORK_ROOT} 1>/dev/stderr
-	pushd ${WORK_ROOT}/${module} >/dev/null
-    fi
-
-    local latestTag=$(detect_module_tag -j)
-    git checkout $latestTag
-    local version=$(mvn -q -Dexec.executable="echo"  -Dexec.args='${project.version}' --non-recursive org.codehaus.mojo:exec-maven-plugin:exec)
-
-    ## Restore branch to releasing
-    checkout_releasing_branch ${module} ${WORK_ROOT} 1>/dev/stderr
-
-    test -n "$version"
-    exit_if_failed "$?" ${EXIT_FATAL_FAIL} "Failed to get version from ${module}"
-
-    if [ $jenkinsMode -eq 0 ];then
-	popd >/dev/null
-    fi
-    if [ $quietMode -eq 0 ];then
-	echo_stderr "### detect_module_version: ${module:+${module}:} Version: $version"
-    fi
-    echo "$version"
+    local tag=$(detect_module_tag $@)
+    sed -n -e 's/[a-zA-Z-]*-\([0-9][0-9.-]*\)/\1/p' <<< $tag
 }
 
 ###
 ###     does_branch_exist <module> <branch> [parentDir]
+###         Tell whether the <branch> exist in <module>.
+###         Returns:
+###            yes: branch exists at local.
+###            remote: branch exists at remote, not local.
+###            no: branch does not exist in remote and local.
+###         parentDir default is WORK_ROOT.
 function does_branch_exist(){
     local module=$1
     local branch=$2
@@ -268,7 +255,7 @@ function does_branch_exist(){
 	exit ${EXIT_FATAL_MISSING_DEPENDENCY}
     fi
 
-    pushd ${parentDir}/${module} >/dev/null
+    cd ${parentDir}/${module}
     echo_stderr -n "### Does ${module} has branch ${branch}?..."
     local ret=$EXIT_OK
     if git rev-parse --verify ${branch} &>/dev/null;then
@@ -279,7 +266,7 @@ function does_branch_exist(){
 	echo "no"
 	ret=${EXIT_RETURN_FALSE}
     fi
-    popd >/dev/null
+    cd - >/dev/null
     return $ret
 }
 
@@ -290,11 +277,11 @@ function ensure_repo_generic(){
     local parentDir=$1
     local module=$2
     local git_repo_url=${3-}
-    print_status "### Ensure the repo $module is at ${parentDir}/${module}"
+    print_status " Ensure the repo $module is at ${parentDir}/${module}"
     if [ -z "$git_repo_url" ];then
-	git_repo_url=$(get_git_url ${module})
+        git_repo_url=${ZANATA_GIT_URL_PREFIX}/${module}.git
     fi
-    create_missing_dir ${parentDir}
+    mkdir -p ${parentDir}
     pushd ${parentDir} >/dev/null
     if [ ! -d ${module} ];then
 	git clone "${git_repo_url}"
@@ -315,6 +302,7 @@ function ensure_repo(){
 
 ###
 ###     exit_if_failed <var> <exitStatus> <exitMsg>
+###         Exit when <var> is not 0.
 function exit_if_failed(){
     if [ "$1" -ne 0 ];then
 	failed $2 "$3"
@@ -328,10 +316,9 @@ function exit_if_failed(){
 ###         Environment:
 ###             EXIT_MSG: Error message to print.
 EXIT_MSG=
-ZANATA_QUIET_MODE=0
 function exit_print_error(){
     local exitStatus=$?
-    if [ $ZANATA_QUIET_MODE -eq 0 ];then
+    if [[ ${ZANATA_QUIET_MODE-} != 0 ]];then
 	if [ -n "${exitStatus-}" ];then
 	    case $exitStatus in
 		${EXIT_OK} )
@@ -355,7 +342,7 @@ function exit_print_error(){
 		    echo_stderr "### [RETURN] FALSE: ${EXIT_MSG}"
 		    ;;
 		* )
-		    echo_stderr "### Unexpected Exit: ${EXIT_MSG}"
+		    echo_stderr "### Unexpected Exit Code ${exitStatus}: ${EXIT_MSG}"
 		    ;;
 	    esac
 	fi
@@ -365,6 +352,7 @@ function exit_print_error(){
 
 ###
 ###     failed <exitStatus> <exitMsg>
+###         Exit with the error code <exitStatus> and error message <exitMsg>.
 function failed(){
     local exitStatus=$1
     EXIT_MSG="$2"
@@ -420,6 +408,9 @@ function get_module(){
 	*parent)
 	    echo "zanata-parent"
 	    ;;
+	*platform)
+	    echo "zanata-platform"
+	    ;;
 	*openprops)
 	    echo "openprops"
 	    ;;
@@ -442,10 +433,10 @@ function get_module_from_command(){
     local firstArg=${1-}
 
     Module=$(get_module $0)
-    if [ "x$Module" = "x-" ];then
+    if [[ $Module = '-' ]];then
 	Module=$(get_module $firstArg)
-	if [ "x$Module" = "x-" ];then
-	    exit ${EXIT_FATAL_UNKNOWN_MODULE}
+	if [[ $Module = '-' ]];then
+	    failed ${EXIT_FATAL_UNKNOWN_MODULE} "Heee ${firtArg-}"
 	else
 	    echo "$Module 1"
 	fi
@@ -478,6 +469,9 @@ function get_artifact_id(){
 	*parent)
 	    echo "zanata-parent"
 	    ;;
+	*platform)
+	    echo "platform"
+	    ;;
 	*openprops)
 	    echo "openprops"
 	    ;;
@@ -485,7 +479,7 @@ function get_artifact_id(){
 	    echo "server"
 	    ;;
 	*)
-	    failed ${EXIT_FATAL_UNKNOWN_MODULE} "get_artifact_id: module not recognized "
+	    failed ${EXIT_FATAL_UNKNOWN_MODULE} "get_artifact_id: module $1 not recognized "
 	    ;;
     esac
 }
@@ -514,7 +508,7 @@ function is_maven_scope(){
 
 ###
 ###     parse_gav <GAV>
-###         Parse GAV
+###         Parse GAV.
 ###         GAV can either in following formats
 ###             commons-cli:commons-cli:1.0
 ###             commons-cli:commons-cli:jar:1.0
@@ -583,7 +577,7 @@ function parse_gav(){
 
 ###
 ###     ga_to_rpm_name <GroupId> <artifactId>
-###        GroupId-ArtifactId to RPM name
+###        GroupId-ArtifactId to RPM name.
 function ga_to_rpm_name(){
     echo "$1-$2"
 }
@@ -597,18 +591,19 @@ function gav_to_nv(){
 }
 
 ###
-###     gav_to_nvr <GroupId> <artifactId> <Version>
+###     gav_to_nvr <GroupId> <artifactId> <Version> [SpecRelease]
 ###        GroupId-ArtifactId-Version to RPM name-version-release
-###        release is always 1
+###        release default is 1
 ###        Note the release does not include dist tag (.el7)
-###
 function gav_to_nvr(){
-    local release=1
-#    if [[ "$version" =~ _SNAPSHOT ]];then
-#	version=$(sed -e 's/_SNAPSHOT//' <<<$version)
-#		release="0.snapshot"
-#    fi
-    echo "$(gav_to_nv $1 $2 $3)-$release"
+    local groupId=$1
+    local artifactId=$2
+    local version=$3
+    local release=${4-}
+    if [[ -z $release ]];then
+	release=1
+    fi
+    echo "$(gav_to_nv $groupId $artifactId $version)-$release"
 }
 
 function gav_to_maven_artifact_dir(){
@@ -622,7 +617,7 @@ function gav_to_maven_artifact_dir(){
 
 ###
 ###     gav_to_maven_artifact_file <GroupId> <artifactId> <Version> [Packaging] [Classifier]
-###        Return the artifact file when given Gav
+###        Return the artifact filename when given Gav.
 function gav_to_maven_artifact_file(){
     local groupId=$1
     local artifactId=$2
@@ -645,7 +640,7 @@ function gav_to_maven_artifact_file(){
 ###             -s: prepend separation line before message
 ###             -t <Stage>: Specify Stage
 ###         If -s is specified, it will pad separation line before message, like
-###         "[Stage]============================== Start"
+###         "(Caller)[Stage]============================== Start"
 ###         It will use following Environment variables
 ###             Stage: As stage inside []
 ZnatNoEOL=0
@@ -655,7 +650,7 @@ function print_status(){
     local optionN=0
     local optionS=0
 
-    if [ $ZANATA_QUIET_MODE -eq 1 ];then
+    if [[ ${ZANATA_QUIET_MODE-} = 1 ]];then
 	return
     fi
 
@@ -682,7 +677,12 @@ function print_status(){
     done
     if [ $ZnatNoEOL -eq 0 ];then
 	## Previous line already ended
-	outputStr+="### [${Stage-}]"
+	local caller=$(basename ${BASH_SOURCE[1]})
+	outputStr+="### "
+	if [[ $caller != $ProgramName ]];then
+	    outputStr+="($caller)"
+	fi
+        outputStr+="[${Stage-}]"
     fi
 
     if [ $optionS -eq 1 ];then
@@ -752,7 +752,7 @@ declare EXIT_RETURN_FALSE=40
 ###         Default: /tmp/zanata
 : ${TMP_ROOT:=/tmp/zanata}
 export TMP_ROOT
-create_missing_dir "${TMP_ROOT}"
+mkdir -p "${TMP_ROOT}"
 
 ###
 ###     REPO_LOCAL_DIR
@@ -760,7 +760,7 @@ create_missing_dir "${TMP_ROOT}"
 ###         This should NOT be your normal work maven repo
 ###         Default: /tmp/maven-central-release-repo
 : ${REPO_LOCAL_DIR:=${TMP_ROOT}/maven-central-release-repo}
-create_missing_dir "${REPO_LOCAL_DIR}"
+mkdir -p "${REPO_LOCAL_DIR}"
 
 ###
 ###     DEVEL_ROOT
@@ -769,16 +769,16 @@ create_missing_dir "${REPO_LOCAL_DIR}"
 ###         ${DEVEL_ROOT}/zanata-scripts
 ###         Default: ${HOME}/devel
 : ${DEVEL_ROOT:=$HOME/devel}
-create_missing_dir "${DEVEL_ROOT}"
+mkdir -p "${DEVEL_ROOT}"
 
 ###
 ###     WORK_ROOT
 ###         Root of working directories, whose content is expected to be changed by scripts.
 ###         So normally this should NOT be your development directory.
-###         You can also clean it by removing it, it should rebuild when running any scripts use it.
+###         You can also clean it by removing it, it should rebuild when running any scripts that use it.
 ###         Default: ${HOME}/zanata-work-root
 : ${WORK_ROOT:=${HOME}/zanata-work-root}
-create_missing_dir "${WORK_ROOT}"
+mkdir -p "${WORK_ROOT}"
 
 ###
 ###     ZANATA_GIT_URL_PREFIX
@@ -792,9 +792,11 @@ create_missing_dir "${WORK_ROOT}"
 ###         Default: ${HOME}/.m2/repository
 : ${M2_REPOSITORY_DIR:=$HOME/.m2/repository}
 
-ProgramName=$(basename ${BASH_SOURCE[$((${#BASH_SOURCE[@]}-1))]})
+ProgramFullFilename=${BASH_SOURCE[$((${#BASH_SOURCE[@]}-1))]}
+ProgramName=$(basename ${ProgramFullFilename})
 case $ProgramName in
     *-functions )
+	trap exit_print_error EXIT
 	case ${1-} in
 	    help )
 		zanata_script_help $0
@@ -813,8 +815,11 @@ case $ProgramName in
 		$@
 		exit $?
 		;;
+	    ?* )
+		failed ${EXIT_FATAL_INVALID_OPTIONS} "Invalid option $1"
+		;;
 	esac
-	zanata_script_help $0
+	zanata_script_help_short $0
     ;;
 esac
 
