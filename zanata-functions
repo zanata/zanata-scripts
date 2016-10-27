@@ -494,7 +494,7 @@ function get_artifact_id(){
 ###     is_maven_packaging [str]
 function is_maven_packaging(){
     case $1 in
-	pom | jar | maven-plugin | ejb | war | ear | rar | par )
+	pom | jar | maven-plugin | ejb | war | ear | rar | par | zip )
 	    return 0
 	    ;;
     esac
@@ -623,8 +623,6 @@ function gav_to_maven_artifact_dir(){
 ###
 ###     gav_to_maven_artifact_file <GroupId> <artifactId> <Version> [Packaging] [Classifier]
 ###        Return the artifact file when given Gav
-###        release is always 1
-###        Note the release does not include dist tag (.el7)
 function gav_to_maven_artifact_file(){
     local groupId=$1
     local artifactId=$2
