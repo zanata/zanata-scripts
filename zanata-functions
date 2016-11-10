@@ -236,6 +236,7 @@ function detect_module_version(){
     sed -n -e 's/[a-zA-Z-]*-\([0-9][0-9.-]*\)/\1/p' <<< $tag
 }
 
+
 ###
 ###     does_branch_exist <module> <branch> [parentDir]
 ###         Tell whether the <branch> exist in <module>.
@@ -243,6 +244,13 @@ function detect_module_version(){
 ###            yes: branch exists at local.
 ###            remote: branch exists at remote, not local.
 ###            no: branch does not exist in remote and local.
+###         Prints:
+###            yes: branch exists.
+###            remote: branch exists at remote, not local.
+###            no: branch does not exist in remote and local.
+###         Returns:
+###            EXIT_OK: The branch exists
+###            EXIT_RETURN_FALSE: The branch does not exists.
 ###         parentDir default is WORK_ROOT.
 function does_branch_exist(){
     local module=$1
@@ -256,18 +264,39 @@ function does_branch_exist(){
     fi
 
     cd ${parentDir}/${module}
-    echo_stderr -n "### Does ${module} has branch ${branch}?..."
-    local ret=$EXIT_OK
-    if git rev-parse --verify ${branch} &>/dev/null;then
-	echo "yes"
-    elif git ls-remote --heads origin $branch | grep $branch >& /dev/null ;then
-	echo "remote"
-    else
-	echo "no"
-	ret=${EXIT_RETURN_FALSE}
-    fi
+    print_status "Does ${module} has branch ${branch}?..."
+    set +e
+    ans=$(does_branch_exist_core "$branch")
+    local ret=$?
+    set -e
+    echo $ans
     cd - >/dev/null
     return $ret
+}
+
+###
+###     does_branch_exist_core <branch>
+###         Tell whether the <branch> exists.
+###         This function assumes you are already in the git checkout 
+###         directory.
+###         Prints:
+###            yes: branch exists.
+###            remote: branch exists at remote, not local.
+###            no: branch does not exist in remote and local.
+###         Returns:
+###            EXIT_OK: The branch exists
+###            EXIT_RETURN_FALSE: The branch does not exists.
+function does_branch_exist_core(){
+    local branch=$1
+    if git rev-parse --verify ${branch} &>/dev/null;then
+	echo "yes"
+	return $EXIT_OK
+    elif git ls-remote --heads origin $branch | grep $branch >& /dev/null ;then
+	echo "remote"
+	return $EXIT_OK
+    fi
+    echo "no"
+    return $EXIT_RETURN_FALSE
 }
 
 ###
@@ -598,7 +627,7 @@ function gav_to_nv(){
 function gav_to_nvr(){
     local groupId=$1
     local artifactId=$2
-    local version=$3
+    local version=$(sed -e 's/-/_/g'<<<$3)
     local release=${4-}
     if [[ -z $release ]];then
 	release=1
