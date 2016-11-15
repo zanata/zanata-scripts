@@ -23,8 +23,8 @@
 ### OPTIONS
 ###     -h: Show help.
 ###
-###     -i: Interactive mode
-###         It will pause before commit.
+###     -B: Batch mode
+###         It will NOT ask question and proceed with default choice.
 ###
 ###     -j: Jenkins mode.
 ###         This assumes that current directory is <module> work directory.
@@ -52,21 +52,21 @@ ProgramName=$(basename $0)
 
 ##=== parsing Start ===
 print_status -t "parse" -s "Start"
-Interactive=0
+BatchMode=0
 JenkinsMode=0
 PushMode=0
 AllowSnapshot=0
 VersionGoal=use-latest-releases
 declare -a ExtraOptionArray=()
 
-while getopts "hijnp" opt;do
+while getopts "hBjnp" opt;do
     case $opt in
 	h )
 	    zanata_script_help $0
 	    exit ${EXIT_OK}
 	    ;;
-	i )
-	    Interactive=1
+	B )
+	    BatchMode=1
 	    ;;
 	j )
 	    JenkinsMode=1
@@ -125,15 +125,16 @@ CmdOptArray=( ${VERSIONS_PLUGIN}:$VersionGoal '-Dincludes=org.zanata:*' ${ExtraO
 print_status " ${CmdOptArray[*]}"
 mvn "${CmdOptArray[@]}"
 
-CmdOptArray=( ${VERSIONS_PLUGIN}:update-properties '-Dincludes=org.zanata:*' '-DexcludeProperties=${EXCLUDE_PROPERTIES}' ${ExtraOptionArray[@]-} )
-print_status " ${CmdOptArray[*]}"
+CmdOptArray=( ${VERSIONS_PLUGIN}:update-properties '-Dincludes=org.zanata:*' '-DincludeProperties=zanata.assets.version' '-DexcludeProperties=${EXCLUDE_PROPERTIES}' ${ExtraOptionArray[@]-} )
+set -x
 mvn "${CmdOptArray[@]}"
+set +x
 
 if ! git diff --exit-code ;then
-    if [ $Interactive -eq 1 ];then
+    if [ $BatchMode -eq 0 ];then
 	read -p "### Are the change looks alright? Press [Ctrl-C] to break, [Enter] to continue"
     fi
-    git commit -m "chore(version): Update Zanata dependencies" -- **/pom.xml
+    git commit -a -m "chore(version): Update Zanata dependencies"
     if [ $PushMode -ge 1 ];then
 	git push
     else
