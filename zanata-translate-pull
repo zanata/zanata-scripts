@@ -9,8 +9,8 @@ shopt -s globstar
 ### OPTIONS
 ###     -h: Show this help
 ###
-###     -i: Interactive mode
-###         It will pause before commit.
+###     -B: Batch mode
+###         It will NOT ask question and proceed with default choice.
 ###
 ###     -j: Jenkins mode.
 ###         This assumes that current directory is <module> work directory.
@@ -32,18 +32,18 @@ PROGRAM_NAME=$(basename $0)
 
 ##=== parsing Start ===
 print_status -t parsing -s "Start"
-Interactive=0
+BatchMode=0
 JenkinsMode=0
 PushMode=0
 
-while getopts "hijp" opt;do
+while getopts "hBjp" opt;do
     case $opt in
 	h )
 	    zanata_script_help $0
 	    exit ${EXIT_OK}
 	    ;;
-	i )
-	    Interactive=1
+	B )
+	    BatchMode=1
 	    ;;
 	j )
 	    JenkinsMode=1
@@ -61,15 +61,18 @@ shift $((OPTIND-1))
 
 ##=== prepare Start ===
 print_status -t prepare  -s "Start"
-## If not JenkinsMode, then checkout should be done here
-if [ $JenkinsMode -eq 0 ];then
+
+if [[ -n $1 ]];then
     ModuleResult=$(get_module_from_command ${1-})
     Module=$(sed -e 's/ .*//'<<<"$ModuleResult")
     if [[ $ModuleResult == *1 ]];then
 	shift
     fi
     print_status " Module=$Module"
+fi
 
+## If not JenkinsMode, then checkout should be done here
+if [ $JenkinsMode -eq 0 ];then
     ensure_repo ${Module}
 
     ## Determine branch
@@ -88,25 +91,34 @@ else
     Branch=$(git name-rev --name-only HEAD)
 fi
 
-##=== prepare Start ===
-if [ ! -r zanata.xml ];then
-    failed $EXIT_FATAL_MISSING_DEPENDNECY "zanata.xml does not exist."
+## Find zanata.xml
+##     So far, only server/zanata.xml working
+ZanataXmlArray=( server/zanata.xml )
+if [[ -z $ZanataXmlArray ]];then
+    failed $EXIT_FATAL_MISSING_DEPENDENCY "zanata.xml does not exist"
 fi
 
 ##=== translation update Start ===
-print_status -t "translation update" -s "Start"
-print_status " pull translation from Zanata"
-mvn -B -e org.zanata:zanata-maven-plugin:pull -Dzanata.projectVersion=$Branch $@
-
-print_status " Validate translation"
-mvn -B -e com.googlecode.l10n-maven-plugin:l10n-maven-plugin:validate -pl zanata-war $@
+for ZanataXml in "${ZanataXmlArray[@]}";do
+    d=$(dirname $ZanataXml)
+    cd $d
+    print_status -t "$d translation update" -s "Start"
+    print_status " pull translation from Zanata"
+    mvn -B -e org.zanata:zanata-maven-plugin:pull -pl . -Dzanata.projectVersion=$Branch $@
+    print_status " Validate translation"
+    if [[ -d zanata-war ]];then
+	mvn -B -e com.googlecode.l10n-maven-plugin:l10n-maven-plugin:validate -pl zanata-war $@
+    else
+	mvn -B -e com.googlecode.l10n-maven-plugin:l10n-maven-plugin:validate $@
+    fi
+    cd -
+done
 
 if ! git diff --exit-code ;then
-    if [ $Interactive -eq 1 ];then
+    if [ $BatchMode -eq 0 ];then
 	read -p "### Press [Ctrl-C] to break, [Enter] to continue"
     fi
-    git add **/src/main/resources/**/*_*.properties
-    git commit -m "trans(pull): Update translation"
+    git commit -a -m "trans(pull): Update translation"
     if [ $PushMode -ge 1 ];then
 	git push
     else
