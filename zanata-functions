@@ -236,46 +236,8 @@ function detect_module_version(){
     sed -n -e 's/[a-zA-Z-]*-\([0-9][0-9.-]*\)/\1/p' <<< $tag
 }
 
-
 ###
-###     does_branch_exist <module> <branch> [parentDir]
-###         Tell whether the <branch> exist in <module>.
-###         Returns:
-###            yes: branch exists at local.
-###            remote: branch exists at remote, not local.
-###            no: branch does not exist in remote and local.
-###         Prints:
-###            yes: branch exists.
-###            remote: branch exists at remote, not local.
-###            no: branch does not exist in remote and local.
-###         Returns:
-###            EXIT_OK: The branch exists
-###            EXIT_RETURN_FALSE: The branch does not exists.
-###         parentDir default is WORK_ROOT.
-function does_branch_exist(){
-    local module=$1
-    local branch=$2
-    local parentDir=${3-}
-    [ -z $parentDir ] && parentDir=${WORK_ROOT}
-
-    if [ ! -d "${parentDir}/${module}" ];then
-	echo_stderr "[ERROR] ${WORK_ROOT}/${module} does not exist"
-	exit ${EXIT_FATAL_MISSING_DEPENDENCY}
-    fi
-
-    cd ${parentDir}/${module}
-    print_status "Does ${module} has branch ${branch}?..."
-    set +e
-    ans=$(does_branch_exist_core "$branch")
-    local ret=$?
-    set -e
-    echo $ans
-    cd - >/dev/null
-    return $ret
-}
-
-###
-###     does_branch_exist_core <branch>
+###     does_branch_exist <branch>
 ###         Tell whether the <branch> exists.
 ###         This function assumes you are already in the git checkout
 ###         directory.
@@ -286,7 +248,7 @@ function does_branch_exist(){
 ###         Returns:
 ###            EXIT_OK: The branch exists
 ###            EXIT_RETURN_FALSE: The branch does not exists.
-function does_branch_exist_core(){
+function does_branch_exist(){
     local branch=$1
     if git rev-parse --verify ${branch} &>/dev/null;then
 	echo "yes"
