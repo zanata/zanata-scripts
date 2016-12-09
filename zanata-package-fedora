@@ -98,7 +98,7 @@ function is_branch_build_in_bodhi(){
 ##=== parsing Start ===
 print_status -t parsing -s "Start"
 
-Version=
+ScmVersion=
 SpecRelease=
 AutoDetect=0
 while getopts "ha" opt;do
@@ -118,11 +118,8 @@ done
 shift $((OPTIND-1))
 
 ## Get Module
-moduleResult=$(get_module_from_command ${1-})
-Module=$(sed -e 's/ .*//'<<<"$moduleResult")
-if [[ $moduleResult == *1 ]];then
-    shift
-fi
+branch_prepare RELEASING "$@"
+shift $ShiftOffset
 print_status " Module=$Module"
 
 ## Get Version
@@ -140,12 +137,12 @@ if [ ${AutoDetect} -eq 0 ];then
 
     test -n "$SpecRelease"
     exit_if_failed "$?" ${EXIT_FATAL_INVALID_OPTION} "Failed to get SPEC release from ${VersionRelease}"
-    Version=$(sed -e 's/-'$SpecRelease'$//' <<<$VersionRelease)
-    test -n "$Version"
+    ScmVersion=$(sed -e 's/-'$SpecRelease'$//' <<<$VersionRelease)
+    test -n "$ScmVersion"
     exit_if_failed "$?" ${EXIT_FATAL_INVALID_OPTION} "Failed to get version from ${VersionRelease}"
 else
     ## Auto detect version
-    Version=$(zanata-version-get-latest -q $Module)
+    Version=$(detect_module_version ${Module})
     print_status " ${Module} version: $Version"
 
     test -n "$Version"
@@ -202,6 +199,6 @@ if [ $Module != "zanata-server" ];then
     for bodhiBranch in $(cmake-fedora-koji bodhi-branch fedora | xargs );do
         bodhi --buildroot-override $Module-$Version-$SpecRelease.$bodhiBranch
     done
-    bodhi --buildroot-override 
+    bodhi --buildroot-override
 fi
 
