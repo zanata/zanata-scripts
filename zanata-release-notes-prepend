@@ -97,28 +97,24 @@ while getopts "hjv" opt;do
     esac
 done
 shift $((OPTIND-1))
+export JenkinsMode
 
 ## Get Module
-moduleResult=$(get_module_from_command ${1-1})
-Module=$(sed -e 's/ .*//'<<<"$moduleResult")
-if [[ $moduleResult == *1 ]];then
-    shift
-fi
+branch_prepare RELEASING "$@"
+shift $ShiftOffset
 print_status " Module=$Module"
-ArtifactId=`get_artifact_id $Module`
+
+ArtifactId=$(get_artifact_id $Module)
 Version=$1
 
-##== prepare  Start ==
-print_status -t prepare -s "Start"
-## If not JenkinsMode, then checkout should be done here
 if [ $JenkinsMode -eq 0 ];then
-    ensure_repo ${Module}
-    checkout_releasing_branch $Module $WORK_ROOT
     cd "$WORK_ROOT/$Module"
 fi
 
-RELEASE_NOTES_FILE=docs/release-notes.md
-if [ ! -r $RELEASE_NOTES_FILE ];then
+##== prepare  Start ==
+print_status -t prepare -s "Start"
+ReleaseNotesFile=docs/release-notes.md
+if [[ ! -r $ReleaseNotesFile ]];then
     failed $EXIT_FATAL_MISSING_DEPENDENCY "docs/release-notes.md does not exist"
 fi
 
@@ -191,7 +187,7 @@ while IFS= read -r l ;do
     if [ $VerboseMode -eq 1 ];then
 	echo "$Mode$Keep=$line"
     fi
-done < <(cat $RELEASE_NOTES_FILE)
+done < <(cat $ReleaseNotesFile)
 
 ##== Combine Start ==
 print_status -t "release-notes combine"  -s "Start"
@@ -212,12 +208,12 @@ fi
 echo -e "\n-----------------------\n" >> $TmpFile
 
 cat $TmpFileLesser >> $TmpFile
-mv $TmpFile $RELEASE_NOTES_FILE
+mv $TmpFile $ReleaseNotesFile
 rm -f $TmpFileJira $TmpFileGreater $TmpFileThis $TmpFileLesser
 
 if git diff --exit-code ;then
-    failed ${EXIT_RETURN_FALSE} " $RELEASE_NOTES_FILE does not need to change."
+    failed ${EXIT_RETURN_FALSE} " $ReleaseNotesFile does not need to change."
 fi
-git commit -m "doc(release): Update $RELEASE_NOTES_FILE for version $Version" -- $RELEASE_NOTES_FILE
+git commit -m "doc(release): Update $ReleaseNotesFile for version $Version" -- $ReleaseNotesFile
 exit ${EXIT_OK}
 

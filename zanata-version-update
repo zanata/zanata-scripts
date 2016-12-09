@@ -3,22 +3,18 @@
 ###     zanata-version-update - Update the Zanata dependencies
 ###
 ### SYNOPSIS
-###     zanata-version-update [Option] [<module>|<artifact> [<branch>]]
+###     zanata-version-update [Option] [<module>|<artifact>]
 ###
 ### DESCRIPTION
 ###     This program updates pom.xml to use latest release
 ### of the dependencies in org.zanata
 ###
 ### ARGUMENTS
-###     <module>: module name like zanata-api
-###         If option '-j' is specified, this will be ignored
+###     <module>: module name like zanata-platform
 ###
-###     <artifact>: artifact like api
-###         If option '-j' is specified, this will be ignored
+###     <artifact>: artifact like platform
 ###
 ###     <branch>: branch to work on. By default it is releasing branch.
-###         If option '-j' is specified, this will be ignored
-###
 ###
 ### OPTIONS
 ###     -h: Show help.
@@ -84,35 +80,13 @@ while getopts "hBjnp" opt;do
 	    ;;
     esac
 done
+export JenkinsMode
 shift $((OPTIND-1))
 
-
-##=== prepare Start ===
-print_status -t prepare  -s "Start"
-## If not JenkinsMode, then checkout should be done here
-if [ $JenkinsMode -eq 0 ];then
-    ModuleResult=$(get_module_from_command ${1-})
-    Module=$(sed -e 's/ .*//'<<<"$ModuleResult")
-    if [[ $ModuleResult == *1 ]];then
-	shift
-    fi
-    print_status " Module=$Module"
-
-    ensure_repo ${Module}
-
-    ## Determine branch
-    if [ -n "${1-}" ];then
-	Branch=$1
-	shift
-    else
-	## Determine RELEASING_BRANCH
-	Branch=$(get_releasing_branch $Module)
-    fi
-    print_status " Branch is $Branch"
-
-    checkout_branch $Module "$Branch" $WORK_ROOT
-    cd "$WORK_ROOT/$Module"
-fi
+## Get Module
+branch_prepare RELEASING "$@"
+shift $ShiftOffset
+print_status " Module=$Module"
 
 ##=== update Start ===
 print_status -t update  -s "Start"

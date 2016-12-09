@@ -56,55 +56,34 @@ while getopts "hBjp" opt;do
 	    ;;
     esac
 done
-
+export JenkinsMode
 shift $((OPTIND-1))
+
+## Get Module
+branch_prepare RELEASING "$@"
+shift $ShiftOffset
+print_status " Module=$Module"
 
 ##=== prepare Start ===
 print_status -t prepare  -s "Start"
 
-if [[ -n $1 ]];then
-    ModuleResult=$(get_module_from_command ${1-})
-    Module=$(sed -e 's/ .*//'<<<"$ModuleResult")
-    if [[ $ModuleResult == *1 ]];then
-	shift
-    fi
-    print_status " Module=$Module"
-fi
-
-## If not JenkinsMode, then checkout should be done here
-if [ $JenkinsMode -eq 0 ];then
-    ensure_repo ${Module}
-
-    ## Determine branch
-    if [ -n "${1-}" ];then
-	Branch=$1
-	shift
-    else
-	## Determine RELEASING_BRANCH
-	Branch=$(get_releasing_branch $Module)
-    fi
-    print_status " Branch is $Branch"
-
-    checkout_branch $Module "$Branch" $WORK_ROOT
-    cd "$WORK_ROOT/$Module"
-else
-    Branch=$(git name-rev --name-only HEAD)
-fi
-
 ## Find zanata.xml
-##     So far, only server/zanata.xml working
-ZanataXmlArray=( server/zanata.xml )
+## TODO enable server/gwt-editor/zanata.xml when it is ready
+ZanataXmlArray=( server/zanata.xml  )
 if [[ -z $ZanataXmlArray ]];then
     failed $EXIT_FATAL_MISSING_DEPENDENCY "zanata.xml does not exist"
 fi
 
 ##=== translation update Start ===
+### Perhaps the zanata-maven-plugin does not deployed yet.
+mvn -B install -pl .,client -DskipTests
+
 for ZanataXml in "${ZanataXmlArray[@]}";do
     d=$(dirname $ZanataXml)
     cd $d
     print_status -t "$d translation update" -s "Start"
     print_status " pull translation from Zanata"
-    mvn -B -e org.zanata:zanata-maven-plugin:pull -pl . -Dzanata.projectVersion=$Branch $@
+    mvn -B -e org.zanata:zanata-maven-plugin:pull -pl . -Dzanata.projectVersion=$WorkingBranch $@
     print_status " Validate translation"
     if [[ -d zanata-war ]];then
 	mvn -B -e com.googlecode.l10n-maven-plugin:l10n-maven-plugin:validate -pl zanata-war $@

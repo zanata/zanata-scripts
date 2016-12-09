@@ -11,23 +11,22 @@
 ###     -h: Show this help
 ###
 ###     -d <developmentVersion>:
-###         Development Vesion like: 3.10.0-SNAPSHOT
+###         Development Vesion like: 4.1.0-SNAPSHOT
 ###
 ###     -j: Jenkins mode.
 ###         This assumes that current directory is <module> work directory.
 ###         and correct branch is checked out.
 ###
-###     -n:
-###         Dry-run
-###
 ###     -P: Working on pull request branch
 ###         pr-<artifactId>-<version>
 ###
 ###     -Q:
-###         Quick mode. It skips dry-run and only does the real build.
+###         Quick mode that skip prepare steps.
+###         Prepare steps include update dependency, translation,
+###         and release-notes prepend.
 ###
 ###     -r <releaseVersion>
-###         Release Vesion like: 3.9.0
+###         Release Vesion like: 4.0.0
 ###
 ### DESCRIPTION
 ###     This program does maven release, as well as tag the release version.
@@ -47,12 +46,12 @@
 ###   1. For point release, if you are confident and want to release directly in
 ###      release branch, run:
 ###
-###      zanata-maven-release -r <releaseVer> -d <developmentVer> <artifact>
+###      zanata-maven-release -r 4.0.1 -d 4.0.2-SNAPSHOT platform
 ###
 ###   2. If you prefer to work in the development branch, first checkout that branch,
 ###      then run:
 ###
-###      zanata-maven-release -j -r <releaseVer> -d <developmentVer> <artifact>
+###      zanata-maven-release -j -r 4.1.0 -d 4.1.1-SNAPSHOT platform
 ###
 ### ENVIRONMENT
 ###     RELEASING_BRANCH
@@ -72,7 +71,7 @@ trap exit_print_error EXIT
 MavenReleaseForkedArgumentArray=( -e -Dgwt.validateOnly -DskipTests -DskipArqTests -DskipFuncTests -Dfindbugs.skip)
 
 ## Maven options
-MavenOptionArray=( "${MavenReleaseForkedArgumentArray[@]}" -Doptimise -Dmaven.repo.local=$REPO_LOCAL_DIR -Dgpg.useagent -DupdateReleaseInfo=true -Dresume=false "-Darguments=${MavenReleaseForkedArgumentArray[*]}" -Doptimise)
+MavenOptionArray=( "${MavenReleaseForkedArgumentArray[@]}" -Doptimise -Dmaven.repo.local=$REPO_LOCAL_DIR -Dgpg.useagent -DupdateReleaseInfo=true -Dresume=false "-Darguments=${MavenReleaseForkedArgumentArray[*]}")
 
 ###
 ###     NEXUS_STAGING_OPTIONS
@@ -166,11 +165,8 @@ export JenkinsMode
 shift $((OPTIND-1))
 
 ## Get Module
-moduleResult=$(get_module_from_command ${1-})
-Module=$(sed -e 's/ .*//'<<<"$moduleResult")
-if [[ $moduleResult == *1 ]];then
-    shift
-fi
+branch_prepare RELEASING "$@"
+shift $ShiftOffset
 print_status " Module=$Module"
 
 ## Final parsing check
@@ -185,22 +181,7 @@ fi
 
 ArtifactId=$(get_artifact_id $Module)
 
-##=== checkout Start ===
-print_status -t checkout -s "Start"
-if [ $JenkinsMode -eq 1 ];then
-    WorkingBranch=$(git rev-parse --abbrev-ref HEAD)
-    print_status " Maven release for $Module will be operated on current branch ($WorkingBranch)"
-else
-    ##  Ensure repo
-    ensure_repo $Module
-
-    ## Determine RELEASING_BRANCH
-    : ${RELEASING_BRANCH:=$(get_releasing_branch $Module)}
-    print_status " RELEASING_BRANCH for $Module is ${RELEASING_BRANCH}"
-
-    WorkingBranch=$RELEASING_BRANCH
-    print_status " Working Branch is $WorkingBranch"
-    checkout_branch $Module $WorkingBranch $WORK_ROOT
+if [ $JenkinsMode -eq 0 ];then
     cd ${WORK_ROOT}/${Module}
 
     ## Merge with origin
@@ -287,9 +268,6 @@ fi
 ## zanata-assets does not work is release-plugin anyway.
 print_status -t release -s "Start"
 
-## Make sure no other files get involved
-git clean -f -d -x
-
 case $Module in
     zanata-platform )
 	MavenOptionArray+=( -pl build-tools,parent )
@@ -304,6 +282,7 @@ sed -i -e 's|<tag>HEAD</tag>|<tag>'$ArtifactId'-'$ReleaseVersion'</tag>|' $(find
 set -x
 mvn "${MavenOptionArray[@]}" versions:set -DnewVersion=$ReleaseVersion
 mvn scm:checkin -Dmessage="chore(version): set version ${ReleaseVersion}" -DpushChanges=false
+git tag $ArtifactId-$ReleaseVersion
 set +x
 
 ## Deploy for release
@@ -319,6 +298,6 @@ nexus_release
 print_status " Set to development version"
 sed -i -e 's|<tag>.*</tag>|<tag>HEAD</tag>|' $(find . -name pom.xml | xargs )
 mvn "${MavenOptionArray[@]}" -pl build-tools,parent versions:set -DnewVersion=$DevelopmentVersion
-mvn -N scm:checkin -Dmessage="chore(version): new snapshot version ${DevelopmentVersion}" -pushChanges=true
+mvn -N scm:checkin -Dmessage="chore(version): new snapshot version ${DevelopmentVersion}" -DpushChanges=true
 set +x
 
