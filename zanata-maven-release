@@ -79,7 +79,6 @@ MavenOptionArray=( "${MavenReleaseForkedArgumentArray[@]}" -Doptimise -Dmaven.re
 : ${NEXUS_STAGING_OPTIONS:="-e -DnexusUrl=https://oss.sonatype.org/ -DserverId=sonatype-nexus-staging -Prelease"}
 
 NEXUS_STAGING_PLUGIN=org.sonatype.plugins:nexus-staging-maven-plugin
-MAVEN_RELEASE_PLUGIN=org.apache.maven.plugins:maven-release-plugin:2.5
 
 ##=== function definitions Start ===
 function nexus_release(){
@@ -288,7 +287,7 @@ set +x
 ## Deploy for release
 print_status " deploy for release"
 set -x
-mvn "${MavenOptionArray[@]}" -Prelease -Doptimise deploy
+mvn "${MavenOptionArray[@]}" -Prelease deploy
 set +x
 
 ## Release with sonatype
@@ -297,7 +296,11 @@ nexus_release
 ## Set to development version
 print_status " Set to development version"
 sed -i -e 's|<tag>.*</tag>|<tag>HEAD</tag>|' $(find . -name pom.xml | xargs )
+set -x
 mvn "${MavenOptionArray[@]}" -pl build-tools,parent versions:set -DnewVersion=$DevelopmentVersion
 mvn -N scm:checkin -Dmessage="chore(version): new snapshot version ${DevelopmentVersion}" -DpushChanges=true
 set +x
+
+## Push the tags
+git push --tags
 
