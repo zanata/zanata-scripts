@@ -3,12 +3,12 @@
 ###     zanata-release-branching - Do branching for big release (non-point release).
 ###
 ### SYNOPSIS
-###     zanata-release-branching <module> <DevelopmentVersion>
-### 
+###     zanata-release-branching [Options] <module> <DevelopmentVersion>
+###
 ### DESCRIPTION
 ###     This script performs branching chores for big releases of
 ###     zanata-client and zanata-server.
-### 
+###
 
 shopt -s globstar
 ScriptDir=$(dirname $(readlink  -q -f $0))
@@ -17,45 +17,80 @@ source "${FunctionScriptFile}"
 trap exit_print_error EXIT
 ProgramName=$(basename $0)
 
-print_status -t "parse" -s "Start"
+##=== parsing Start ===
+print_status -t parsing -s "Start"
 
-if [ $# -ne 2 ];then
-    zanata_script_help $0
-    exit ${EXIT_FATAL_INVALID_OPTIONS}
-fi
+BatchMode=0
+JenkinsMode=0
+PushMode=0
+
+###
+### OPTIONS
+while getopts "hjp" opt;do
+    case $opt in
+###
+###     -h: Show this help
+	h )
+	    zanata_script_help $0
+	    exit ${EXIT_OK}
+	    ;;
+###
+###     -B: Batch mode
+###         It will NOT ask question and proceed with default choice.
+	B )
+            BatchMode=1
+	    ;;
+###
+###     -j: Jenkins mode
+###         This assumes that current directory is <module> work directory,
+###         and correct branch is checked out.
+        j )
+	    JenkinsMode=1
+	    ;;
+###
+###     -p: Push after commit
+###         Git push when it has commit.
+        p )
+	    PushMode=1
+	    ;;
+
+	* )
+	    failed ${EXIT_FATAL_INVALID_OPTIONS} "$opt"
+	    ;;
+    esac
+done
+shift $((OPTIND-1))
+
+export JenkinsMode
 
 ## Get Module
-ModuleResult=$(get_module_from_command $1)
-echo "ModuleResult=$ModuleResult"
-Module=$(sed -e 's/ .*//'<<<"$ModuleResult")
-if [[ $ModuleResult == *1 ]];then
-    shift
-fi
+branch_prepare master "$@"
 print_status " Module=$Module"
+shift $ShiftOffset
 
+## Get DevelopmentVersion
+if [[ -z ${1-} ]];then
+    failed ${EXIT_FATAL_INVALID_OPTIONS} "Need <developmentVersion>"
+fi
 DevelopmentVersion=$1
+
+if [[ $JenkinsMode -eq 0 ]];then
+    cd ${WORK_ROOT}/${Module}
+fi
+ArtifactId=$(get_artifact_id $Module)
 
 ##=== prepare Start ===
 print_status -t prepare -s "Start"
 
-ensure_repo ${Module}
-cd ${WORK_ROOT}/${Module}
-git fetch -p
-git clean -f -d
+print_status " Match master to remote"
+git pull
+git reset --hard "origin/master"
+
 declare -A hasBranch
 
-## Determine DEVEL_BRANCH
-: ${DEVEL_BRANCH:=$(get_devel_branch $Module)}
-hasBranch[devel]=$DEVEL_BRANCH
-print_status " DEVEL_BRANCH for $Module is ${hasBranch[devel]}"  
-git checkout ${hasBranch[devel]}
-git pull
-git reset --hard "origin/${hasBranch[devel]}"
-
 print_status " Determine branches to process"
-
 for b in legacy release ;do
-    case $(does_branch_exist ${Module} $b) in
+    case $(does_branch_exist $b) in
 	yes )
 	    git checkout $b
 	    ;;
@@ -72,18 +107,16 @@ for b in legacy release ;do
     hasBranch[$b]=$b
 done
 
-if [ "${hasBranch[release]}" = "" ];then
+if [ "${hasBranch[release]-}" = "" ];then
     failed $EXIT_RETURN_FALSE "No release branch, skip"
 fi
-
-print_status " Done"
 
 ##=== branching Start ===
 if [ ! "${hasBranch[legacy]}" = "" ];then
     print_status -t "release->legacy" -s "Start"
     git checkout "${hasBranch[legacy]}"
     print_status " Point 'legacy' at previous 'release'"
-    
+
     if ! git merge "origin/${hasBranch[release]}" --ff-only; then
 	print_status " [FATAL] please check for cherry-picked commits in legacy which were never merged into release"
 	exit ${EXIT_FATAL_FAIL}
@@ -92,23 +125,34 @@ if [ ! "${hasBranch[legacy]}" = "" ];then
     print_status " Done"
 fi
 
-print_status -t "${DEVEL_BRANCH}->release" -s "Start"
+print_status -t "master->release" -s "Start"
 git checkout "${hasBranch[release]}"
-print_status " Point 'release' at local $DEVEL_BRANCH"
-if ! git merge $DEVEL_BRANCH --ff-only; then
-    EXIT_MSG=" Please check for cherry-picked commits in release which were never merged into $DEVEL_BRANCH"
+print_status " Point 'release' at local master"
+if ! git merge master --ff-only; then
+    EXIT_MSG=" Please check for cherry-picked commits in release which were never merged into master"
     exit ${EXIT_FATAL_FAIL}
 fi
 
 print_status -t "Final" -s "Start"
-print_status " Update $DEVEL_BRANCH version"
-git checkout $DEVEL_BRANCH
+print_status " Update master version"
+git checkout master
 
-mvn release:update-versions -DautoVersionSubmodules=true -DdevelopmentVersion=${DevelopmentVersion}
-git commit -m "[$ProgramName] development version is now ${DevelopmentVersion}" -- **/pom.xml
+mvn versions:set -pl build-tools,parent -DnewVersion=$DevelopmentVersion
 
-print_status " Push all the changes back"
-git push origin ${hasBranch[@]}
+if ! git diff --exit-code ;then
+    if [ $BatchMode -eq 0 ];then
+	read -p "### Press [Ctrl-C] to break, [Enter] to continue"
+    fi
+    git commit -a -m "chore(version): development version is now ${DevelopmentVersion}"
+    if [ $PushMode -ge 1 ];then
+	print_status " Push all the changes back"
+	git push origin master "${hasBranch[@]}"
+    else
+	exit ${EXIT_RETURN_FALSE}
+    fi
+else
+    print_status " No change detected"
+fi
 
 cat>/dev/stderr<<END
 Please remember to announce the branching in IRC and zanata-devel.
