@@ -47,14 +47,14 @@ $HTTP::Request::Common::DYNAMIC_FILE_UPLOAD = 1;
 
 my $userAgent = LWP::UserAgent->new();
 
-sub make_request {
+sub http_request_new {
     my ( $method, $url, $header, $content ) = @_;
     return HTTP::Request->new( $method, $url, $header, $content );
 }
 
 sub rest_response {
     my ( $method, $url, $header, $content, $contentCb, $readSizeHint ) = @_;
-    my $request = make_request( $method, $url, $header, $content );
+    my $request = http_request_new( $method, $url, $header, $content );
     return $userAgent->request( $request, $contentCb, $readSizeHint );
 }
 
@@ -88,19 +88,6 @@ sub zanata_scripts_ini_load {
     }
 }
 
-sub github_credential_has_value {
-    my $hashSize = keys %zanataScriptsIniHash;
-    zanata_scripts_ini_load if $hashSize == 0;
-
-    die "github_username is not defined, "
-      . "please put 'github_username=<USERNAME>' in $zanataScriptsIni"
-      unless zanata_scripts_ini_key_get_value('github_username');
-
-    die "github_token is not defined, "
-      . "please put 'github_token=<TOKEN>' in $zanataScriptsIni"
-      unless zanata_scripts_ini_key_get_value('github_token');
-}
-
 sub zanata_scripts_ini_key_is_defined {
     my ($key) = @_;
     return defined $zanataScriptsIniHash{$key};
@@ -108,58 +95,8 @@ sub zanata_scripts_ini_key_is_defined {
 
 sub zanata_scripts_ini_key_get_value {
     my ($key) = @_;
+    return undef unless zanata_scripts_ini_key_is_defined($key);
     return $zanataScriptsIniHash{$key};
-}
-
-sub github_rest_response {
-    my ( $method, $path, $header, $content, $contentCb, $readSizeHint ) = @_;
-    my $request =
-      make_request( $method, "https://" . GITHUB_REST_SERVER . $path,
-        $header, $content );
-    return $userAgent->request( $request, $contentCb, $readSizeHint );
-}
-
-sub github_logined_rest_response {
-    my ( $method, $path, $header, $content, $contentCb, $readSizeHint ) = @_;
-    github_credential_has_value;
-
-    my $url =
-        "https://"
-      . zanata_scripts_ini_key_get_value('github_username') . ':'
-      . zanata_scripts_ini_key_get_value('github_token') . '@'
-      . GITHUB_REST_SERVER
-      . $path;
-
-    my $request = make_request( $method, $url, $header, $content );
-    return $userAgent->request( $request, $contentCb, $readSizeHint );
-}
-
-sub artifactory_credential_has_value {
-	my $hashSize = keys %zanataScriptsIniHash;
-	zanata_scripts_ini_load if $hashSize == 0;
-
-	die "artifactory_username is not defined, "
-	. "please put 'gitub_username=<USERNAME>' in $zanataScriptsIni"
-	unless zanata_scripts_ini_key_get_value('artifactory_username');
-
-	die "artifactory_token is not defined, "
-	. "please put 'gitub_token=<TOKEN>' in $zanataScriptsIni"
-	unless zanata_scripts_ini_key_get_value('artifactory_token');
-}
-
-sub artifactory_logined_rest_response {
-	my ( $method, $serverBase, $path, $header, $content, $contentCb, $readSizeHint ) = @_;
-	artifactory_credential_has_value;
-
-	my $url =
-	"http://"
-	. zanata_scripts_ini_key_get_value('artifactory_username') . ':'
-	. zanata_scripts_ini_key_get_value('artifactory_token') . '@'
-	. $serverBase
-	. $path;
-
-	my $request = make_request( $method, $url, $header, $content );
-	return $userAgent->request( $request, $contentCb, $readSizeHint );
 }
 
 BEGIN {
@@ -212,15 +149,14 @@ our @EXPORT = qw(EXIT_OK EXIT_FATAL_UNSPECIFIED EXIT_FATAL_INVALID_OPTIONS
   EXIT_ERROR_FAIL EXIT_RETURN_FALSE
   JIRA_SERVER_URL JIRA_PROJECT
 
-  GITHUB_REST_URL
+  GITHUB_REST_SERVER
 
   print_status
-  artifactory_logined_rest_response
   github_credential_has_value
   github_logined_post_form
   github_logined_rest_response
   github_rest_response
-  make_request
+  http_request_new
   progress_bar_set_total_size
   progress_bar_cb
 
@@ -229,6 +165,8 @@ our @EXPORT = qw(EXIT_OK EXIT_FATAL_UNSPECIFIED EXIT_FATAL_INVALID_OPTIONS
 
   zanata_scripts_ini_key_is_defined
   zanata_scripts_ini_key_get_value
+  zanata_scripts_ini_load
+
 );
 
 1;
