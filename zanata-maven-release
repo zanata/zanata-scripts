@@ -7,27 +7,6 @@
 ###     zanata-maven-release-assets    [options]
 ###     zanata-maven-release-platform    [options]
 ###
-### OPTIONS
-###     -h: Show this help
-###
-###     -d <developmentVersion>:
-###         Development Vesion like: 4.1.0-SNAPSHOT
-###
-###     -j: Jenkins mode.
-###         This assumes that current directory is <module> work directory.
-###         and correct branch is checked out.
-###
-###     -P: Working on pull request branch
-###         pr-<artifactId>-<version>
-###
-###     -Q:
-###         Quick mode that skip prepare steps.
-###         Prepare steps include update dependency, translation,
-###         and release-notes prepend.
-###
-###     -r <releaseVersion>
-###         Release Vesion like: 4.0.0
-###
 ### DESCRIPTION
 ###     This program does maven release, as well as tag the release version.
 ###
@@ -81,44 +60,59 @@ MavenOptionArray=( "${MavenReleaseForkedArgumentArray[@]}" -Doptimise -Dmaven.re
 NEXUS_STAGING_PLUGIN=org.sonatype.plugins:nexus-staging-maven-plugin
 
 ##=== function definitions Start ===
+## run_command <command> [args ... ]
+##     On Dry-run mode, just show the command,
+##     otherwise run the command.
+function run_command(){
+    if [[ $DryRunMode -eq 1 ]];then
+        print_status " [Dry-Run] $*"
+    else
+        set -x
+        "$@"
+        set +x
+    fi
+}
+
 function nexus_release(){
     print_status -t nexus-release -s "Start"
 
-    StagingRepositoryBuffer=$(mvn $NEXUS_STAGING_OPTIONS ${NEXUS_STAGING_PLUGIN}:rc-list | sed -n  -e '/orgzanata-.* / p' )
-    StagingRepositoryId=$( awk '{print $2}' <<<"$StagingRepositoryBuffer" | tail -n 1)
-    StagingRepositoryState=$( awk '{print $3}' <<<"$StagingRepositoryBuffer" | tail -n 1)
-    StagingPropertiesGlob="target/checkout/target/nexus-staging/staging/*.properties"
+    print_status " Obtaining StagingRepositoryId"
+    StagingRepositoryBuffer=$(run_command mvn $NEXUS_STAGING_OPTIONS ${NEXUS_STAGING_PLUGIN}:rc-list | sed -n  -e '/orgzanata-.* / p' )
 
-    if [ -z "$StagingRepositoryId" ];then
-	#TODO: Maybe because it has not yet been deployed
-	if [ -e $StagingPropertiesGlob ];then
-	    StagingRepositoryId=$(grep -oP '^stagingRepository\.id=\K.*' $StagingPropertiesGlob )
-	    test -n "$StagingRepositoryId"
-	    exit_if_failed $? $EXIT_FATAL_FAIL " Cannot obtain staging repository id from both nexus-staging plugin and local target files"
-	else
-	    print_status " Failed to found either stagingRepositoryId or $StagingPropertiesGlob"
-	    print_status " Please try to manually submit nexus manually"
-	    print_status " Steps:"
-	    print_status "   1. git checkout <ArtifactId>-<Version>"
-	    print_status "   2. mvn clean deploy -Prelease"
-	    failed $EXIT_FATAL_FAILED " Failed to found either stagingRepositoryId or $StagingPropertiesGlob"
-	fi
+    if [[ $DryRunMode -eq 0 ]];then
+        [[ -z $StagingRepositoryBuffer ]] &&\
+            failed $EXIT_FATAL_FAIL " Failed to found artifacts in ${NEXUS_STAGING_PLUGIN}:rc-list"
+
+        StagingRepositoryId=$( awk '{print $2}' <<<"$StagingRepositoryBuffer" | tail -n 1)
+
+        [[ -z $StagingRepositoryId ]] &&\
+            failed $EXIT_FATAL_FAIL " Failed to obtain StagingRepositoryId"
+
+        StagingRepositoryState=$( awk '{print $3}' <<<"$StagingRepositoryBuffer" | tail -n 1)
+
+        [[ -z $StagingRepositoryState ]] &&\
+            failed $EXIT_FATAL_FAIL " Failed to obtain StagingRepositoryState"
+
+        print_status " StagingRepositoryId=$StagingRepositoryId StagingRepositoryState=$StagingRepositoryState"
+    else
+        print_status " [Dry-Run] No StagingRepositoryId, because artifacts not deployed"
+        ## Provide pseudo Id and state for display
+        StagingRepositoryId=StagingRepositoryId
+        StagingRepositoryState=OPEN
     fi
-
-    print_status " StagingRepositoryId=${StagingRepositoryId}"
 
     # read -p "### Please login sonatype and check maven-metadata.xml. Press [Ctrl-C] to break, [Enter] to continue"
 
     if [ "$StagingRepositoryState" = "OPEN" ];then
-	print_status " nexus-staging:close"
-	mvn $NEXUS_STAGING_OPTIONS ${NEXUS_STAGING_PLUGIN}:close \
-	    -DstagingRepositoryId=${StagingRepositoryId}
+        print_status " nexus-staging:close"
+        run_command mvn $NEXUS_STAGING_OPTIONS ${NEXUS_STAGING_PLUGIN}:close \
+            -DstagingRepositoryId=${StagingRepositoryId}
 
     fi
 
     print_status " nexus-staging:release"
-    mvn $NEXUS_STAGING_OPTIONS ${NEXUS_STAGING_PLUGIN}:release \
-	-DstagingRepositoryId=${StagingRepositoryId}
+    run_command mvn $NEXUS_STAGING_OPTIONS ${NEXUS_STAGING_PLUGIN}:release \
+        -DstagingRepositoryId=${StagingRepositoryId}
 
 }
 ##=== function definitions End   ===
@@ -128,35 +122,65 @@ print_status -t parsing -s "Start"
 
 WorkingBranch=
 DevelopmentVersion=
+DryRunMode=0
 JenkinsMode=0
 PullRequestMode=0
 QuickMode=0
 ReleaseVersion=
 
-while getopts "hd:jPQr:" opt;do
+###
+### OPTIONS
+###
+
+while getopts "hd:jnPQr:" opt;do
     case $opt in
-	h )
-	    zanata_script_help $0
-	    exit ${EXIT_OK}
-	    ;;
-	d )
-	    DevelopmentVersion=$OPTARG
-	    ;;
-	j )
-	    JenkinsMode=1
-	    ;;
-	P )
-	    PullRequestMode=1
-	    ;;
-	Q )
-	    QuickMode=1
-	    ;;
-	r )
-	    ReleaseVersion=$OPTARG
-	    ;;
-	* )
+###     -h: Show this help
+        h )
+            zanata_script_help $0
+            exit ${EXIT_OK}
+            ;;
+###
+###     -d <developmentVersion>:
+###         Development Vesion like: 4.1.0-SNAPSHOT
+        d )
+            DevelopmentVersion=$OPTARG
+            ;;
+###
+###     -j: Jenkins mode.
+###         This assumes that current directory is <module> work directory.
+###         and correct branch is checked out.
+        j )
+            JenkinsMode=1
+            ;;
+###
+###     -n: Dry-run mode.
+###         Just show what would be done.
+        n )
+            DryRunMode=1
+            ;;
+###
+###     -P: Working on pull request branch
+###         pr-<artifactId>-<version>
+        P )
+            PullRequestMode=1
+            ;;
+###
+###     -Q:
+###         Quick mode that skip prepare steps.
+###         Prepare steps include update dependency, translation,
+###         and release-notes prepend.
+        Q )
+            QuickMode=1
+            ;;
+###
+###     -r <releaseVersion>
+###         Release Vesion like: 4.0.0
+        r )
+            ReleaseVersion=$OPTARG
+            ;;
+        * )
             failed ${EXIT_FATAL_INVALID_OPTIONS} "$opt"
-	    ;;
+            ;;
     esac
 done
 export JenkinsMode
@@ -171,10 +195,10 @@ print_status " Module=$Module"
 ## Final parsing check
 if [ "$Module" = "zanata-assets" ];then
     if [ -z "$ReleaseVersion" ];then
-	failed $EXIT_FATAL_INVALID_OPTIONS "assets requires -r <releaseVersion>"
+        failed $EXIT_FATAL_INVALID_OPTIONS "assets requires -r <releaseVersion>"
     fi
     if [ -z "$DevelopmentVersion" ];then
-	failed $EXIT_FATAL_INVALID_OPTIONS "assets requires -d <developmentVersion>"
+        failed $EXIT_FATAL_INVALID_OPTIONS "assets requires -d <developmentVersion>"
     fi
 fi
 
@@ -191,7 +215,7 @@ fi
 if [ $PullRequestMode -eq 1 ];then
     WorkingBranch="pr-$ArtifactId-$ReleaseVersion"
     if ! does_branch_exist $WorkingBranch ;then
-	git branch $WorkingBranch
+        git branch $WorkingBranch
     fi
     git checkout $WorkingBranch
     print_status " Working on the pull request branch: $WorkingBranch"
@@ -207,58 +231,58 @@ if [[ $QuickMode -eq 0 ]];then
     ##==== Update Dependency ====
     print_status " Update dependency"
     set +e
-    $ScriptDir/zanata-version-update -j
+    run_command $ScriptDir/zanata-version-update -j
     case $? in
-	$EXIT_OK )
-	    ;;
-	$EXIT_RETURN_FALSE )
-	    ;;
-	* )
-	    failed $? "Failed to version update"
-	    ;;
+        $EXIT_OK )
+            ;;
+        $EXIT_RETURN_FALSE )
+            ;;
+        * )
+            failed $? "Failed to version update"
+            ;;
     esac
     set -e
 
     if [[ -r zanata.xml || -r server/zanata.xml ]];then
-	##==== Update translations ====
-	print_status " Update Zanata translation"
-	set +e
-	$ScriptDir/zanata-translate-pull -j
-	case $? in
-	    $EXIT_OK )
-		;;
-	    $EXIT_RETURN_FALSE )
-		;;
-	    * )
-		failed $? "Failed to pull translation"
-		;;
-	esac
-	set -e
+        ##==== Update translations ====
+        print_status " Update Zanata translation"
+        set +e
+        run_command $ScriptDir/zanata-translate-pull -j
+        case $? in
+            $EXIT_OK )
+                ;;
+            $EXIT_RETURN_FALSE )
+                ;;
+            * )
+                failed $? "Failed to pull translation"
+                ;;
+        esac
+        set -e
     fi
 
     if [[ -r docs/release-notes.md ]];then
-	##==== release-notes-prepend ====
-	print_status " release-notes-prepend"
-	set +e
-	zanata-release-notes-prepend -j $ArtifactId $ReleaseVersion
-	ExitCode=$?
-	set -e
-	case $ExitCode in
-	    $EXIT_OK )
-		;;
-	    $EXIT_FATAL_MISSING_DEPENDENCY )
-		# This usually means the module does not have docs/release-notes.md
-		;;
-	    $EXIT_FATAL_UNKNOWN_MODULE )
-		# This usually means that <ArtifactId-$ReleaseVersion> does note exist in Jira
-		;;
-	    $EXIT_RETURN_FALSE )
-		# No Jira issues associates to the <ArtifactId-$ReleaseVersion>
-		;;
-	    * )
-		failed $ExitCode " Failed to get related jira issues"
-		;;
-	esac
+        ##==== release-notes-prepend ====
+        print_status " release-notes-prepend"
+        set +e
+        run_command zanata-release-notes-prepend -j $ArtifactId $ReleaseVersion
+        ExitCode=$?
+        set -e
+        case $ExitCode in
+            $EXIT_OK )
+                ;;
+            $EXIT_FATAL_MISSING_DEPENDENCY )
+                # This usually means the module does not have docs/release-notes.md
+                ;;
+            $EXIT_FATAL_UNKNOWN_MODULE )
+                # This usually means that <ArtifactId-$ReleaseVersion> does note exist in Jira
+                ;;
+            $EXIT_RETURN_FALSE )
+                # No Jira issues associates to the <ArtifactId-$ReleaseVersion>
+                ;;
+            * )
+                failed $ExitCode " Failed to get related jira issues"
+                ;;
+        esac
     fi
 fi
 
@@ -269,38 +293,32 @@ print_status -t release -s "Start"
 
 case $Module in
     zanata-platform )
-	MavenOptionArray+=( -pl build-tools,parent )
-	;;
+        MavenOptionArray+=( -pl build-tools,parent )
+        ;;
     * )
-	;;
+        ;;
 esac
 
 ## Set to release version
 print_status " Set release version to $ReleaseVersion"
 sed -i -e 's|<tag>HEAD</tag>|<tag>'$ArtifactId'-'$ReleaseVersion'</tag>|' $(find . -name pom.xml | xargs )
-set -x
-mvn "${MavenOptionArray[@]}" versions:set -DnewVersion=$ReleaseVersion
-mvn scm:checkin -Dmessage="chore(version): set version ${ReleaseVersion}" -DpushChanges=false
-git tag $ArtifactId-$ReleaseVersion
-set +x
+run_command mvn "${MavenOptionArray[@]}" versions:set -DnewVersion=$ReleaseVersion
+run_command mvn scm:checkin -Dmessage="chore(version): set version ${ReleaseVersion}" -DpushChanges=false
+run_command git tag $ArtifactId-$ReleaseVersion
 
 ## Deploy for release
 print_status " deploy for release"
-set -x
-mvn "${MavenOptionArray[@]}" -Prelease deploy
-set +x
+run_command mvn "${MavenOptionArray[@]}" -Prelease deploy
 
 ## Release with sonatype
 nexus_release
 
 ## Set to development version
 print_status " Set to development version"
-sed -i -e 's|<tag>.*</tag>|<tag>HEAD</tag>|' $(find . -name pom.xml | xargs )
-set -x
-mvn "${MavenOptionArray[@]}" -pl build-tools,parent versions:set -DnewVersion=$DevelopmentVersion
-mvn -N scm:checkin -Dmessage="chore(version): new snapshot version ${DevelopmentVersion}" -DpushChanges=true
-set +x
+run_command sed -i -e 's|<tag>.*</tag>|<tag>HEAD</tag>|' $(find . -name pom.xml | xargs )
+run_command mvn "${MavenOptionArray[@]}" -pl build-tools,parent versions:set -DnewVersion=$DevelopmentVersion
+run_command mvn -N scm:checkin -Dmessage="chore(version): new snapshot version ${DevelopmentVersion}" -DpushChanges=true
 
 ## Push the tags
-git push --tags
+run_command git push --tags
 

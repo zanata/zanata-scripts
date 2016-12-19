@@ -30,33 +30,33 @@ while getopts "hjp" opt;do
     case $opt in
 ###
 ###     -h: Show this help
-	h )
-	    zanata_script_help $0
-	    exit ${EXIT_OK}
-	    ;;
+        h )
+            zanata_script_help $0
+            exit ${EXIT_OK}
+            ;;
 ###
 ###     -B: Batch mode
 ###         It will NOT ask question and proceed with default choice.
-	B )
+        B )
             BatchMode=1
-	    ;;
+            ;;
 ###
 ###     -j: Jenkins mode
 ###         This assumes that current directory is <module> work directory,
 ###         and correct branch is checked out.
         j )
-	    JenkinsMode=1
-	    ;;
+            JenkinsMode=1
+            ;;
 ###
 ###     -p: Push after commit
 ###         Git push when it has commit.
         p )
-	    PushMode=1
-	    ;;
+            PushMode=1
+            ;;
 
-	* )
-	    failed ${EXIT_FATAL_INVALID_OPTIONS} "$opt"
-	    ;;
+        * )
+            failed ${EXIT_FATAL_INVALID_OPTIONS} "$opt"
+            ;;
     esac
 done
 shift $((OPTIND-1))
@@ -91,15 +91,15 @@ declare -A hasBranch
 print_status " Determine branches to process"
 for b in legacy release ;do
     case $(does_branch_exist $b) in
-	yes )
-	    git checkout $b
-	    ;;
-	remote )
-	    git checkout --track origin/$b
-	    ;;
-	* )
-	    continue
-	    ;;
+        yes )
+            git checkout $b
+            ;;
+        remote )
+            git checkout --track origin/$b
+            ;;
+        * )
+            continue
+            ;;
     esac
     print_status "  match branch $b with origin for ${Module}"
     git pull
@@ -118,8 +118,8 @@ if [ ! "${hasBranch[legacy]}" = "" ];then
     print_status " Point 'legacy' at previous 'release'"
 
     if ! git merge "origin/${hasBranch[release]}" --ff-only; then
-	print_status " [FATAL] please check for cherry-picked commits in legacy which were never merged into release"
-	exit ${EXIT_FATAL_FAIL}
+        print_status " [FATAL] please check for cherry-picked commits in legacy which were never merged into release"
+        exit ${EXIT_FATAL_FAIL}
     fi
 
     print_status " Done"
@@ -141,14 +141,14 @@ mvn versions:set -pl build-tools,parent -DnewVersion=$DevelopmentVersion
 
 if ! git diff --exit-code ;then
     if [ $BatchMode -eq 0 ];then
-	read -p "### Press [Ctrl-C] to break, [Enter] to continue"
+        read -p "### Press [Ctrl-C] to break, [Enter] to continue"
     fi
     git commit -a -m "chore(version): development version is now ${DevelopmentVersion}"
     if [ $PushMode -ge 1 ];then
-	print_status " Push all the changes back"
-	git push origin master "${hasBranch[@]}"
+        print_status " Push all the changes back"
+        git push origin master "${hasBranch[@]}"
     else
-	exit ${EXIT_RETURN_FALSE}
+        exit ${EXIT_RETURN_FALSE}
     fi
 else
     print_status " No change detected"

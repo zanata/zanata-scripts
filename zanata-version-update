@@ -57,27 +57,27 @@ declare -a ExtraOptionArray=()
 
 while getopts "hBjnp" opt;do
     case $opt in
-	h )
-	    zanata_script_help $0
-	    exit ${EXIT_OK}
-	    ;;
-	B )
-	    BatchMode=1
-	    ;;
-	j )
-	    JenkinsMode=1
-	    ;;
-	n )
-	    AllowSnapshot=1
-	    VersionGoal=use-next-versions
-	    ExtraOptionArray+=(-DallowSnapshots=true)
-	    ;;
-	p )
-	    PushMode=1
-	    ;;
-	* )
-	    failed ${EXIT_FATAL_INVALID_OPTIONS} "$opt"
-	    ;;
+        h )
+            zanata_script_help $0
+            exit ${EXIT_OK}
+            ;;
+        B )
+            BatchMode=1
+            ;;
+        j )
+            JenkinsMode=1
+            ;;
+        n )
+            AllowSnapshot=1
+            VersionGoal=use-next-versions
+            ExtraOptionArray+=(-DallowSnapshots=true)
+            ;;
+        p )
+            PushMode=1
+            ;;
+        * )
+            failed ${EXIT_FATAL_INVALID_OPTIONS} "$opt"
+            ;;
     esac
 done
 export JenkinsMode
@@ -106,13 +106,13 @@ set +x
 
 if ! git diff --exit-code ;then
     if [ $BatchMode -eq 0 ];then
-	read -p "### Are the change looks alright? Press [Ctrl-C] to break, [Enter] to continue"
+        read -p "### Are the change looks alright? Press [Ctrl-C] to break, [Enter] to continue"
     fi
     git commit -a -m "chore(version): Update Zanata dependencies"
     if [ $PushMode -ge 1 ];then
-	git push
+        git push
     else
-	exit ${EXIT_RETURN_FALSE}
+        exit ${EXIT_RETURN_FALSE}
     fi
 else
     print_status " No change detected"

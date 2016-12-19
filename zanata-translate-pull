@@ -38,22 +38,22 @@ PushMode=0
 
 while getopts "hBjp" opt;do
     case $opt in
-	h )
-	    zanata_script_help $0
-	    exit ${EXIT_OK}
-	    ;;
-	B )
-	    BatchMode=1
-	    ;;
-	j )
-	    JenkinsMode=1
-	    ;;
-	p )
-	    PushMode=1
-	    ;;
-	* )
-	    failed ${EXIT_FATAL_INVALID_OPTIONS} "$opt"
-	    ;;
+        h )
+            zanata_script_help $0
+            exit ${EXIT_OK}
+            ;;
+        B )
+            BatchMode=1
+            ;;
+        j )
+            JenkinsMode=1
+            ;;
+        p )
+            PushMode=1
+            ;;
+        * )
+            failed ${EXIT_FATAL_INVALID_OPTIONS} "$opt"
+            ;;
     esac
 done
 export JenkinsMode
@@ -86,22 +86,22 @@ for ZanataXml in "${ZanataXmlArray[@]}";do
     mvn -B -e org.zanata:zanata-maven-plugin:pull -pl . -Dzanata.projectVersion=$WorkingBranch $@
     print_status " Validate translation"
     if [[ -d zanata-war ]];then
-	mvn -B -e com.googlecode.l10n-maven-plugin:l10n-maven-plugin:validate -pl zanata-war $@
+        mvn -B -e com.googlecode.l10n-maven-plugin:l10n-maven-plugin:validate -pl zanata-war $@
     else
-	mvn -B -e com.googlecode.l10n-maven-plugin:l10n-maven-plugin:validate $@
+        mvn -B -e com.googlecode.l10n-maven-plugin:l10n-maven-plugin:validate $@
     fi
     cd -
 done
 
 if ! git diff --exit-code ;then
     if [ $BatchMode -eq 0 ];then
-	read -p "### Press [Ctrl-C] to break, [Enter] to continue"
+        read -p "### Press [Ctrl-C] to break, [Enter] to continue"
     fi
     git commit -a -m "trans(pull): Update translation"
     if [ $PushMode -ge 1 ];then
-	git push
+        git push
     else
-	exit ${EXIT_RETURN_FALSE}
+        exit ${EXIT_RETURN_FALSE}
     fi
 else
     print_status " No change detected"

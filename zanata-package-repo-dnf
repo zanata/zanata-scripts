@@ -59,11 +59,11 @@ source "${SCRIPT_DIR}/zanata-rpm-functions"
 ###         Default: /home/${REMOTE_USER}/srv/repos/${REMOTE_USER}/
 : ${REMOTE_DIR:=/srv/repos/${REMOTE_USER}/zanata}
 ###
-###    	LOCAL_DIR
+###            LOCAL_DIR
 ###         The local directory that mirror the remote directory
 : ${LOCAL_DIR:=${WORK_ROOT}/dnf/zanata}
 ###
-###    	RSYNC_OPTIONS
+###            RSYNC_OPTIONS
 ###         Options that will be passed to rsync
 ###         Default: "--cvs-exclude --recursive --verbose --links --update --compress --exclude '*.core' --stats --progress --archive  --keep-dirlinks"
 : ${RSYNC_OPTIONS:=--cvs-exclude --recursive --verbose --links --update --compress --exclude '*.core' --stats --progress --archive  --keep-dirlinks}
@@ -102,7 +102,7 @@ function update_dnf_repo_dir(){
     local opts=""
     pushd "$baseDir" 1>/dev/null
     if [ $NewRepoMetadata -eq 0 ];then
-	opts="--update"
+        opts="--update"
     fi
     print_status " createrepo $opts $CREATEREPO_OPTS $repoDir"
     createrepo $opts $CREATEREPO_OPTS "$repoDir"
@@ -120,22 +120,22 @@ StartFrom=
 NewRepoMetadata=0
 while getopts "habn" opt;do
     case $opt in
-	h )
-	    zanata_script_help $0
-	    exit ${EXIT_OK}
-	    ;;
-	a )
-	    AutoDetect=1
-	    ;;
-	b )
-	    StartFrom="build"
-	    ;;
-	n )
-	    NewRepoMetadata=1
-	    ;;
-	* )
-	    exit_if_failed ${EXIT_FATAL_INVALID_OPTIONS} ${EXIT_FATAL_INVALID_OPTIONS} "$opt"
-	    ;;
+        h )
+            zanata_script_help $0
+            exit ${EXIT_OK}
+            ;;
+        a )
+            AutoDetect=1
+            ;;
+        b )
+            StartFrom="build"
+            ;;
+        n )
+            NewRepoMetadata=1
+            ;;
+        * )
+            exit_if_failed ${EXIT_FATAL_INVALID_OPTIONS} ${EXIT_FATAL_INVALID_OPTIONS} "$opt"
+            ;;
     esac
 done
 shift $((OPTIND-1))
@@ -148,19 +148,19 @@ print_status " Module=$Module"
 ## Get Package name
 case $Module in
     zanata-client )
-	PackageName=zanata-cli-bin
-	;;
+        PackageName=zanata-cli-bin
+        ;;
     * )
-	PackageName=$Module
-	;;
+        PackageName=$Module
+        ;;
 esac
 
 ## Get Version
 if [ ${AutoDetect} -eq 0 ];then
     if [ -z "$1" ];then
-	zanata_script_help $0
-	EXIT_MSG="Requires version-release. Please either specify version-release or use option -a"
-	exit ${EXIT_FATAL_INVALID_OPTIONS}
+        zanata_script_help $0
+        EXIT_MSG="Requires version-release. Please either specify version-release or use option -a"
+        exit ${EXIT_FATAL_INVALID_OPTIONS}
     fi
     VersionRelease=$1
 
@@ -193,8 +193,8 @@ print_status " check depending programs"
 ExitStatus=${EXIT_OK}
 for dep in rpmbuild mock createrepo; do
     if ! which $dep &>/dev/null ; then
-	ExitStatus=${EXIT_FATAL_MISSING_DEPENDENCY}
-	EXIT_MSG+=" $dep"
+        ExitStatus=${EXIT_FATAL_MISSING_DEPENDENCY}
+        EXIT_MSG+=" $dep"
     fi
 done
 exit_if_failed "${ExitStatus}" ${EXIT_FATAL_MISSING_DEPENDENCY} "$EXIT_MSG"
@@ -209,18 +209,18 @@ if [ -z "${StartFrom}" ];then
 
     print_status "  Create missing directories and links"
     for fr in ${FEDORA_RELEASES}; do
-	mkdir -p "$fr"
+        mkdir -p "$fr"
 
-	## RHEL usually use something like epel-7Server
-	for e in Client Workstation Server; do
-	    if [ ! -r "$fr$e" ];then
-		ln -sf "$fr" "$fr$e"
-	    fi
-	done
+        ## RHEL usually use something like epel-7Server
+        for e in Client Workstation Server; do
+            if [ ! -r "$fr$e" ];then
+                ln -sf "$fr" "$fr$e"
+            fi
+        done
 
-	for arch in SRPMS i386 x86_64; do
-	    mkdir -p "$fr/$arch"
-	done
+        for arch in SRPMS i386 x86_64; do
+            mkdir -p "$fr/$arch"
+        done
     done
 fi
 
@@ -249,39 +249,39 @@ for fr in ${FEDORA_RELEASES}; do
 
     mkdir -p "${SRpmDir}"
     if [ ! -r "${SrpmPath}" ];then
-	## Create srpm
-	print_status " creating SRPM: ${SrpmPath}"
-	rpmbuild -bs --define "dist .${DistTag}" --define "_sourcedir ${CACHE_DIR}" --define "_srcrpmdir ${SRpmDir}" "${SpecFilename}"
-	update_dnf_repo_dir $fr SRPMS
+        ## Create srpm
+        print_status " creating SRPM: ${SrpmPath}"
+        rpmbuild -bs --define "dist .${DistTag}" --define "_sourcedir ${CACHE_DIR}" --define "_srcrpmdir ${SRpmDir}" "${SpecFilename}"
+        update_dnf_repo_dir $fr SRPMS
     fi
 
     ## Create missing RPMS
     for arch in x86_64 i386; do
-	SpecArch=$(rpm -qp --qf '%{arch}' "${SrpmPath}")
-	RpmFilename="${PackageName}-${Version}-${SpecRelease}.$DistTag.${SpecArch}.rpm"
-	RpmDir="$fr/$arch"
-	RpmPath="$RpmDir/${RpmFilename}"
-	print_status " RpmPath=${RpmPath}"
+        SpecArch=$(rpm -qp --qf '%{arch}' "${SrpmPath}")
+        RpmFilename="${PackageName}-${Version}-${SpecRelease}.$DistTag.${SpecArch}.rpm"
+        RpmDir="$fr/$arch"
+        RpmPath="$RpmDir/${RpmFilename}"
+        print_status " RpmPath=${RpmPath}"
 
-	if [ ! -r "${RpmPath}" ];then
-	    ## Creating rpm
-	    if [[ "$SpecArch" = "noarch" && "$arch" == i?86 ]];then
-		## noarch in i?86 can just link to  x86_64.rpm
-		Rpm64RelativePath="../x86_64/${RpmFilename}"
-		if [ -r "$Rpm64RelativePath" ];then
-		    print_status " linking ${Rpm64RelativePath} to ${RpmPath}"
-		    ln -sf ${Rpm64RelativePath} ${RpmPath}
-		else
-		    print_status " ${Rpm64RelativePath} does not exist, remove ${RpmPath}"
-		    rm -f ${Rpm64RelativePath} ${RpmPath}
-		fi
-	    else
-		print_status " creating ${RpmPath}"
-		mock  -r "${fr}-${arch}" -D "dist .${DistTag}" --resultdir "${RESULT_DIR}" --rebuild "${SrpmPath}"
-		cp -v ${RESULT_DIR}/${RpmFilename} ${RpmDir}
-	    fi
-	    update_dnf_repo_dir $fr $arch
-	fi
+        if [ ! -r "${RpmPath}" ];then
+            ## Creating rpm
+            if [[ "$SpecArch" = "noarch" && "$arch" == i?86 ]];then
+                ## noarch in i?86 can just link to  x86_64.rpm
+                Rpm64RelativePath="../x86_64/${RpmFilename}"
+                if [ -r "$Rpm64RelativePath" ];then
+                    print_status " linking ${Rpm64RelativePath} to ${RpmPath}"
+                    ln -sf ${Rpm64RelativePath} ${RpmPath}
+                else
+                    print_status " ${Rpm64RelativePath} does not exist, remove ${RpmPath}"
+                    rm -f ${Rpm64RelativePath} ${RpmPath}
+                fi
+            else
+                print_status " creating ${RpmPath}"
+                mock  -r "${fr}-${arch}" -D "dist .${DistTag}" --resultdir "${RESULT_DIR}" --rebuild "${SrpmPath}"
+                cp -v ${RESULT_DIR}/${RpmFilename} ${RpmDir}
+            fi
+            update_dnf_repo_dir $fr $arch
+        fi
     done
 done
 

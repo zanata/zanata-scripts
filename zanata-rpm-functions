@@ -34,7 +34,7 @@ function spec_update(){
     exit_if_failed $? $EXIT_FATAL_FAIL "SPEC file $specPath does not exists"
 
     if [ -z "$changeLogMsg" ];then
-	changeLogMsg="- Upgrade to upstream version ${Version}"
+        changeLogMsg="- Upgrade to upstream version ${Version}"
     fi
 
     local tmpSpecPath=${TMP_ROOT}/$(basename ${specPath})
@@ -42,31 +42,31 @@ function spec_update(){
     ## Update changelog
     local changelogMatchStr=$(sed -n -e '/^%changelog/,$ p' ${specPath} | sed -n -e "/^\* .* ${version}-${specRelease}/ p")
     if [ -z "$changelogMatchStr" ];then
-	print_status " updating changelog"
-	sed -e '/^%changelog/a *'" $(date '+%a %b %d %Y') $maintainerEmail $version-$specRelease\n$changeLogMsg\n" "${specPath}" > ${tmpSpecPath}.changelog
-	SpecModified=1
+        print_status " updating changelog"
+        sed -e '/^%changelog/a *'" $(date '+%a %b %d %Y') $maintainerEmail $version-$specRelease\n$changeLogMsg\n" "${specPath}" > ${tmpSpecPath}.changelog
+        SpecModified=1
     else
-	cp "${specPath}" ${tmpSpecPath}.changelog
+        cp "${specPath}" ${tmpSpecPath}.changelog
     fi
 
     ## Update version
     local versionMatchStr=$(sed -n -e '/^Version:/ s/^Version:\s*\([0-9.]*\)/\1/ p' ${tmpSpecPath}.changelog)
     if [ "${versionMatchStr}" != "$version" ];then
-	print_status " updating version to $version"
-	sed -e '/^Version:/ s/^\(Version:\s*\).*$/\1'$version'/' ${tmpSpecPath}.changelog > ${tmpSpecPath}.version
-	SpecModified=1
+        print_status " updating version to $version"
+        sed -e '/^Version:/ s/^\(Version:\s*\).*$/\1'$version'/' ${tmpSpecPath}.changelog > ${tmpSpecPath}.version
+        SpecModified=1
     else
-	cp "${tmpSpecPath}.changelog" "${tmpSpecPath}.version"
+        cp "${tmpSpecPath}.changelog" "${tmpSpecPath}.version"
     fi
 
     ## Update SpecRelease
     local releaseMatchStr=$(sed -n -e '/^Release:/ s/^Release:\s*\([0-9][0-9]*\).*$/\1/ p' ${tmpSpecPath}.version)
     if [ "${releaseMatchStr}" != "${specRelease}" ];then
-	print_status " updating SPEC release to ${specRelease}"
-	sed -e '/^Release:/ s/[0-9][0-9]*/'$specRelease'/' ${tmpSpecPath}.version > ${tmpSpecPath}
-	SpecModified=1
+        print_status " updating SPEC release to ${specRelease}"
+        sed -e '/^Release:/ s/[0-9][0-9]*/'$specRelease'/' ${tmpSpecPath}.version > ${tmpSpecPath}
+        SpecModified=1
     else
-	cp "${tmpSpecPath}.version" "${tmpSpecPath}"
+        cp "${tmpSpecPath}.version" "${tmpSpecPath}"
     fi
 
     print_status " checking generated SPEC"
@@ -82,18 +82,18 @@ function spec_update(){
 function branch_to_bodhi_branch(){
     local branch=$1
     if [ "$branch" = "master" ];then
-	branch=f${RawhideVersion}
+        branch=f${RawhideVersion}
     fi
 
     local num=$(sed -e 's/[^0-9]*//' <<< $branch)
 
     case $branch in
-	f* )
-	    echo "fc$num"
-	    ;;
-	e* )
-	    echo "el$num"
-	    ;;
+        f* )
+            echo "fc$num"
+            ;;
+        e* )
+            echo "el$num"
+            ;;
     esac
 }
 
@@ -104,30 +104,30 @@ function branch_to_bodhi_branch(){
 function branches_to_koji_targets(){
     local first=1
     for branch in "$@"; do
-	if [ "$branch" = "master" ];then
-	    branch=f${RawhideVersion}
-	fi
+        if [ "$branch" = "master" ];then
+            branch=f${RawhideVersion}
+        fi
 
-	local num=$(sed -e 's/[^0-9]*//' <<< $branch)
+        local num=$(sed -e 's/[^0-9]*//' <<< $branch)
 
-	if [ $first -eq 1 ];then
-	    first=0
-	else
-	    echo -n " "
-	fi
+        if [ $first -eq 1 ];then
+            first=0
+        else
+            echo -n " "
+        fi
 
-	case $branch in
-	    f* )
-		echo -n "f$num"
-		;;
-	    e* )
-		if [ $num -ge 7 ];then
-		    echo -n "epel$num"
-		else
-		    echo -n "el$num"
-		fi
-		;;
-	esac
+        case $branch in
+            f* )
+                echo -n "f$num"
+                ;;
+            e* )
+                if [ $num -ge 7 ];then
+                    echo -n "epel$num"
+                else
+                    echo -n "el$num"
+                fi
+                ;;
+        esac
     done
 }
 
@@ -147,8 +147,8 @@ fi
 ExitStatus=$EXIT_OK
 for dep in awk koji fedpkg bodhi rpmbuild mock; do
     if ! which $dep &>/dev/null ; then
-	ExitStatus=${EXIT_FATAL_MISSING_DEPENDENCY}
-	EXIT_MSG+=" $dep"
+        ExitStatus=${EXIT_FATAL_MISSING_DEPENDENCY}
+        EXIT_MSG+=" $dep"
     fi
 done
 exit_if_failed "${ExitStatus}" ${EXIT_FATAL_MISSING_DEPENDENCY} "$EXIT_MSG"

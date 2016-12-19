@@ -10,14 +10,14 @@
 ###     -h: Show this help
 ###
 ###     -a: Automatic detected
-###         Version will be detected from latest tag from git. 
+###         Version will be detected from latest tag from git.
 ###
 ###     -w: WAR file
 ###         WAR file to be include in overlay.
 ###
 ###
 ### DESCRIPTION
-###     This program builds overlay zip from 
+###     This program builds overlay zip from
 ###     zanata-client and zanata-server.
 ###
 
@@ -27,7 +27,7 @@ source "${FUNCTION_SCRIPT_FILE}"
 trap exit_print_error EXIT
 PROGRAM_NAME=$(basename $0)
 
-### ENVIRONMENT 
+### ENVIRONMENT
 ###     MYSQL_CONNECTOR_JAVA_VER
 : ${MYSQL_CONNECTOR_JAVA_VER:=5.1.19}
 
@@ -56,17 +56,17 @@ function overlay_pack(){
     cp -R ${DeployCommonDir} standalone/
     cp ${LocalZanataWar} standalone/deployments
     if [[ $distro == wildfly ]];then
-	for url in ${DEPENDENFCIES_wildfly[@]};do
-	    archFile=$(basename $url)
-	    case $archFile in
-		*.zip )
-		    unzip -u ${OverlayWorkDir}/$archFile
-		    ;;
-		*.tar.gz | *.gz )
-		    tar xzvf ${OverlayWorkDir}/$archFile
-		    ;;
-	    esac
-	done
+        for url in ${DEPENDENFCIES_wildfly[@]};do
+            archFile=$(basename $url)
+            case $archFile in
+                *.zip )
+                    unzip -u ${OverlayWorkDir}/$archFile
+                    ;;
+                *.tar.gz | *.gz )
+                    tar xzvf ${OverlayWorkDir}/$archFile
+                    ;;
+            esac
+        done
     fi
 
     zip -x '*.zip' -9 -r ../zanata-$Version-$distro.zip *
@@ -80,24 +80,24 @@ OverlayBuiltArray=()
 
 while getopts "haw:" opt;do
     case $opt in
-	h )
-	    zanata_script_help $0
-	    exit ${EXIT_OK}
-	    ;;
-	a )
-	    AutoDetect=1
-	    ;;
-	w )
-	    if [[ $OPTARG =~ ^/ ]]; then
-		War=$OPTARG
-	    else
-		War=$PWD/$OPTARG
-	    fi
+        h )
+            zanata_script_help $0
+            exit ${EXIT_OK}
+            ;;
+        a )
+            AutoDetect=1
+            ;;
+        w )
+            if [[ $OPTARG =~ ^/ ]]; then
+                War=$OPTARG
+            else
+                War=$PWD/$OPTARG
+            fi
 
-	    ;;
-	* )
-	    failed ${EXIT_FATAL_INVALID_OPTIONS} "$opt"
-	    ;;
+            ;;
+        * )
+            failed ${EXIT_FATAL_INVALID_OPTIONS} "$opt"
+            ;;
     esac
 done
 
@@ -108,10 +108,10 @@ Module=zanata-server
 ## Get Version
 if [ ${AutoDetect} -eq 0 ];then
     if [ -z "${1-}" ];then
-	zanata_script_help $0
-	EXIT_MSG="Requires version. Please either specify version or use option -a"
-	
-	exit ${EXIT_FATAL_INVALID_OPTIONS}
+        zanata_script_help $0
+        EXIT_MSG="Requires version. Please either specify version or use option -a"
+
+        exit ${EXIT_FATAL_INVALID_OPTIONS}
     fi
     Version=$1
 else
@@ -155,10 +155,10 @@ print_status -t "Get WAR" -s "Start"
 LocalZanataWar=${DeployVerDir}/zanata.war
 if [ ! -r ${LocalZanataWar} ];then
     if [ -n "${War-}" ];then
-	cp $War $LocalZanataWar
+        cp $War $LocalZanataWar
     else
-	wget -c -P ${VersionTag} https://github.com/zanata/zanata-server/releases/download/${VersionTag}/zanata-war-${Version}.war
-	cp ${OverlayWorkDir}/$VersionTag/zanata-war-${Version}.war $LocalZanataWar
+        wget -c -P ${VersionTag} https://github.com/zanata/zanata-server/releases/download/${VersionTag}/zanata-war-${Version}.war
+        cp ${OverlayWorkDir}/$VersionTag/zanata-war-${Version}.war $LocalZanataWar
     fi
 fi
 

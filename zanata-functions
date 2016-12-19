@@ -36,10 +36,10 @@ function zanata_help_raw(){
 function zanata_help_list_sections_from_string(){
     local -A idx
     for section in $(sed -n -e '/^[A-Z]/ p' <<<"$1" | xargs); do
-	if [ -z "${idx[$section]-}"   ];then
-	    idx[$section]=1
-	    echo "$section"
-	fi
+        if [ -z "${idx[$section]-}"   ];then
+            idx[$section]=1
+            echo "$section"
+        fi
     done
 }
 
@@ -61,22 +61,22 @@ function zanata_help_section_from_string(){
     IFS=''
     echo "$buf" | while read line ; do
         ## update currentHeader
-	if [[ "$line" =~ ^[A-Z].* ]];then
-	    currentHeader=$(sed -e 's/\s*$//' <<< "$line")
-	fi
+        if [[ "$line" =~ ^[A-Z].* ]];then
+            currentHeader=$(sed -e 's/\s*$//' <<< "$line")
+        fi
 
-	## print if current Header is section
-	if [[ "$currentHeader" = "$section" ]];then
-	    ## print section header if not already
-	    if [[ "$line" =~ $section\s* ]];then
-		if [ $headerPrinted -eq 0 ];then
-		    headerPrinted=1
-		    echo "$line"
-		fi
-	    else
-		echo "$line"
-	    fi
-	fi
+        ## print if current Header is section
+        if [[ "$currentHeader" = "$section" ]];then
+            ## print section header if not already
+            if [[ "$line" =~ $section\s* ]];then
+                if [ $headerPrinted -eq 0 ];then
+                    headerPrinted=1
+                    echo "$line"
+                fi
+            else
+                echo "$line"
+            fi
+        fi
     done
     IFS="${IFS_BAK}"
 }
@@ -98,27 +98,27 @@ function zanata_script_help_short(){
     local buf=$(zanata_help_raw $script)
     local zanataFunc=$(zanata_functions_get_path)
     if [ "$script" != "${zanataFunc}" ];then
-	buf+=$'\n'$'\n'
-	buf+=$(zanata_help_section "${zanataFunc}" "EXIT_STATUS")
-	buf+=$'\n'$'\n'
-	buf+=$(zanata_help_section "${zanataFunc}" "ENVIRONMENT")
+        buf+=$'\n'$'\n'
+        buf+=$(zanata_help_section "${zanataFunc}" "EXIT_STATUS")
+        buf+=$'\n'$'\n'
+        buf+=$(zanata_help_section "${zanataFunc}" "ENVIRONMENT")
     fi
 
     for section in $(zanata_help_list_sections_from_string "$buf" | xargs );do
-	case "$section" in
-	    SYNOPSIS )
-		zanata_help_section_from_string "$section" "$buf"
-		echo
-		;;
-	    ARGUMENTS )
-		zanata_help_section_from_string "$section" "$buf"
-		echo
-		;;
-	    OPTIONS )
-		zanata_help_section_from_string "$section" "$buf"
-		echo
-		;;
-	esac
+        case "$section" in
+            SYNOPSIS )
+                zanata_help_section_from_string "$section" "$buf"
+                echo
+                ;;
+            ARGUMENTS )
+                zanata_help_section_from_string "$section" "$buf"
+                echo
+                ;;
+            OPTIONS )
+                zanata_help_section_from_string "$section" "$buf"
+                echo
+                ;;
+        esac
     done
 }
 
@@ -130,17 +130,15 @@ function zanata_script_help(){
     local buf=$(zanata_help_raw $script)
     local zanataFunc=$(zanata_functions_get_path)
     if [ "$script" != "${zanataFunc}" ];then
-	buf+="
-"
-	buf+=$(zanata_help_section "${zanataFunc}" "EXIT_STATUS")
-	buf+="
-"
-	buf+=$(zanata_help_section "${zanataFunc}" "ENVIRONMENT")
+        buf+=$'\n'$'\n'
+        buf+=$(zanata_help_section "${zanataFunc}" "EXIT_STATUS")
+        buf+=$'\n'$'\n'
+        buf+=$(zanata_help_section "${zanataFunc}" "ENVIRONMENT")
     fi
 
     for section in $(zanata_help_list_sections_from_string "$buf" | xargs );do
-	zanata_help_section_from_string "$section" "$buf"
-	echo
+        zanata_help_section_from_string "$section" "$buf"
+        echo
     done
 }
 
@@ -150,7 +148,7 @@ function zanata_script_help(){
 ###         If ZANATA_QUITE_MODE=1, this function does nothing.
 function echo_stderr(){
     if [[ ${ZANATA_QUIET_MODE-} != 1 ]];then
-	echo "$@" > /dev/stderr
+        echo "$@" > /dev/stderr
     fi
 }
 
@@ -176,33 +174,33 @@ function branch_prepare(){
     ## Get module name
     Module=$(get_module $0)
     if [[ $Module = '-' ]];then
-	## See whether Module is provided in first argument
-	Module=$(get_module ${1-})
-	if [[ $Module = '-' ]];then
-	    if [[ ${JenkinsMode-} -ne 1 ]];then
-		failed ${EXIT_FATAL_UNKNOWN_MODULE} "Module is not given and not in JenkinsMode"
-	    else
-		## Default module in JenkinsMode is the directory name
-		Module=$(basename $PWD)
-	    fi
-	else
-	    ## Module provided in first argument
-	    ShiftOffset=1
-	fi
+        ## See whether Module is provided in first argument
+        Module=$(get_module ${1-})
+        if [[ $Module = '-' ]];then
+            if [[ ${JenkinsMode-} -ne 1 ]];then
+                failed ${EXIT_FATAL_UNKNOWN_MODULE} "Module is not given and not in JenkinsMode"
+            else
+                ## Default module in JenkinsMode is the directory name
+                Module=$(basename $PWD)
+            fi
+        else
+            ## Module provided in first argument
+            ShiftOffset=1
+        fi
     fi
     if [[ ${JenkinsMode-} -eq 0 ]];then
-	print_status " ensure $Module exists"
-	ensure_repo $Module
-	cd ${WORK_ROOT}/${Module}
-	if [[ $branch = "RELEASING" ]];then
-	    WorkingBranch=$(get_releasing_branch)
-	else
-	    WorkingBranch=$branch
-	fi
-	print_status " checking out $WorkingBranch of $Module"
-	checkout_branch $Module $WorkingBranch $WORK_ROOT
+        print_status " ensure $Module exists"
+        ensure_repo $Module
+        cd ${WORK_ROOT}/${Module}
+        if [[ $branch = "RELEASING" ]];then
+            WorkingBranch=$(get_releasing_branch)
+        else
+            WorkingBranch=$branch
+        fi
+        print_status " checking out $WorkingBranch of $Module"
+        checkout_branch $Module $WorkingBranch $WORK_ROOT
     else
-	WorkingBranch=$(get_current_branch)
+        WorkingBranch=$(get_current_branch)
     fi
 
     ## Make sure the work tree is clean
@@ -242,17 +240,17 @@ function detect_module_tag(){
     local jenkinsMode=0
     local quietMode=0
     if [ "$1" = "-q" ];then
-	quietMode=1
-	shift
+        quietMode=1
+        shift
     fi
     if [ "$1" = "-j" ];then
-	jenkinsMode=1;
+        jenkinsMode=1;
     else
-	module=$1
+        module=$1
     fi
     if [ $jenkinsMode -eq 0 ];then
-	ensure_repo_generic ${WORK_ROOT} ${module}
-	cd ${WORK_ROOT}/${module}
+        ensure_repo_generic ${WORK_ROOT} ${module}
+        cd ${WORK_ROOT}/${module}
     fi
     git fetch --tags 1>/dev/stderr
 
@@ -263,7 +261,7 @@ function detect_module_tag(){
     fi
 
     if [ $quietMode -eq 0 ];then
-	print_status " detect_module_tag: ${module:+${module}:} Latest tag: $latestTag"
+        print_status " detect_module_tag: ${module:+${module}:} Latest tag: $latestTag"
     fi
     echo "${latestTag}"
 }
@@ -294,11 +292,11 @@ function detect_module_version(){
 function does_branch_exist(){
     local branch=$1
     if git rev-parse --verify ${branch} &>/dev/null;then
-	echo "yes"
-	return $EXIT_OK
+        echo "yes"
+        return $EXIT_OK
     elif git ls-remote --heads origin $branch | grep $branch >& /dev/null ;then
-	echo "remote"
-	return $EXIT_OK
+        echo "remote"
+        return $EXIT_OK
     fi
     echo "no"
     return $EXIT_RETURN_FALSE
@@ -318,9 +316,9 @@ function ensure_repo_generic(){
     mkdir -p ${parentDir}
     pushd ${parentDir} >/dev/null
     if [ ! -d ${module} ];then
-	git clone "${git_repo_url}"
+        git clone "${git_repo_url}"
         if [ $? -ne 0 ];then
-	    failed ${EXIT_FATAL_MISSING_DEPENDENCY} "[ERROR] Failed to clone ${git_repo_url}"
+            failed ${EXIT_FATAL_MISSING_DEPENDENCY} "[ERROR] Failed to clone ${git_repo_url}"
         fi
     fi
     popd >/dev/null
@@ -338,7 +336,7 @@ function ensure_repo(){
 ###         Exit when <var> is not 0.
 function exit_if_failed(){
     if [ "$1" -ne 0 ];then
-	failed $2 "$3"
+        failed $2 "$3"
     fi
 }
 
@@ -352,33 +350,33 @@ EXIT_MSG=
 function exit_print_error(){
     local exitStatus=$?
     if [[ ${ZANATA_QUIET_MODE-} != 0 ]];then
-	if [ -n "${exitStatus-}" ];then
-	    case $exitStatus in
-		${EXIT_OK} )
-		    echo_stderr "### Done ${EXIT_MSG}"
-		    ;;
-		${EXIT_FATAL_INVALID_OPTIONS} )
-		    zanata_script_help_short $0
-		    echo_stderr "### [FATAL] Invalid Options: ${EXIT_MSG}"
-		    ;;
-		${EXIT_FATAL_MISSING_DEPENDENCY} )
-		    echo_stderr "### [FATAL] Missing dependencies: ${EXIT_MSG}"
-		    ;;
-		${EXIT_FATAL_UNKNOWN_MODULE} )
-		    zanata_script_help_short $0
-		    echo_stderr "### [FATAL] Unknown or Invalid module: ${EXIT_MSG}"
-		    ;;
-		${EXIT_FATAL_FAIL} )
-		    echo_stderr "### [FATAL] Fail: ${EXIT_MSG}"
-		    ;;
-		${EXIT_RETURN_FALSE} )
-		    echo_stderr "### [RETURN] FALSE: ${EXIT_MSG}"
-		    ;;
-		* )
-		    echo_stderr "### Unexpected Exit Code ${exitStatus}: ${EXIT_MSG}"
-		    ;;
-	    esac
-	fi
+        if [ -n "${exitStatus-}" ];then
+            case $exitStatus in
+                ${EXIT_OK} )
+                    echo_stderr "### Done ${EXIT_MSG}"
+                    ;;
+                ${EXIT_FATAL_INVALID_OPTIONS} )
+                    zanata_script_help_short $0
+                    echo_stderr "### [FATAL] Invalid Options: ${EXIT_MSG}"
+                    ;;
+                ${EXIT_FATAL_MISSING_DEPENDENCY} )
+                    echo_stderr "### [FATAL] Missing dependencies: ${EXIT_MSG}"
+                    ;;
+                ${EXIT_FATAL_UNKNOWN_MODULE} )
+                    zanata_script_help_short $0
+                    echo_stderr "### [FATAL] Unknown or Invalid module: ${EXIT_MSG}"
+                    ;;
+                ${EXIT_FATAL_FAIL} )
+                    echo_stderr "### [FATAL] Fail: ${EXIT_MSG}"
+                    ;;
+                ${EXIT_RETURN_FALSE} )
+                    echo_stderr "### [RETURN] FALSE: ${EXIT_MSG}"
+                    ;;
+                * )
+                    echo_stderr "### Unexpected Exit Code ${exitStatus}: ${EXIT_MSG}"
+                    ;;
+            esac
+        fi
     fi
     exit ${exitStatus}
 }
@@ -423,36 +421,21 @@ function get_devel_branch(){
 ###         Print: <module or - for unknown>
 function get_module(){
     case ${1-} in
-	*api)
-	    echo "zanata-api"
-	    ;;
-	*assets)
-	    echo "zanata-assets"
-	    ;;
-	*client)
-	    echo "zanata-client"
-	    ;;
-	*common)
-	    echo "zanata-common"
-	    ;;
-	*jgettext)
-	    echo "jgettext"
-	    ;;
-	*parent)
-	    echo "zanata-parent"
-	    ;;
-	*platform)
-	    echo "zanata-platform"
-	    ;;
-	*openprops)
-	    echo "openprops"
-	    ;;
-	*server)
-	    echo "zanata-server"
-	    ;;
-	*)
-	    echo "-"
-	    ;;
+        *assets)
+            echo "zanata-assets"
+            ;;
+        *jgettext)
+            echo "jgettext"
+            ;;
+        *platform)
+            echo "zanata-platform"
+            ;;
+        *openprops)
+            echo "openprops"
+            ;;
+        *)
+            echo "-"
+            ;;
     esac
 }
 
@@ -462,36 +445,24 @@ function get_module(){
 ###         Print: <SCM Tag>
 function get_artifact_id(){
     case $1 in
-	*api)
-	    echo "api"
-	    ;;
-	*assets)
-	    echo "zanata-assets"
-	    ;;
-	*client)
-	    echo "client"
-	    ;;
-	*common)
-	    echo "common"
-	    ;;
-	*jgettext)
-	    echo "jgettext"
-	    ;;
-	*parent)
-	    echo "zanata-parent"
-	    ;;
-	*platform)
-	    echo "platform"
-	    ;;
-	*openprops)
-	    echo "openprops"
-	    ;;
-	*server)
-	    echo "server"
-	    ;;
-	*)
-	    failed ${EXIT_FATAL_UNKNOWN_MODULE} "get_artifact_id: module $1 not recognized "
-	    ;;
+        *api)
+            echo "api"
+            ;;
+        *assets)
+            echo "zanata-assets"
+            ;;
+        *jgettext)
+            echo "jgettext"
+            ;;
+        *platform)
+            echo "platform"
+            ;;
+        *openprops)
+            echo "openprops"
+            ;;
+        *)
+            failed ${EXIT_FATAL_UNKNOWN_MODULE} "get_artifact_id: module $1 not recognized "
+            ;;
     esac
 }
 
@@ -499,9 +470,9 @@ function get_artifact_id(){
 ###     is_maven_packaging [str]
 function is_maven_packaging(){
     case $1 in
-	pom | jar | maven-plugin | ejb | war | ear | rar | par | zip )
-	    return 0
-	    ;;
+        pom | jar | maven-plugin | ejb | war | ear | rar | par | zip )
+            return 0
+            ;;
     esac
     return 1
 }
@@ -510,9 +481,9 @@ function is_maven_packaging(){
 ###     is_maven_scope [str]
 function is_maven_scope(){
     case $1 in
-	compile | provided | runtime | test | system )
-	    return 0
-	    ;;
+        compile | provided | runtime | test | system )
+            return 0
+            ;;
     esac
     return 1
 }
@@ -538,47 +509,47 @@ function parse_gav(){
     local c5=$(awk -F ':' '{print $5}'<<<$gav)
     local c6=$(awk -F ':' '{print $6}'<<<$gav)
     if [[ -n "$c6" ]];then
-	if ! is_maven_scope $c6 ;then
-	    failed $EXIT_ERROR_FAIL "Invalid scope $c6 from $gav"
-	fi
-	Scope=$c6
+        if ! is_maven_scope $c6 ;then
+            failed $EXIT_ERROR_FAIL "Invalid scope $c6 from $gav"
+        fi
+        Scope=$c6
     fi
 
     if [[ -n "$c5" ]];then
-	## c5 can either be scope or version
-	if [[ -n "$c6" ]];then
-	    Version=$c5
-	elif is_maven_scope $c5 ;then
-	    Scope=$c5
-	else
-	    Version=$c5
-	fi
+        ## c5 can either be scope or version
+        if [[ -n "$c6" ]];then
+            Version=$c5
+        elif is_maven_scope $c5 ;then
+            Scope=$c5
+        else
+            Version=$c5
+        fi
     fi
 
     if [[ -n "$c4" ]];then
-	## c4 can either be classifier, version or scope
-	if [[ -n "$Version" ]];then
-	    Classifier=$c4
-	elif [[ -n "$Scope" ]];then
-	    Version=$c4
-	elif is_maven_scope $c4 ;then
-	    Scope=$c4
-	else
-	    Version=$c4
-	fi
+        ## c4 can either be classifier, version or scope
+        if [[ -n "$Version" ]];then
+            Classifier=$c4
+        elif [[ -n "$Scope" ]];then
+            Version=$c4
+        elif is_maven_scope $c4 ;then
+            Scope=$c4
+        else
+            Version=$c4
+        fi
     fi
 
     if [[ -z "$c3" ]];then
-	failed $EXIT_FATAL_INVALID_OPTIONS "Invalid gav $gav"
+        failed $EXIT_FATAL_INVALID_OPTIONS "Invalid gav $gav"
     fi
 
     ## c3 can either be packaging, or version
     if is_maven_packaging $c3 ;then
-	Packaging=$c3
+        Packaging=$c3
     elif [[ -n "$Version" ]];then
-	failed $EXIT_FATAL_INVALID_OPTIONS "Invalid maven packaging $c3 from gav $gav"
+        failed $EXIT_FATAL_INVALID_OPTIONS "Invalid maven packaging $c3 from gav $gav"
     else
-	Version=$c3
+        Version=$c3
     fi
 
     test -n "$GroupId" -a -n "$ArtifactId" -a -n "$Version"
@@ -612,7 +583,7 @@ function gav_to_nvr(){
     local version=$(sed -e 's/-/_/g'<<<$3)
     local release=${4-}
     if [[ -z $release ]];then
-	release=1
+        release=1
     fi
     echo "$(gav_to_nv $groupId $artifactId $version)-$release"
 }
@@ -637,7 +608,7 @@ function gav_to_maven_artifact_file(){
     local classifier=${5-}
 
     if [ -z "$packaging" ];then
-	packaging=jar
+        packaging=jar
     fi
     echo "${artifactId}-${version}${classifier:+-${classifier}}.${packaging}"
 }
@@ -662,50 +633,50 @@ function print_status(){
     local optionS=0
 
     if [[ ${ZANATA_QUIET_MODE-} = 1 ]];then
-	return
+        return
     fi
 
     while [[ $1 == -* ]]; do
-	case $1 in
-	    -n )
-		optionArray+=( -n )
-		shift
-		optionN=1
-		;;
-	    -q )
-		return
-		;;
-	    -s )
-		optionS=1
-		shift
-		;;
-	    -t )
-		shift
-		Stage=$1
-		shift
-		;;
+        case $1 in
+            -n )
+                optionArray+=( -n )
+                shift
+                optionN=1
+                ;;
+            -q )
+                return
+                ;;
+            -s )
+                optionS=1
+                shift
+                ;;
+            -t )
+                shift
+                Stage=$1
+                shift
+                ;;
         esac
     done
     if [ $ZnatNoEOL -eq 0 ];then
-	## Previous line already ended
-	local caller=$(basename ${BASH_SOURCE[1]})
-	outputStr+="### "
-	if [[ $caller != $ProgramName ]];then
-	    outputStr+="($caller)"
-	fi
+        ## Previous line already ended
+        local caller=$(basename ${BASH_SOURCE[1]})
+        outputStr+="### "
+        if [[ $caller != $ProgramName ]];then
+            outputStr+="($caller)"
+        fi
         outputStr+="[${Stage-}]"
     fi
 
     if [ $optionS -eq 1 ];then
-	outputStr+="=============================="
+        outputStr+="=============================="
     fi
 
     local message="$1"
     outputStr+="$message"
     if [ -n "${optionArray-}" ];then
-	echo_stderr ${optionArray[@]} "$outputStr"
+        echo_stderr ${optionArray[@]} "$outputStr"
     else
-	echo_stderr "$outputStr"
+        echo_stderr "$outputStr"
     fi
     ZnatNoEOL=$optionN
 }
@@ -717,7 +688,7 @@ function print_status(){
 function time-stamp(){
     local DATE_FORMAT=$1
     if [ -z "$DATE_FORMAT" ];then
-	DATE_FORMAT='%F-%R-%N'
+        DATE_FORMAT='%F-%R-%N'
     fi
     date -u +"$DATE_FORMAT"
 }
@@ -776,7 +747,7 @@ mkdir -p "${REPO_LOCAL_DIR}"
 ###
 ###     DEVEL_ROOT
 ###         Root of development project directories.
-###	    For example,  Git Repo zanata-scripts is expected to be in
+###            For example,  Git Repo zanata-scripts is expected to be in
 ###         ${DEVEL_ROOT}/zanata-scripts
 ###         Default: ${HOME}/devel
 : ${DEVEL_ROOT:=$HOME/devel}
@@ -807,30 +778,30 @@ ProgramFullFilename=${BASH_SOURCE[$((${#BASH_SOURCE[@]}-1))]}
 ProgramName=$(basename ${ProgramFullFilename})
 case $ProgramName in
     *-functions )
-	trap exit_print_error EXIT
-	case ${1-} in
-	    help )
-		zanata_script_help $0
-		exit ${EXIT_OK}
-		;;
-	    help-section )
-		zanata_help_section $0 $2
-		exit ${EXIT_OK}
-		;;
-	    help-list-sections )
-		zanata_help_list_sections $0
-		exit ${EXIT_OK}
-		;;
-	    run )
-		shift
-		$@
-		exit $?
-		;;
-	    ?* )
-		failed ${EXIT_FATAL_INVALID_OPTIONS} "Invalid option $1"
-		;;
-	esac
-	zanata_script_help_short $0
+        trap exit_print_error EXIT
+        case ${1-} in
+            help )
+                zanata_script_help $0
+                exit ${EXIT_OK}
+                ;;
+            help-section )
+                zanata_help_section $0 $2
+                exit ${EXIT_OK}
+                ;;
+            help-list-sections )
+                zanata_help_list_sections $0
+                exit ${EXIT_OK}
+                ;;
+            run )
+                shift
+                $@
+                exit $?
+                ;;
+            ?* )
+                failed ${EXIT_FATAL_INVALID_OPTIONS} "Invalid option $1"
+                ;;
+        esac
+        zanata_script_help_short $0
     ;;
 esac
 
