@@ -1,16 +1,55 @@
-#!/bin/bash -e
+#!/bin/bash -eu
 ### NAME
 ###     zanata-artifact-m2repo - Get artifact list from m2 repo
 ###
 ### SYNOPSIS
-###     zanata-artifact-m2repo
-### 
+###     zanata-artifact-m2repo [options]
+###
+###
 ### DESCRIPTION
-###     This program produce artifact list from m2 repo/
+###     This program produces artifact list from m2 repo
+###     By default, it uses ${HOME}/.m2/repository
 ###
-###
+ScriptDir=$(dirname $(readlink  -q -f $0))
+FunctionScriptFile=${ScriptDir}/zanata-functions
+source "$FunctionScriptFile"
+trap exit_print_error EXIT
+
+##=== parsing Start ===
+print_status -t parsing -s "Start"
 
 M2Repo=${HOME}/.m2/repository
+
+###
+### OPTIONS
+while getopts "hd:l" opt;do
+    case $opt in
+###
+###     -h: Show this help
+	h )
+	    zanata_script_help $0
+	    exit ${EXIT_OK}
+	    ;;
+###
+###     -d <Dir>:
+###        m2 repository dir.
+	d )
+	    M2Repo=$OPTARG
+            ;;
+###
+###     -l: repository dir from zanata-maven-release
+###         zanata-maven-release will download the artifacts
+###         to /tmp/zanata/maven-central-release-repo
+	l )
+            M2Repo=/tmp/zanata/maven-central-release-repo
+            ;;
+        * )
+            failed ${EXIT_FATAL_INVALID_OPTIONS} "$opt"
+            ;;
+    esac
+done
+shift $((OPTIND-1))
+[[ ! -r $M2Repo ]] && failed $EXIT_FATAL_MISSING_DEPENDENCY "Directory $M2Repo is not readable"
 
 find $M2Repo -name '*.pom' -printf '%h\n' | sed -e 's|^'$M2Repo/'||' \
     | sed -e 's|\(.*\)/\([^/]*\)|\1:\2|' | sed -e 's|\(.*\)/\([^/]*\)|\1:\2|' \
