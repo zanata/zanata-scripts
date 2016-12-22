@@ -293,7 +293,9 @@ print_status -t release -s "Start"
 
 case $Module in
     zanata-platform )
-        MavenOptionArray+=( -pl build-tools,parent )
+	## List all artifacts that will be released in sonatype
+	## as well as zanata-frontend, which is required for MEAD
+        MavenOptionArray+=( -pl build-tools,parent,api,common,client,server/zanata-frontend )
         ;;
     * )
         ;;
