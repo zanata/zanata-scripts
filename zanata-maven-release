@@ -146,7 +146,7 @@ while getopts "hd:jnPQr:" opt;do
             DevelopmentVersion=$OPTARG
             ;;
 ###
-###     -j: Just use current directory.
+###     -j: Just use current directory (no git checkout)
 ###         This assumes that current directory is <module> work directory.
 ###         and correct branch is checked out.
         j )
