@@ -81,7 +81,7 @@ function nexus_release(){
 
     if [[ $DryRunMode -eq 0 ]];then
         [[ -z $StagingRepositoryBuffer ]] &&\
-            failed $EXIT_FATAL_FAIL " Failed to found artifacts in ${NEXUS_STAGING_PLUGIN}:rc-list"
+            failed $EXIT_FATAL_FAIL " Failed to find artifacts in ${NEXUS_STAGING_PLUGIN}:rc-list"
 
         StagingRepositoryId=$( awk '{print $2}' <<<"$StagingRepositoryBuffer" | tail -n 1)
 
@@ -95,7 +95,7 @@ function nexus_release(){
 
         print_status " StagingRepositoryId=$StagingRepositoryId StagingRepositoryState=$StagingRepositoryState"
     else
-        print_status " [Dry-Run] No StagingRepositoryId, because artifacts not deployed"
+        print_status " [Dry-Run] No StagingRepositoryId, because artifact deployment is skipped"
         ## Provide pseudo Id and state for display
         StagingRepositoryId=StagingRepositoryId
         StagingRepositoryState=OPEN
@@ -123,7 +123,7 @@ print_status -t parsing -s "Start"
 WorkingBranch=
 DevelopmentVersion=
 DryRunMode=0
-JenkinsMode=0
+JustUseCurrentDirectoryMode=0
 PullRequestMode=0
 QuickMode=0
 ReleaseVersion=
@@ -146,11 +146,11 @@ while getopts "hd:jnPQr:" opt;do
             DevelopmentVersion=$OPTARG
             ;;
 ###
-###     -j: Jenkins mode.
+###     -j: Just use current directory.
 ###         This assumes that current directory is <module> work directory.
 ###         and correct branch is checked out.
         j )
-            JenkinsMode=1
+            JustUseCurrentDirectoryMode=1
             ;;
 ###
 ###     -n: Dry-run mode.
@@ -183,7 +183,7 @@ while getopts "hd:jnPQr:" opt;do
             ;;
     esac
 done
-export JenkinsMode
+export JustUseCurrentDirectoryMode
 
 shift $((OPTIND-1))
 
@@ -204,7 +204,7 @@ fi
 
 ArtifactId=$(get_artifact_id $Module)
 
-if [ $JenkinsMode -eq 0 ];then
+if [ $JustUseCurrentDirectoryMode -eq 0 ];then
     cd ${WORK_ROOT}/${Module}
 
     ## Merge with origin

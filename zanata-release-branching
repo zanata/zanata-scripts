@@ -21,7 +21,7 @@ ProgramName=$(basename $0)
 print_status -t parsing -s "Start"
 
 BatchMode=0
-JenkinsMode=0
+JustUseCurrentDirectoryMode=0
 PushMode=0
 
 ###
@@ -41,11 +41,11 @@ while getopts "hjp" opt;do
             BatchMode=1
             ;;
 ###
-###     -j: Jenkins mode
+###     -j: Just use current directory
 ###         This assumes that current directory is <module> work directory,
 ###         and correct branch is checked out.
         j )
-            JenkinsMode=1
+            JustUseCurrentDirectoryMode=1
             ;;
 ###
 ###     -p: Push after commit
@@ -61,7 +61,7 @@ while getopts "hjp" opt;do
 done
 shift $((OPTIND-1))
 
-export JenkinsMode
+export JustUseCurrentDirectoryMode
 
 ## Get Module
 branch_prepare master "$@"
@@ -74,7 +74,7 @@ if [[ -z ${1-} ]];then
 fi
 DevelopmentVersion=$1
 
-if [[ $JenkinsMode -eq 0 ]];then
+if [[ $JustUseCurrentDirectoryMode -eq 0 ]];then
     cd ${WORK_ROOT}/${Module}
 fi
 ArtifactId=$(get_artifact_id $Module)

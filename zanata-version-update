@@ -22,7 +22,7 @@
 ###     -B: Batch mode
 ###         It will NOT ask question and proceed with default choice.
 ###
-###     -j: Jenkins mode.
+###     -j: Just use current directory.
 ###         This assumes that current directory is <module> work directory.
 ###         and correct branch is checked out.
 ###
@@ -49,7 +49,7 @@ ProgramName=$(basename $0)
 ##=== parsing Start ===
 print_status -t "parse" -s "Start"
 BatchMode=0
-JenkinsMode=0
+JustUseCurrentDirectoryMode=0
 PushMode=0
 AllowSnapshot=0
 VersionGoal=use-latest-releases
@@ -65,7 +65,7 @@ while getopts "hBjnp" opt;do
             BatchMode=1
             ;;
         j )
-            JenkinsMode=1
+            JustUseCurrentDirectoryMode=1
             ;;
         n )
             AllowSnapshot=1
@@ -80,7 +80,7 @@ while getopts "hBjnp" opt;do
             ;;
     esac
 done
-export JenkinsMode
+export JustUseCurrentDirectoryMode
 shift $((OPTIND-1))
 
 ## Get Module
@@ -108,7 +108,7 @@ if ! git diff --exit-code ;then
     if [ $BatchMode -eq 0 ];then
         read -p "### Are the change looks alright? Press [Ctrl-C] to break, [Enter] to continue"
     fi
-    git commit -a -m "chore(version): Update Zanata dependencies"
+    git commit -m "chore(version): Update Zanata dependencies" -- "**/pom.xml"
     if [ $PushMode -ge 1 ];then
         git push
     else

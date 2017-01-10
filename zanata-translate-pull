@@ -12,7 +12,7 @@ shopt -s globstar
 ###     -B: Batch mode
 ###         It will NOT ask question and proceed with default choice.
 ###
-###     -j: Jenkins mode.
+###     -j: Just use current directory.
 ###         This assumes that current directory is <module> work directory.
 ###         and correct branch is checked out.
 ###
@@ -33,7 +33,7 @@ PROGRAM_NAME=$(basename $0)
 ##=== parsing Start ===
 print_status -t parsing -s "Start"
 BatchMode=0
-JenkinsMode=0
+JustUseCurrentDirectoryMode=0
 PushMode=0
 
 while getopts "hBjp" opt;do
@@ -46,7 +46,7 @@ while getopts "hBjp" opt;do
             BatchMode=1
             ;;
         j )
-            JenkinsMode=1
+            JustUseCurrentDirectoryMode=1
             ;;
         p )
             PushMode=1
@@ -56,7 +56,7 @@ while getopts "hBjp" opt;do
             ;;
     esac
 done
-export JenkinsMode
+export JustUseCurrentDirectoryMode
 shift $((OPTIND-1))
 
 ## Get Module

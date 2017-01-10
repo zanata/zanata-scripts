@@ -177,10 +177,10 @@ function branch_prepare(){
         ## See whether Module is provided in first argument
         Module=$(get_module ${1-})
         if [[ $Module = '-' ]];then
-            if [[ ${JenkinsMode-} -ne 1 ]];then
-                failed ${EXIT_FATAL_UNKNOWN_MODULE} "Module is not given and not in JenkinsMode"
+            if [[ ${JustUseCurrentDirectoryMode-} -ne 1 ]];then
+                failed ${EXIT_FATAL_UNKNOWN_MODULE} "Module is not given and not in JustUseCurrentDirectoryMode"
             else
-                ## Default module in JenkinsMode is the directory name
+                ## Default module in JustUseCurrentDirectoryMode is the directory name
                 Module=$(basename $PWD)
             fi
         else
@@ -188,7 +188,7 @@ function branch_prepare(){
             ShiftOffset=1
         fi
     fi
-    if [[ ${JenkinsMode-} -eq 0 ]];then
+    if [[ ${JustUseCurrentDirectoryMode-} -eq 0 ]];then
         print_status " ensure $Module exists"
         ensure_repo $Module
         cd ${WORK_ROOT}/${Module}
@@ -237,18 +237,18 @@ function checkout_branch(){
 ###         Print latest tag of module
 function detect_module_tag(){
     local module=
-    local jenkinsMode=0
+    local justUseCurrentDirectoryMode=0
     local quietMode=0
     if [ "$1" = "-q" ];then
         quietMode=1
         shift
     fi
     if [ "$1" = "-j" ];then
-        jenkinsMode=1;
+        justUseCurrentDirectoryMode=1;
     else
         module=$1
     fi
-    if [ $jenkinsMode -eq 0 ];then
+    if [ $justUseCurrentDirectoryMode -eq 0 ];then
         ensure_repo_generic ${WORK_ROOT} ${module}
         cd ${WORK_ROOT}/${module}
     fi
@@ -256,7 +256,7 @@ function detect_module_tag(){
 
     ## This tell you the latest tag of all branch.
     local latestTag=$(git describe --tags $( git rev-list --tags --max-count 1))
-    if [ $jenkinsMode -eq 0 ];then
+    if [ $justUseCurrentDirectoryMode -eq 0 ];then
         cd - >/dev/null
     fi
 

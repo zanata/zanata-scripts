@@ -22,7 +22,7 @@
 ### OPTIONS
 ###     -h: Show this help.
 ###
-###     -j: Jenkins mode.
+###     -j: Just use current directory.
 ###         This assumes that current directory is <module> work directory.
 ###         and correct branch is checked out.
 ###
@@ -74,7 +74,7 @@ function version_greater(){
 
 ##== parsing Start ==
 print_status -t "parse" -s "Start"
-JenkinsMode=0
+JustUseCurrentDirectoryMode=0
 VerboseMode=0
 JiraGetReleaseNoteOptArray=()
 
@@ -85,7 +85,7 @@ while getopts "hjv" opt;do
              exit ${EXIT_OK}
              ;;
          j )
-             JenkinsMode=1
+             JustUseCurrentDirectoryMode=1
              ;;
          v )
              VerboseMode=1
@@ -97,7 +97,7 @@ while getopts "hjv" opt;do
     esac
 done
 shift $((OPTIND-1))
-export JenkinsMode
+export JustUseCurrentDirectoryMode
 
 ## Get Module
 branch_prepare RELEASING "$@"
@@ -107,7 +107,7 @@ print_status " Module=$Module"
 ArtifactId=$(get_artifact_id $Module)
 Version=$1
 
-if [ $JenkinsMode -eq 0 ];then
+if [ $JustUseCurrentDirectoryMode -eq 0 ];then
     cd "$WORK_ROOT/$Module"
 fi
 
