@@ -3,12 +3,12 @@
 ###     zanata-artifact-m2repo - Get artifact list from m2 repo
 ###
 ### SYNOPSIS
-###     zanata-artifact-m2repo [options]
-###
+###     zanata-artifact-m2repo [options] <dir>
+###     zanata-artifact-m2repo -l
+###     zanata-artifact-m2repo -t
 ###
 ### DESCRIPTION
 ###     This program produces artifact list from m2 repo
-###     By default, it uses ${HOME}/.m2/repository
 ###
 ScriptDir=$(dirname $(readlink  -q -f $0))
 FunctionScriptFile=${ScriptDir}/zanata-functions
@@ -17,38 +17,40 @@ trap exit_print_error EXIT
 
 ##=== parsing Start ===
 print_status -t parsing -s "Start"
-
-M2Repo=${HOME}/.m2/repository
+M2Repo=
 
 ###
 ### OPTIONS
-while getopts "hd:l" opt;do
+while getopts "hlt" opt;do
     case $opt in
 ###
 ###     -h: Show this help
 	h )
 	    zanata_script_help $0
-	    exit ${EXIT_OK}
+	    exit $EXIT_OK
 	    ;;
 ###
-###     -d <Dir>:
-###        m2 repository dir.
-	d )
-	    M2Repo=$OPTARG
-            ;;
+###     -l: Use maven default m2 repository directory, i.e.
+###        $HOME/.m2/repository
+        l )
+            M2Repo=$HOME/.m2/repository
+	    ;;
 ###
-###     -l: repository dir from zanata-maven-release
+###     -t: Use repository dir dump from zanata-maven-release
 ###         zanata-maven-release will download the artifacts
-###         to /tmp/zanata/maven-central-release-repo
-	l )
-            M2Repo=/tmp/zanata/maven-central-release-repo
-            ;;
-        * )
-            failed ${EXIT_FATAL_INVALID_OPTIONS} "$opt"
+###         to $REPO_LOCAL_DIR, by default, it is
+###         /tmp/zanata/maven-central-release-repo
+        t )
+            M2Repo=$REPO_LOCAL_DIR
+	    ;;
+	* )
+            failed $EXIT_FATAL_INVALID_OPTIONS "$opt"
             ;;
     esac
 done
 shift $((OPTIND-1))
+[[ -z $M2Repo ]] && failed $EXIT_FATAL_INVALID_OPTIONS "Please either specify m2 directory, or use option -l or -t"
+
 [[ ! -r $M2Repo ]] && failed $EXIT_FATAL_MISSING_DEPENDENCY "Directory $M2Repo is not readable"
 
 find $M2Repo -name '*.pom' -printf '%h\n' | sed -e 's|^'$M2Repo/'||' \
