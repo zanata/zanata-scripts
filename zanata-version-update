@@ -22,7 +22,7 @@
 ###     -B: Batch mode
 ###         It will NOT ask question and proceed with default choice.
 ###
-###     -j: Just use current directory.
+###     -j: Just use current directory (no git checkout)
 ###         This assumes that current directory is <module> work directory.
 ###         and correct branch is checked out.
 ###
@@ -108,7 +108,7 @@ if ! git diff --exit-code ;then
     if [ $BatchMode -eq 0 ];then
         read -p "### Are the change looks alright? Press [Ctrl-C] to break, [Enter] to continue"
     fi
-    git commit -m "chore(version): Update Zanata dependencies" -- "**/pom.xml"
+    git commit -a -m "chore(version): Update Zanata dependencies"
     if [ $PushMode -ge 1 ];then
         git push
     else
