@@ -31,16 +31,20 @@ PROGRAM_NAME=$(basename $0)
 ###     MYSQL_CONNECTOR_JAVA_VER
 : ${MYSQL_CONNECTOR_JAVA_VER:=5.1.19}
 
-DEPENDENFCIES_wildfly=(https://bintray.com/artifact/download/sflanigan/generic/wildfly-module-hibernate-main-4.2.20.Final.zip)
+###
+###     WILDFLY_CLUSTERING_SINGLETON_VER
+: ${WILDFLY_CLUSTERING_SINGLETON_VER:=10.1.0.Final}
+
 
 ##=== function definition Start ===
 function maven_jar_download(){
-    local name=$1
-    local version=$2
-    local relativeDir=${3-}
+    local remotePath=$1
+    local artifactId=$2
+    local version=$3
+    local relativeDir=${4-}
     local destDir=${OverlayWorkDir}/${relativeDir}
     mkdir -p $destDir
-    wget -c -P ${destDir} "http://central.maven.org/maven2/mysql/${name}/${version}/${name}-${version}.jar"
+    wget -c -P ${destDir} "http://central.maven.org/maven2/$remotePath/$artifactId/$version/$artifactId-$version.jar"
 }
 
 function overlay_pack(){
@@ -48,25 +52,21 @@ function overlay_pack(){
     mkdir -p $OverlayWorkDir/$VersionTag/$distro
     cd $OverlayWorkDir/$VersionTag/$distro
     print_status -t "overlay $distro" -s "Start"
+    local zanataOverlayDir=$RepoDir/server/zanata-overlay/
 
-    cp -R ${ModuleDir}/zanata-overlay/common/bin .
-    cp -R ${ModuleDir}/zanata-overlay/common/standalone .
-    cp -R ${ModuleDir}/zanata-overlay/distros/$distro/standalone .
+    print_status "Copy overlay files"
+    cp -vR $zanataOverlayDir/common/bin .
+    cp -vR $zanataOverlayDir/common/standalone .
+    cp -vR $zanataOverlayDir/distros/$distro/standalone .
+
+    print_status "Copy deployment files"
     mkdir -p standalone/deployments
     cp -R ${DeployCommonDir} standalone/
     cp ${LocalZanataWar} standalone/deployments
-    if [[ $distro == wildfly ]];then
-        for url in ${DEPENDENFCIES_wildfly[@]};do
-            archFile=$(basename $url)
-            case $archFile in
-                *.zip )
-                    unzip -u ${OverlayWorkDir}/$archFile
-                    ;;
-                *.tar.gz | *.gz )
-                    tar xzvf ${OverlayWorkDir}/$archFile
-                    ;;
-            esac
-        done
+
+    if [[ -d $OverlayWorkDir/modules ]];then
+	print_status "Copy module files"
+	cp -R ${OverlayWorkDir}/modules .
     fi
 
     zip -x '*.zip' -9 -r ../zanata-$Version-$distro.zip *
@@ -102,8 +102,8 @@ while getopts "haw:" opt;do
 done
 
 shift $((OPTIND-1))
-## Get Module
-Module=zanata-server
+## Get RepoName
+RepoName=zanata-platform
 
 ## Get Version
 if [ ${AutoDetect} -eq 0 ];then
@@ -116,21 +116,22 @@ if [ ${AutoDetect} -eq 0 ];then
     Version=$1
 else
     ## Auto detect version
-    Version=$(detect_module_version ${Module})
-    print_status " ${Module} version: $Version"
+    Version=$(detect_module_version ${RepoName})
+    print_status " ${RepoName} version: $Version"
 
     test -n "$Version"
-    exit_if_failed "$?" ${EXIT_FATAL_FAIL} "Failed to get version from ${Module} git repo"
+    exit_if_failed "$?" ${EXIT_FATAL_FAIL} "Failed to get version from ${RepoName} git repo"
 fi
 
-VersionTag=server-$Version
+VersionTag=platform-$Version
 
 ##=== prepare Start ===
 print_status -t prepare  -s "Start"
 ##  Ensure repo
-ensure_repo $Module
-ModuleDir=${WORK_ROOT}/${Module}
-cd ${ModuleDir}
+ensure_repo $RepoName
+RepoDir=${WORK_ROOT}/${RepoName}
+cd ${RepoDir}
+git fetch
 git checkout $VersionTag
 
 ##=== Download Dependencies Start ===
@@ -141,14 +142,11 @@ cd ${OverlayWorkDir}
 DeployVerDir=${OverlayWorkDir}/$VersionTag/standalone/deployments
 mkdir -p ${DeployVerDir}
 
-for depUrl in "${DEPENDENFCIES_wildfly[@]}";do
-    wget -c "$depUrl"
-done
-
 DeployCommonDir=${OverlayWorkDir}/deployments
 mkdir -p ${DeployCommonDir}
-maven_jar_download mysql-connector-java ${MYSQL_CONNECTOR_JAVA_VER}
+maven_jar_download mysql mysql-connector-java ${MYSQL_CONNECTOR_JAVA_VER}
 cp mysql-connector-java-${MYSQL_CONNECTOR_JAVA_VER}.jar ${DeployCommonDir}/mysql-connector-java.jar
+
 
 ##=== Get War Start ===
 print_status -t "Get WAR" -s "Start"
@@ -164,7 +162,7 @@ fi
 
 ##=== zip Start ===
 print_status -t "zip" -s "Start"
-overlay_pack eap-6
+overlay_pack eap-7
 overlay_pack wildfly
 
 ##=== summary Start ===
