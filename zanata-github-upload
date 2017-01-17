@@ -41,8 +41,8 @@ so running this program multiple times creates multiple draft releases.
 =item B<-v>
 
 Verbose mode.
-This shows detail debuge messages like which module it is processing,
-and full HTTP responde structure.
+This shows detail debug messages like which module it is processing,
+and full HTTP respond structure.
 
 =back
 
@@ -52,19 +52,29 @@ This program uploads the files to GitHub release.
 It will create the release if it does not exists,
 then upload files to GitHub release.
 
-Before uploading, the release tag (e.g. server-4.0.0) should exist,
+Before uploading, the release tag (e.g. platform-4.0.0) should exist,
 otherwise it prints error.
 
 You can try this program by creating draft releases.
 Specify option C<-d> to create draft release.
 
-GitHub credentials are required for uploading so this program loads
-the GitHub credentials in ${HOME}/.config/zanata-scripts.ini.
-The format is explained in section FILES.
-
 Note that this program does not yet find existing draft releases,
-so you need to login GitHub Web UI to remove drafts or promote drafts as
-real releases.
+so you need to login GitHub Web UI to remove drafts or promote drafts to
+official releases.
+
+GitHub credentials are required for creating release and upload files.
+This program obtains the credentials by following order:
+Use either
+    1) Environment variables:
+       ZANATA_GITHUB_USERNAME
+       ZANATA_GITHUB_TOKEN
+
+    2) Configuration file:
+       ${HOME}/.config/zanata-scripts.ini.
+       The format is explained in section FILES.
+
+If credentials cannot be found in either way, this program prints error messages.
+
 
 =head1 FILES
 
@@ -110,18 +120,11 @@ use JSON::XS;
 use URI::Escape;
 $HTTP::Request::Common::DYNAMIC_FILE_UPLOAD = 1;
 
+my $githubUsername=undef;
+my $githubToken=undef;
+
 ##== Function definition ==
 my $zanataScriptsIni = $ENV{'HOME'} . '/.config/zanata-scripts.ini';
-
-sub github_credential_has_value {
-    die "github_username is not defined, "
-    . "please put 'github_username=<USERNAME>' in $zanataScriptsIni"
-    unless zanata_scripts_ini_key_get_value('github_username');
-
-    die "github_token is not defined, "
-    . "please put 'github_token=<TOKEN>' in $zanataScriptsIni"
-    unless zanata_scripts_ini_key_get_value('github_token');
-}
 
 sub github_rest_response {
     my ( $method, $path, $header, $content, $contentCb, $readSizeHint ) = @_;
@@ -133,14 +136,10 @@ sub github_rest_response {
 
 sub github_authenticated_rest_response {
     my ( $method, $path, $header, $content, $contentCb, $readSizeHint ) = @_;
-    github_credential_has_value;
 
-    my $url =
-    "https://"
-    . zanata_scripts_ini_key_get_value('github_username') . ':'
-    . zanata_scripts_ini_key_get_value('github_token') . '@'
-    . GITHUB_REST_SERVER
-    . $path;
+    my $url =  "https://$githubUsername:$githubToken@"
+        . GITHUB_REST_SERVER
+        . $path;
 
     return rest_response(  $method, $url, $header, $content, $contentCb, $readSizeHint );
 }
@@ -164,20 +163,36 @@ my ($artifact) = split( /-/, $releaseTag, 2 );
 
 ## module is actually GitHub repository
 ## such as zanata-parent, zanata-server
-my $module = `$scriptDir/zanata-functions run get_module $artifact`;
+my $module = `$scriptDir/zanata-functions run get_module $artifact 2>/dev/null`;
 chomp($module);
 print STDERR "module=$module\n" if $verbose;
 shift;
 die "Invalid releaseTag $releaseTag. \n"
-    . "  Valid releaseTag looks like server-4.0.0 or client-4.0.0"
-	if ($module eq '-');
+    . "  Valid releaseTag looks like platform-4.0.0"
+    if ($module eq '-');
 
 ## Check whether the files are readable.
 foreach my $f (@ARGV) {
     die "$f is not readable. $!" unless ( -r $f );
 }
 
-zanata_scripts_ini_load;
+## Obtaining credential
+$githubUsername=$ENV{'ZANATA_GITHUB_USERNAME'};
+$githubToken=$ENV{'ZANATA_GITHUB_TOKEN'};
+
+if (( $githubUsername eq '') or ( $githubToken eq '')){
+    zanata_scripts_ini_load;
+
+    if ($githubUsername eq ''){
+	$githubUsername=zanata_scripts_ini_key_get_value('github_username');
+	die "Please provide github_username" unless $githubUsername;
+    }
+
+    if ($githubToken eq ''){
+	$githubToken=zanata_scripts_ini_key_get_value('github_token');
+	die "Please provide github_token" unless $githubToken;
+    }
+}
 
 ##== Check Existing Tags ==
 my $response = github_rest_response( 'GET',
@@ -239,12 +254,8 @@ sub github_upload {
     my $name = basename($filePath);
     my $content = read_file( $filePath, binmode => ':raw' );
 
-    github_credential_has_value;
-
     my $url =
-        $uploadProtocol . "://"
-      . zanata_scripts_ini_key_get_value('github_username') . ':'
-      . zanata_scripts_ini_key_get_value('github_token') . '@'
+        "$uploadProtocol://$githubUsername:$githubToken@"
       . $uploadPath
       . "?name="
       . uri_escape($name);

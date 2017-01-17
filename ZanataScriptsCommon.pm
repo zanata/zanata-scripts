@@ -76,9 +76,9 @@ my %zanataScriptsIniHash;
 my $zanataScriptsIni = $ENV{'HOME'} . '/.config/zanata-scripts.ini';
 
 sub zanata_scripts_ini_load {
-    die "$zanataScriptsIni not found" unless ( -r $zanataScriptsIni );
+    die "zanata-scripts.ini not found at $zanataScriptsIni" unless ( -r $zanataScriptsIni );
     open( my $fh, '<', $zanataScriptsIni )
-      or die "Cannont open $zanataScriptsIni: $!";
+      or die "Cannon read $zanataScriptsIni: $!";
     while ( my $line = <$fh> ) {
         chomp $line;
         if ( $line =~ /^[A-Za-z].*=.*$/ ) {
