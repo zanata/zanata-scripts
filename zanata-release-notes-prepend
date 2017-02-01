@@ -105,9 +105,11 @@ shift $ShiftOffset
 print_status " Module=$Module"
 
 ArtifactId=$(get_artifact_id $Module)
-Version=$1
+Version=${1-}
 
-if [ $JustUseCurrentDirectoryMode -eq 0 ];then
+[[ -z $Version ]] && failed $EXIT_FATAL_INVALID_OPTIONS "Please specify Version"
+
+if [[ $JustUseCurrentDirectoryMode -eq 0 ];then
     cd "$WORK_ROOT/$Module"
 fi
 
