@@ -112,7 +112,7 @@ if [ "${hasBranch[release]-}" = "" ];then
 fi
 
 ##=== branching Start ===
-if [ ! "${hasBranch[legacy]}" = "" ];then
+if [ ! "${hasBranch[legacy]-}" = "" ];then
     print_status -t "release->legacy" -s "Start"
     git checkout "${hasBranch[legacy]}"
     print_status " Point 'legacy' at previous 'release'"
