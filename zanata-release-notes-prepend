@@ -109,7 +109,7 @@ Version=${1-}
 
 [[ -z $Version ]] && failed $EXIT_FATAL_INVALID_OPTIONS "Please specify Version"
 
-if [[ $JustUseCurrentDirectoryMode -eq 0 ];then
+if [[ $JustUseCurrentDirectoryMode -eq 0 ]];then
     cd "$WORK_ROOT/$Module"
 fi
 
