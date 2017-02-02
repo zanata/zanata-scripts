@@ -163,7 +163,8 @@ function echo_stderr(){
 ###              3. JenkinMode=1 (which branch is ready already)
 ###
 ###         Assigned Variables:
-###            Module: module name
+###            RepoName: Repository name
+###            Module: (Deprecated) Same as RepoName.
 ###            ShiftOffset: how many argument need to be shift
 ###         Prints: shift offset (either 0 or 1)
 function branch_prepare(){
@@ -172,39 +173,40 @@ function branch_prepare(){
     ShiftOffset=0
 
     ## Get module name
-    Module=$(get_module $0)
-    if [[ $Module = '-' ]];then
-        ## See whether Module is provided in first argument
-        Module=$(get_module ${1-})
-        if [[ $Module = '-' ]];then
+    RepoName=$(get_module $0)
+    if [[ $RepoName = '-' ]];then
+        ## See whether RepoName is provided in first argument
+        RepoName=$(get_module ${1-})
+        if [[ $RepoName = '-' ]];then
             if [[ ${JustUseCurrentDirectoryMode-} -ne 1 ]];then
-                failed ${EXIT_FATAL_UNKNOWN_MODULE} "Module is not given and not in JustUseCurrentDirectoryMode"
+                failed ${EXIT_FATAL_UNKNOWN_MODULE} "RepoName is not given and not in JustUseCurrentDirectoryMode"
             else
                 ## Default module in JustUseCurrentDirectoryMode is the directory name
-                Module=$(basename $PWD)
+                RepoName=$(basename $PWD)
             fi
         else
-            ## Module provided in first argument
+            ## RepoName provided in first argument
             ShiftOffset=1
         fi
     fi
     if [[ ${JustUseCurrentDirectoryMode-} -eq 0 ]];then
-        print_status " ensure $Module exists"
-        ensure_repo $Module
-        cd ${WORK_ROOT}/${Module}
+        print_status " ensure $RepoName exists"
+        ensure_repo $RepoName
+        cd ${WORK_ROOT}/${RepoName}
         if [[ $branch = "RELEASING" ]];then
             WorkingBranch=$(get_releasing_branch)
         else
             WorkingBranch=$branch
         fi
-        print_status " checking out $WorkingBranch of $Module"
-        checkout_branch $Module $WorkingBranch $WORK_ROOT
+        print_status " checking out $WorkingBranch of $RepoName"
+        checkout_branch $RepoName $WorkingBranch $WORK_ROOT
     else
         WorkingBranch=$(get_current_branch)
     fi
 
     ## Make sure the work tree is clean
     git clean -fdX
+    Module=$RepoName
 }
 
 
@@ -217,15 +219,15 @@ function get_current_branch(){
 
 
 ###
-###     checkout_branch <module> <branch> [parentDir]
-###         checkout <branch> for <module>.
-###         Note that this won't change to the module directory.
+###     checkout_branch <repoName> <branch> [parentDir]
+###         checkout <branch> for <repoName>.
+###         Note that this won't change to the repoName directory.
 function checkout_branch(){
-    local module=$1
+    local repoName=$1
     local branch=$2
     local parentDir=${3-}
     [ -z $parentDir ] && parentDir=${PWD}
-    cd ${parentDir}/${module}
+    cd ${parentDir}/${repoName}
     git remote update origin > /dev/stderr
     git checkout ${branch} > /dev/stderr
     git pull > /dev/stderr
@@ -399,7 +401,7 @@ function failed(){
 ###             'release' if that branch exists; otherwise "master"
 function get_releasing_branch(){
     local ret=$(does_branch_exist release)
-    if [ "$ret" = "yes" ] ;then
+    if [[ $ret = yes || $ret = remote ]] ;then
         echo "release"
         return 0
     fi

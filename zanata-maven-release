@@ -3,7 +3,7 @@
 ###     zanata-maven-release - Release in maven
 ###
 ### SYNOPSIS
-###     zanata-maven-release [options] <Module>
+###     zanata-maven-release [options] <RepoName>
 ###     zanata-maven-release-assets    [options]
 ###     zanata-maven-release-platform    [options]
 ###
@@ -187,13 +187,13 @@ export JustUseCurrentDirectoryMode
 
 shift $((OPTIND-1))
 
-## Get Module
+## Get RepoName
 branch_prepare RELEASING "$@"
 shift $ShiftOffset
-print_status " Module=$Module"
+print_status " RepoName=$RepoName"
 
 ## Final parsing check
-if [ "$Module" = "zanata-assets" ];then
+if [ "$RepoName" = "zanata-assets" ];then
     if [ -z "$ReleaseVersion" ];then
         failed $EXIT_FATAL_INVALID_OPTIONS "assets requires -r <releaseVersion>"
     fi
@@ -202,10 +202,10 @@ if [ "$Module" = "zanata-assets" ];then
     fi
 fi
 
-ArtifactId=$(get_artifact_id $Module)
+ArtifactId=$(get_artifact_id $RepoName)
 
 if [ $JustUseCurrentDirectoryMode -eq 0 ];then
-    cd ${WORK_ROOT}/${Module}
+    cd ${WORK_ROOT}/${RepoName}
 
     ## Merge with origin
     print_status " Branch ${WorkingBranch}: merge origin/$WorkingBranch"
@@ -291,7 +291,7 @@ fi
 ## zanata-assets does not work is release-plugin anyway.
 print_status -t release -s "Start"
 
-case $Module in
+case $RepoName in
     zanata-platform )
 	## List all artifacts that will be released in sonatype
 	## as well as zanata-frontend, which is required for MEAD
@@ -318,7 +318,7 @@ nexus_release
 ## Set to development version
 print_status " Set to development version"
 run_command sed -i -e 's|<tag>.*</tag>|<tag>HEAD</tag>|' $(find . -name pom.xml | xargs )
-run_command mvn "${MavenOptionArray[@]}" -pl build-tools,parent versions:set -DnewVersion=$DevelopmentVersion
+run_command mvn "${MavenOptionArray[@]}" versions:set -DnewVersion=$DevelopmentVersion
 run_command mvn -N scm:checkin -Dmessage="chore(version): new snapshot version ${DevelopmentVersion}" -DpushChanges=true
 
 ## Push the tags
