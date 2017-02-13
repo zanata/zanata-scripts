@@ -47,7 +47,7 @@ trap exit_print_error EXIT
 
 ## Options that will be run in forked build
 ## i.e options that will be passed as -Darguments for maven-release-plugin
-MavenReleaseForkedArgumentArray=( -e -Dgwt.validateOnly -DskipTests -DskipArqTests -DskipFuncTests -Dfindbugs.skip)
+MavenReleaseForkedArgumentArray=( -T 1 -e -Dgwt.validateOnly -DskipTests -DskipArqTests -DskipFuncTests -Dfindbugs.skip)
 
 ## Maven options
 MavenOptionArray=( "${MavenReleaseForkedArgumentArray[@]}" -Doptimise -Dmaven.repo.local=$REPO_LOCAL_DIR -Dgpg.useagent -DupdateReleaseInfo=true -Dresume=false "-Darguments=${MavenReleaseForkedArgumentArray[*]}")
@@ -295,7 +295,8 @@ case $RepoName in
     zanata-platform )
 	## List all artifacts that will be released in sonatype
 	## as well as zanata-frontend, which is required for MEAD
-        MavenOptionArray+=( -pl build-tools,parent,api,common,client,server/zanata-frontend )
+	MavenTagProjects+=( -pl build-tools,parent)
+	MavenReleaseProjects+=( -pl build-tools,parent,api,api/zanata-common-api,common,common/zanata-adapter-glossary,common/zanata-adapter-po,common/zanata-adapter-properties,common/zanata-adapter-xliff,common/zanata-common-util,client,client/stub-server,client/zanata-cli,client/zanata-client-commands,client/zanata-maven-plugin,client/zanata-rest-client,server/zanata-frontend )
         ;;
     * )
         ;;
@@ -304,13 +305,13 @@ esac
 ## Set to release version
 print_status " Set release version to $ReleaseVersion"
 sed -i -e 's|<tag>HEAD</tag>|<tag>'$ArtifactId'-'$ReleaseVersion'</tag>|' $(find . -name pom.xml | xargs )
-run_command mvn "${MavenOptionArray[@]}" versions:set -DnewVersion=$ReleaseVersion
+run_command mvn "${MavenOptionArray[@]}" "${MavenTagProjects[@]}" versions:set -DnewVersion=$ReleaseVersion
 run_command mvn scm:checkin -Dmessage="chore(version): set version ${ReleaseVersion}" -DpushChanges=false
 run_command git tag $ArtifactId-$ReleaseVersion
 
 ## Deploy for release
 print_status " deploy for release"
-run_command mvn "${MavenOptionArray[@]}" -Prelease deploy
+run_command mvn "${MavenOptionArray[@]}" "${MavenReleaseProjects[@]}" -Prelease deploy
 
 ## Release with sonatype
 nexus_release
@@ -318,7 +319,7 @@ nexus_release
 ## Set to development version
 print_status " Set to development version"
 run_command sed -i -e 's|<tag>.*</tag>|<tag>HEAD</tag>|' $(find . -name pom.xml | xargs )
-run_command mvn "${MavenOptionArray[@]}" versions:set -DnewVersion=$DevelopmentVersion
+run_command mvn "${MavenOptionArray[@]}" "${MavenTagProjects[@]}" versions:set -DnewVersion=$DevelopmentVersion
 run_command mvn -N scm:checkin -Dmessage="chore(version): new snapshot version ${DevelopmentVersion}" -DpushChanges=true
 
 ## Push the tags
