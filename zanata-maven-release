@@ -307,7 +307,7 @@ print_status " Set release version to $ReleaseVersion"
 sed -i -e 's|<tag>HEAD</tag>|<tag>'$ArtifactId'-'$ReleaseVersion'</tag>|' $(find . -name pom.xml | xargs )
 run_command mvn "${MavenOptionArray[@]}" "${MavenTagProjects[@]}" versions:set -DnewVersion=$ReleaseVersion
 run_command mvn scm:checkin -Dmessage="chore(version): set version ${ReleaseVersion}" -DpushChanges=false
-run_command git tag $ArtifactId-$ReleaseVersion
+run_command git tag -a -m "tag $ArtifactId-$ReleaseVersion" $ArtifactId-$ReleaseVersion
 
 ## Deploy for release
 print_status " deploy for release"
