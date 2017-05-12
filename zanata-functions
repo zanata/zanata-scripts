@@ -698,34 +698,45 @@ function time-stamp(){
 ###
 ### EXIT_STATUS
 ###     Success:
-###         EXIT_OK
+###         EXIT_OK (0)
 declare EXIT_OK=0
 
 ###
 ###     Fatal that should stop immediately:
-###         EXIT_FATAL_UNSPECIFIED: Unspecified fatal error,
+###         EXIT_FATAL_UNSPECIFIED (1)
+###             Unspecified fatal error,
 ###             usually indicate a bug in our scripts.
 declare EXIT_FATAL_UNSPECIFIED=1
 
-###         EXIT_FATAL_INVALID_OPTIONS: Wrong options were given
+###         EXIT_FATAL_INVALID_OPTIONS (3)
+###             Wrong options were given.
 declare EXIT_FATAL_INVALID_OPTIONS=3
 
-###         EXIT_FATAL_MISSING_DEPENDENCY: Cannot find dependency
+###         EXIT_FATAL_MISSING_DEPENDENCY (4)
+###             Cannot find dependencY.
 declare EXIT_FATAL_MISSING_DEPENDENCY=4
 
-###         EXIT_FATAL_UNKNOWN_MODULE: Invalid or unknown module name.
+###         EXIT_FATAL_UNKNOWN_MODULE (5)
+###             Invalid or unknown module or repository name.
 declare EXIT_FATAL_UNKNOWN_MODULE=5
 
-###         EXIT_FATAL_FAIL: Script detected that a fatal error occurred.
+###         EXIT_FATAL_FAIL (6)
+###             Script detected that a fatal error occurred.
 declare EXIT_FATAL_FAIL=6
 
 ###
 ###     Error that need to stop before next stage:
-###         EXIT_ERROR_FAIL: Script detected that an error occurred.
+###         EXIT_ERROR_FAIL (20)
+###             Script detected that an error occurred.
 declare EXIT_ERROR_FAIL=20
 
-###     Return value, should not print error messages:
-###         EXIT_RETURN_FALSE: Script should return false
+###
+###     Return value, not errors:
+###         EXIT_RETURN_FALSE (40)
+###             Indicate the program did not have error, nor failed,
+###             just not doing what you might hope it to do.
+###             For example, zanata-release-notes-prepend returns EXIT_RETURN_FALSE
+###             when the version-name exists, but no issues.
 declare EXIT_RETURN_FALSE=40
 
 
