@@ -77,7 +77,7 @@ function nexus_release(){
     print_status -t nexus-release -s "Start"
 
     print_status " Obtaining StagingRepositoryId"
-    StagingRepositoryBuffer=$(run_command mvn $NEXUS_STAGING_OPTIONS ${NEXUS_STAGING_PLUGIN}:rc-list | sed -n  -e '/orgzanata-.* / p' )
+    StagingRepositoryBuffer=$(run_command ./mvnw $NEXUS_STAGING_OPTIONS ${NEXUS_STAGING_PLUGIN}:rc-list | sed -n  -e '/orgzanata-.* / p' )
 
     if [[ $DryRunMode -eq 0 ]];then
         [[ -z $StagingRepositoryBuffer ]] &&\
@@ -105,13 +105,13 @@ function nexus_release(){
 
     if [ "$StagingRepositoryState" = "OPEN" ];then
         print_status " nexus-staging:close"
-        run_command mvn $NEXUS_STAGING_OPTIONS ${NEXUS_STAGING_PLUGIN}:close \
+        run_command ./mvnw $NEXUS_STAGING_OPTIONS ${NEXUS_STAGING_PLUGIN}:close \
             -DstagingRepositoryId=${StagingRepositoryId}
 
     fi
 
     print_status " nexus-staging:release"
-    run_command mvn $NEXUS_STAGING_OPTIONS ${NEXUS_STAGING_PLUGIN}:release \
+    run_command ./mvnw $NEXUS_STAGING_OPTIONS ${NEXUS_STAGING_PLUGIN}:release \
         -DstagingRepositoryId=${StagingRepositoryId}
 
 }
@@ -305,13 +305,13 @@ esac
 ## Set to release version
 print_status " Set release version to $ReleaseVersion"
 sed -i -e 's|<tag>HEAD</tag>|<tag>'$ArtifactId'-'$ReleaseVersion'</tag>|' $(find . -name pom.xml | xargs )
-run_command mvn "${MavenOptionArray[@]}" "${MavenTagProjects[@]}" versions:set -DnewVersion=$ReleaseVersion
-run_command mvn scm:checkin -Dmessage="chore(version): set version ${ReleaseVersion}" -DpushChanges=false
+run_command ./mvnw "${MavenOptionArray[@]}" "${MavenTagProjects[@]}" versions:set -DnewVersion=$ReleaseVersion
+run_command ./mvnw scm:checkin -Dmessage="chore(version): set version ${ReleaseVersion}" -DpushChanges=false
 run_command git tag -a -m "tag $ArtifactId-$ReleaseVersion" $ArtifactId-$ReleaseVersion
 
 ## Deploy for release
 print_status " deploy for release"
-run_command mvn "${MavenOptionArray[@]}" "${MavenReleaseProjects[@]}" -Prelease deploy
+run_command ./mvnw "${MavenOptionArray[@]}" "${MavenReleaseProjects[@]}" -Prelease deploy
 
 ## Release with sonatype
 nexus_release
@@ -319,8 +319,8 @@ nexus_release
 ## Set to development version
 print_status " Set to development version"
 run_command sed -i -e 's|<tag>.*</tag>|<tag>HEAD</tag>|' $(find . -name pom.xml | xargs )
-run_command mvn "${MavenOptionArray[@]}" "${MavenTagProjects[@]}" versions:set -DnewVersion=$DevelopmentVersion
-run_command mvn -N scm:checkin -Dmessage="chore(version): new snapshot version ${DevelopmentVersion}" -DpushChanges=true
+run_command ./mvnw "${MavenOptionArray[@]}" "${MavenTagProjects[@]}" versions:set -DnewVersion=$DevelopmentVersion
+run_command ./mvnw -N scm:checkin -Dmessage="chore(version): new snapshot version ${DevelopmentVersion}" -DpushChanges=true
 
 ## Push the tags
 run_command git push --tags
