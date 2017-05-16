@@ -147,7 +147,7 @@ while getopts "hd:jnPQr:" opt;do
             ;;
 ###
 ###     -j: Just use current directory (no git checkout)
-###         This assumes that current directory is <module> work directory.
+###         This assumes that current directory is repo work directory.
 ###         and correct branch is checked out.
         j )
             JustUseCurrentDirectoryMode=1
@@ -271,7 +271,7 @@ if [[ $QuickMode -eq 0 ]];then
             $EXIT_OK )
                 ;;
             $EXIT_FATAL_MISSING_DEPENDENCY )
-                # This usually means the module does not have docs/release-notes.md
+                # This usually means the repo does not have docs/release-notes.md
                 ;;
             $EXIT_FATAL_UNKNOWN_MODULE )
                 # This usually means that <ArtifactId-$ReleaseVersion> does note exist in Jira
@@ -296,7 +296,7 @@ case $RepoName in
 	## List all artifacts that will be released in sonatype
 	## as well as zanata-frontend, which is required for MEAD
 	MavenTagProjects+=( -pl build-tools,parent)
-	MavenReleaseProjects+=( -pl build-tools,parent,api,api/zanata-common-api,common,common/zanata-adapter-glossary,common/zanata-adapter-po,common/zanata-adapter-properties,common/zanata-adapter-xliff,common/zanata-common-util,client,client/stub-server,client/zanata-cli,client/zanata-client-commands,client/zanata-maven-plugin,client/zanata-rest-client,server/zanata-frontend )
+	NexusReleaseProjects+=( -pl build-tools,parent,api,api/zanata-common-api,common,common/zanata-adapter-glossary,common/zanata-adapter-po,common/zanata-adapter-properties,common/zanata-adapter-xliff,common/zanata-common-util,client,client/stub-server,client/zanata-cli,client/zanata-client-commands,client/zanata-maven-plugin,client/zanata-rest-client,server/zanata-frontend )
         ;;
     * )
         ;;
@@ -307,14 +307,16 @@ print_status " Set release version to $ReleaseVersion"
 sed -i -e 's|<tag>HEAD</tag>|<tag>'$ArtifactId'-'$ReleaseVersion'</tag>|' $(find . -name pom.xml | xargs )
 run_command ./mvnw "${MavenOptionArray[@]}" "${MavenTagProjects[@]}" versions:set -DnewVersion=$ReleaseVersion
 run_command ./mvnw scm:checkin -Dmessage="chore(version): set version ${ReleaseVersion}" -DpushChanges=false
-run_command git tag -a -m "tag $ArtifactId-$ReleaseVersion" $ArtifactId-$ReleaseVersion
 
 ## Deploy for release
 print_status " deploy for release"
-run_command ./mvnw "${MavenOptionArray[@]}" "${MavenReleaseProjects[@]}" -Prelease deploy
+run_command ./mvnw "${MavenOptionArray[@]}" "${NexusReleaseProjects[@]}" -Prelease deploy
 
 ## Release with sonatype
 nexus_release
+
+## Tag after nexus_release is completed, so you don't need to remove the tag when something wrong
+run_command git tag -a -m "tag $ArtifactId-$ReleaseVersion" $ArtifactId-$ReleaseVersion
 
 ## Set to development version
 print_status " Set to development version"
