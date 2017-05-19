@@ -50,7 +50,7 @@ trap exit_print_error EXIT
 MavenReleaseForkedArgumentArray=( -T 1 -e -Dgwt.validateOnly -DskipTests -DskipArqTests -DskipFuncTests -Dfindbugs.skip)
 
 ## Maven options
-MavenOptionArray=( "${MavenReleaseForkedArgumentArray[@]}" -Doptimise -Dmaven.repo.local=$REPO_LOCAL_DIR -Dgpg.useagent -DupdateReleaseInfo=true -Dresume=false "-Darguments=${MavenReleaseForkedArgumentArray[*]}")
+MavenOptionArray=( "${MavenReleaseForkedArgumentArray[@]}" -Doptimise -Dmaven.repo.local=$REPO_LOCAL_DIR -Dgpg.useagent=true -DupdateReleaseInfo=true)
 
 ###
 ###     NEXUS_STAGING_OPTIONS
