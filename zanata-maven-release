@@ -296,7 +296,7 @@ case $RepoName in
 	## List all artifacts that will be released in sonatype
 	## as well as zanata-frontend, which is required for MEAD
 	MavenTagProjects+=( -pl build-tools,parent)
-	NexusReleaseProjects+=( -pl build-tools,parent,api,api/zanata-common-api,common,common/zanata-adapter-glossary,common/zanata-adapter-po,common/zanata-adapter-properties,common/zanata-adapter-xliff,common/zanata-common-util,client,client/stub-server,client/zanata-cli,client/zanata-client-commands,client/zanata-maven-plugin,client/zanata-rest-client,server/zanata-frontend )
+	NexusReleaseProjects+=( -pl '!server/zanata-test-war,!server/functional-test' )
         ;;
     * )
         ;;
@@ -310,7 +310,7 @@ run_command ./mvnw scm:checkin -Dmessage="chore(version): set version ${ReleaseV
 
 ## Deploy for release
 print_status " deploy for release"
-run_command ./mvnw "${MavenOptionArray[@]}" "${NexusReleaseProjects[@]}" -Prelease deploy
+run_command ./mvnw "${MavenOptionArray[@]}" "${NexusReleaseProjects[@]}" -Prelease -Dallow.deploy.skip=false deploy
 
 ## Release with sonatype
 nexus_release
@@ -324,6 +324,6 @@ run_command sed -i -e 's|<tag>.*</tag>|<tag>HEAD</tag>|' $(find . -name pom.xml 
 run_command ./mvnw "${MavenOptionArray[@]}" "${MavenTagProjects[@]}" versions:set -DnewVersion=$DevelopmentVersion
 run_command ./mvnw -N scm:checkin -Dmessage="chore(version): new snapshot version ${DevelopmentVersion}" -DpushChanges=true
 
-## Push the tags
-run_command git push --tags
+## Push the relevant tags
+run_command git push --follow-tags origin $WorkingBranch
 
