@@ -53,6 +53,16 @@ shift $((OPTIND-1))
 
 [[ ! -r $M2Repo ]] && failed $EXIT_FATAL_MISSING_DEPENDENCY "Directory $M2Repo is not readable"
 
-find $M2Repo -name '*.pom' -printf '%h\n' | sed -e 's|^'$M2Repo/'||' \
-    | sed -e 's|\(.*\)/\([^/]*\)|\1:\2|' | sed -e 's|\(.*\)/\([^/]*\)|\1:\2|' \
-    | sed -s 's|/|.|g'
+for d in $(find $M2Repo -name '*.pom' -printf "%h\n");do
+    groupPre=$(sed -e "s|$M2Repo/\(.*\)/\([^/]*\)/\([^/]*\)|\1|" <<<$d)
+    group=$(sed -e "s|/|.|g" <<< $groupPre)
+    artifact=$(sed -e "s|$M2Repo/\(.*\)/\([^/]*\)/\([^/]*\)|\2|" <<<$d)
+    version=$(sed -e "s|$M2Repo/\(.*\)/\([^/]*\)/\([^/]*\)|\3|" <<<$d)
+    if [[ -z $(find $d -name '*.jar') ]];then
+        ## pom only
+	echo "$group:$artifact:pom:$version"
+    else
+	## pom and jar
+	echo "$group:$artifact:jar:$version"
+    fi
+done
