@@ -72,7 +72,7 @@ function create_feed(){
 
     if [[ ! -e $feedFile ]]; then
         echo_stderr "Creating $feedFile from $templateFile - version $version"
-        $HOME_BIN_DIR/0template $templateFile version=$version artifactVersion=$artifactVersion stability=$Stability
+        $HOME_BIN_DIR/0template $templateFile version=$version artifactVersion=$artifactVersion stability=$Stability "dist_url_prefix=$DIST_URL_PREFIX"
     fi
 
     $HOME_BIN_DIR/0repo add $feedFile
