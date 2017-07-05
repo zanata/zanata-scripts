@@ -36,11 +36,11 @@ LANG=C
 ###     So make sure both ends support rsync.
 ###
 ## Default Environment Variable
-SCRIPT_DIR=$(dirname $(readlink  -q -f $0))
-FUNCTION_SCRIPT_FILE=${SCRIPT_DIR}/zanata-functions
-source "${FUNCTION_SCRIPT_FILE}"
+ScriptDir=$(dirname $(realpath $0))
+FunctionScriptFile=${ScriptDir}/zanata-functions
+source "$FunctionScriptFile"
 trap exit_print_error EXIT
-source "${SCRIPT_DIR}/zanata-rpm-functions"
+source "${ScriptDir}/zanata-rpm-functions"
 
 
 ### ENVIRONMENT
@@ -147,7 +147,7 @@ print_status " Module=$Module"
 
 ## Get Package name
 case $Module in
-    zanata-client )
+    zanata-platform )
         PackageName=zanata-cli-bin
         ;;
     * )
@@ -277,8 +277,8 @@ for fr in ${FEDORA_RELEASES}; do
                 fi
             else
                 print_status " creating ${RpmPath}"
-                mock  -r "${fr}-${arch}" -D "dist .${DistTag}" --resultdir "${RESULT_DIR}" --rebuild "${SrpmPath}"
-                cp -v ${RESULT_DIR}/${RpmFilename} ${RpmDir}
+#                mock  -r "${fr}-${arch}" -D "dist .${DistTag}" --resultdir "${RESULT_DIR}" --rebuild "${SrpmPath}"
+#                cp -v ${RESULT_DIR}/${RpmFilename} ${RpmDir}
             fi
             update_dnf_repo_dir $fr $arch
         fi

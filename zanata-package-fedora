@@ -53,14 +53,13 @@ LANG=C
 ###     and you need to specify version-release.
 ###
 
+ScriptDir=$(dirname $(realpath $0))
+FunctionScriptFile=${ScriptDir}/zanata-functions
+source "$FunctionScriptFile"
+trap exit_print_error EXIT
+
 ## Variables
 SpecRelease=1
-
-SCRIPT_DIR=$(dirname $(readlink  -q -f $0))
-FUNCTION_SCRIPT_FILE="${SCRIPT_DIR}/zanata-functions"
-source "${FUNCTION_SCRIPT_FILE}"
-trap exit_print_error EXIT
-source "${SCRIPT_DIR}/zanata-rpm-functions"
 
 ##=== function definitions Start ===
 # is pkgBuild been built in koji
