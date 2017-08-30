@@ -1,4 +1,4 @@
-#!/bin/bash -eu
+#!/bin/bash
 ### NAME
 ###     zanata-maven-release - Release in maven
 ###
@@ -32,6 +32,9 @@
 ###
 ###      zanata-maven-release -j -r 4.1.0 -d 4.1.1-SNAPSHOT platform
 ###
+###   Note that if the development version is just snapshot of last number add one, then
+###      -d <version>-SNAPSHOT can be omitted
+###
 ### ENVIRONMENT
 ###     RELEASING_BRANCH
 ###       The branch that we recommend downstream to use, and
@@ -39,7 +42,8 @@
 ###       It is:
 ###          'release' if that branch exists; otherwise 'master'
 ###
-
+export LC_ALL=C
+set -eu
 ScriptDir=$(dirname $(readlink  -q -f $0))
 FunctionScriptFile=${ScriptDir}/zanata-functions
 source "$FunctionScriptFile"
@@ -50,7 +54,7 @@ trap exit_print_error EXIT
 MavenReleaseForkedArgumentArray=( -T 1 -e -Dgwt.validateOnly -DskipTests -DskipArqTests -DskipFuncTests -Dfindbugs.skip)
 
 ## Maven options
-MavenOptionArray=( "${MavenReleaseForkedArgumentArray[@]}" -Doptimise -Dmaven.repo.local=$REPO_LOCAL_DIR -Dgpg.useagent=true -DupdateReleaseInfo=true)
+MavenOptionArray=( "${MavenReleaseForkedArgumentArray[@]}" -Doptimise -Dgpg.useagent=true -DupdateReleaseInfo=true -Dgpg.executable=gpg2)
 
 ###
 ###     NEXUS_STAGING_OPTIONS
@@ -60,19 +64,6 @@ MavenOptionArray=( "${MavenReleaseForkedArgumentArray[@]}" -Doptimise -Dmaven.re
 NEXUS_STAGING_PLUGIN=org.sonatype.plugins:nexus-staging-maven-plugin
 
 ##=== function definitions Start ===
-## run_command <command> [args ... ]
-##     On Dry-run mode, just show the command,
-##     otherwise run the command.
-function run_command(){
-    if [[ $DryRunMode -eq 1 ]];then
-        print_status " [Dry-Run] $*"
-    else
-        set -x
-        "$@"
-        set +x
-    fi
-}
-
 function nexus_release(){
     print_status -t nexus-release -s "Start"
 
@@ -126,13 +117,16 @@ DryRunMode=0
 JustUseCurrentDirectoryMode=0
 PullRequestMode=0
 QuickMode=0
+UpdateDependencies=0
+UpdateReleaseNotes=1
+UpdateTranslations=0
 ReleaseVersion=
 
 ###
 ### OPTIONS
 ###
 
-while getopts "hd:jnPQr:" opt;do
+while getopts "hd:jnPQr:t" opt;do
     case $opt in
 ###     -h: Show this help
         h )
@@ -142,6 +136,7 @@ while getopts "hd:jnPQr:" opt;do
 ###
 ###     -d <developmentVersion>:
 ###         Development Vesion like: 4.1.0-SNAPSHOT
+###         Default: <release version+1>-SNAPSHOT
         d )
             DevelopmentVersion=$OPTARG
             ;;
@@ -170,13 +165,21 @@ while getopts "hd:jnPQr:" opt;do
 ###         Prepare steps include update dependency, translation,
 ###         and release-notes prepend.
         Q )
-            QuickMode=1
+            UpdateTranslations=0
+            UpdateDependencies=0
+            UpdateReleaseNotes=0
             ;;
 ###
 ###     -r <releaseVersion>
-###         Release Vesion like: 4.0.0
+###         Release Vesion like: 4.2.4
         r )
             ReleaseVersion=$OPTARG
+            ;;
+###
+###     -t
+###         Pull translations
+        t )
+            UpdateTranslations=1
             ;;
         * )
             failed ${EXIT_FATAL_INVALID_OPTIONS} "$opt"
@@ -191,6 +194,11 @@ shift $((OPTIND-1))
 branch_prepare RELEASING "$@"
 shift $ShiftOffset
 print_status " RepoName=$RepoName"
+
+## Get DevelopmentVersion
+if [[ -z $DevelopmentVersion ]];then
+    DevelopmentVersion="$(version_next $ReleaseVersion)-SNAPSHOT"
+fi
 
 ## Final parsing check
 if [ "$RepoName" = "zanata-assets" ];then
@@ -227,9 +235,9 @@ print_status -t prepare -s "Start"
 ## gpg2 is needed here, as in Fedora, gpg means gpg 1
 gpg2 --clearsign <<<" "
 
-if [[ $QuickMode -eq 0 ]];then
-    ##==== Update Dependency ====
-    print_status " Update dependency"
+##==== Update Dependencies ====
+if [[ $UpdateDependencies -eq 1 ]];then
+    print_status " Update dependencies"
     set +e
     run_command $ScriptDir/zanata-version-update -j
     case $? in
@@ -242,48 +250,47 @@ if [[ $QuickMode -eq 0 ]];then
             ;;
     esac
     set -e
+fi
 
-    if [[ -r zanata.xml || -r server/zanata.xml ]];then
-        ##==== Update translations ====
-        print_status " Update Zanata translation"
-        set +e
-        run_command $ScriptDir/zanata-translate-pull -j
-        case $? in
-            $EXIT_OK )
-                ;;
-            $EXIT_RETURN_FALSE )
-                ;;
-            * )
-                failed $? "Failed to pull translation"
-                ;;
-        esac
-        set -e
-    fi
+##==== Update translations ====
+if [[ $UpdateTranslations -eq 1 && ( -r zanata.xml || -r server/zanata.xml ) ]];then
+    print_status " Update Zanata translation"
+    set +e
+    run_command $ScriptDir/zanata-translate-pull -j
+    case $? in
+        $EXIT_OK )
+            ;;
+        $EXIT_RETURN_FALSE )
+            ;;
+        * )
+            failed $? "Failed to pull translation"
+            ;;
+    esac
+    set -e
+fi
 
-    if [[ -r docs/release-notes.md ]];then
-        ##==== release-notes-prepend ====
-        print_status " release-notes-prepend"
-        set +e
-        run_command zanata-release-notes-prepend -j $ArtifactId $ReleaseVersion
-        ExitCode=$?
-        set -e
-        case $ExitCode in
-            $EXIT_OK )
-                ;;
-            $EXIT_FATAL_MISSING_DEPENDENCY )
-                # This usually means the repo does not have docs/release-notes.md
-                ;;
-            $EXIT_FATAL_UNKNOWN_MODULE )
-                # This usually means that <ArtifactId-$ReleaseVersion> does note exist in Jira
-                ;;
-            $EXIT_RETURN_FALSE )
-                # No Jira issues associates to the <ArtifactId-$ReleaseVersion>
-                ;;
-            * )
-                failed $ExitCode " Failed to get related jira issues"
-                ;;
-        esac
-    fi
+##==== release-notes-prepend ====
+if [[ $UpdateReleaseNotes -eq 1 && -r docs/release-notes.md ]];then
+    print_status " release-notes-prepend"
+    set +e
+    run_command zanata-release-notes-prepend -j $ArtifactId $ReleaseVersion
+    set -e
+    case $ExitCode in
+        $EXIT_OK )
+            ;;
+        $EXIT_FATAL_MISSING_DEPENDENCY )
+            # This usually means the repo does not have docs/release-notes.md
+            ;;
+        $EXIT_FATAL_UNKNOWN_MODULE )
+            # This usually means that <ArtifactId-$ReleaseVersion> does note exist in Jira
+            ;;
+        $EXIT_RETURN_FALSE )
+            # No Jira issues associates to the <ArtifactId-$ReleaseVersion>
+            ;;
+        * )
+            failed $ExitCode " Failed to get related jira issues"
+            ;;
+    esac
 fi
 
 ##=== release  Start ===
@@ -293,10 +300,10 @@ print_status -t release -s "Start"
 
 case $RepoName in
     zanata-platform )
-	## List all artifacts that will be released in sonatype
-	## as well as zanata-frontend, which is required for MEAD
-	MavenTagProjects+=( -pl build-tools,parent)
-	NexusReleaseProjects+=( -pl '!server/zanata-test-war,!server/functional-test' )
+    ## List all artifacts that will be released in sonatype
+    ## as well as zanata-frontend, which is required for MEAD
+        MavenTagProjects+=( -pl build-tools,parent)
+        NexusReleaseProjects+=( -pl '!server/zanata-test-war,!server/functional-test' )
         ;;
     * )
         ;;

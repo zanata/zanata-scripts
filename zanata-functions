@@ -714,7 +714,7 @@ function time_stamp(){
 ###         Add one to last number
 ###         Version delimiter are: . _ -
 function version_next(){
-	local thisVersion=$1
+    local thisVersion=$1
     local prefix=${thisVersion%[._-]*}
     local delimiter=$(sed -n -E -e 's/^.*([._-])([0-9]+)?$/\1/p'<<<$thisVersion)
     local last
