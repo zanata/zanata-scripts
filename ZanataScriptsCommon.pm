@@ -28,6 +28,7 @@ use constant {
     EXIT_FATAL_MISSING_DEPENDENCY => 4,
     EXIT_FATAL_UNKNOWN_MODULE     => 5,
     EXIT_FATAL_FAIL               => 6,
+    EXIT_FATAL_INVALID_ARGUMENTS  => 7,
 
     EXIT_ERROR_FAIL   => 20,
     EXIT_RETURN_FALSE => 40
