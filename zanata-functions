@@ -683,6 +683,20 @@ function print_status(){
     ZnatNoEOL=$optionN
 }
 
+## run_command <command> [args ... ]
+##     On Dry-run mode, just show the command,
+##     otherwise run the command.
+function run_command(){
+    if [[ ${DryRunMode:-} -eq 1 ]];then
+        print_status " [Dry-Run] $*"
+    else
+        set -x
+        "$@"
+        ExitCode=$?
+        set +x
+    fi
+}
+
 ###
 ###     time_stamp [DATE_FORMAT]
 ###         Use stamp like "2015-06-29-06:56:34-953717856", base on UTC
