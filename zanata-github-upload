@@ -195,7 +195,7 @@ if (( $githubUsername eq '') or ( $githubToken eq '')){
 }
 
 ##== Check Existing Tags ==
-my $response = github_rest_response( 'GET',
+my $response = github_authenticated_rest_response( 'GET',
     "/repos/zanata/$module/git/refs/tags/$releaseTag" );
 print STDERR Dumper($response) if $verbose;
 response_die_if_error( $response, "Tag $releaseTag does not exists." );
