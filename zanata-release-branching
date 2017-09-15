@@ -1,4 +1,4 @@
-#!/bin/bash -eu
+#!/bin/bash
 ### NAME
 ###     zanata-release-branching - Do branching for big release (non-point release).
 ###
@@ -12,23 +12,25 @@
 ###     If branching succeeds and is pushes to GitHub, it returns EXIT_OK
 ###     If branching succeeds but not pushed to GitHub,
 ###     it returns EXIT_RETURN_FALSE.
+export LC_ALL=C
+set -eu
 shopt -s globstar
 ScriptDir=$(dirname $(readlink  -q -f $0))
 FunctionScriptFile=${ScriptDir}/zanata-functions
-source "${FunctionScriptFile}"
+source "$FunctionScriptFile"
 trap exit_print_error EXIT
-ProgramName=$(basename $0)
 
 ##=== parsing Start ===
 print_status -t parsing -s "Start"
 
 BatchMode=0
 JustUseCurrentDirectoryMode=0
+OverwrittenLegacy=1
 PushMode=0
 
 ###
 ### OPTIONS
-while getopts "hjp" opt;do
+while getopts "hBjlp" opt;do
     case $opt in
 ###
 ###     -h: Show this help
@@ -48,6 +50,11 @@ while getopts "hjp" opt;do
 ###         and correct branch is checked out.
         j )
             JustUseCurrentDirectoryMode=1
+            ;;
+###
+###     -l: Legacy branch will be overwritten by release branch
+        l )
+            OverwrittenLegacy=0
             ;;
 ###
 ###     -p: Push after commit
@@ -92,6 +99,9 @@ declare -A hasBranch
 
 print_status " Determine branches to process"
 for b in legacy release ;do
+    if [[ OverwrittenLegacy -eq 0 && $b = 'legacy' ]]; then
+        continue
+    fi
     case $(does_branch_exist $b) in
         yes )
             git checkout $b
@@ -114,7 +124,7 @@ if [ "${hasBranch[release]-}" = "" ];then
 fi
 
 ##=== branching Start ===
-if [ ! "${hasBranch[legacy]-}" = "" ];then
+if [[ OverwrittenLegacy -eq 1 && ! "${hasBranch[legacy]-}" = "" ]];then
     print_status -t "release->legacy" -s "Start"
     git checkout "${hasBranch[legacy]}"
     print_status " Point 'legacy' at previous 'release'"
