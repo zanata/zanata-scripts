@@ -40,17 +40,34 @@ This program get list of issue given Version name like 'client-3.8.4'.
 
 =head1 EXIT STATUS
 
-Returns EXIT_OK (0) when successfully.
+=over 4
 
-Returns EXIT_FATAL_INVALID_OPTIONS (3) when invalid 
-options or arguments are given
+=item B<EXIT_OK (0)>
 
-Returns EXIT_FATAL_UNKNOWN_MODULE (5) when <VersionName> does not exists
+Successfully found the repository, version,
+and the issue list has been changed.
 
-Returns EXIT_FATAL_FAIL (6) generic failure, 
-usually failed to get the resources at the net
+=item B<EXIT_FATAL_INVALID_OPTIONS (3)>
 
-Return EXIT_RETURN_FALSE (40) when Version-name exists, but no issues.
+Invalid options are given.
+
+=item B<EXIT_FATAL_UNKNOWN_MODULE (5)>
+
+Module is not provided.
+
+=item B<EXIT_FATAL_FAIL (6)>
+
+Failed to retrieve the issue list from Jira.
+Perhaps the network issues.
+
+=item B<EXIT_ERROR_UNKNOWN_VERSION (21)>
+
+The specified version is unknown.
+
+=item B<EXIT_RETURN_FALSE (40)>
+
+Not actually an error, just nothing new in issue list.
+
 
 =cut
 
@@ -112,8 +129,8 @@ while ( $total < 0 or $startAt < $total ) {
     if ( $response->code == 200 ) {
     }
     elsif ( $response->code =~ /40.*/ ) {
-        $! = EXIT_FATAL_UNKNOWN_MODULE;
-        die "[FATAL] $versionName does not exists. "
+        $! = EXIT_ERROR_UNKNOWN_VERSION;
+        die "[ERROR] Version $versionName is unknown to Jira. "
           . $response->code . " "
           . $response->message;
     }
