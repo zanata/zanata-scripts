@@ -30,8 +30,10 @@ use constant {
     EXIT_FATAL_FAIL               => 6,
     EXIT_FATAL_INVALID_ARGUMENTS  => 7,
 
-    EXIT_ERROR_FAIL   => 20,
-    EXIT_RETURN_FALSE => 40
+    EXIT_ERROR_FAIL               => 20,
+    EXIT_ERROR_UNKNOWN_VERSION    => 21,
+
+    EXIT_RETURN_FALSE             => 40
 };
 
 use constant JIRA_SERVER_URL    => 'https://zanata.atlassian.net';
