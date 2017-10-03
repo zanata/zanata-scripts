@@ -272,8 +272,10 @@ fi
 ##==== release-notes-prepend ====
 if [[ $UpdateReleaseNotes -eq 1 && -r docs/release-notes.md ]];then
     print_status " release-notes-prepend"
+    ## Remove -alpha-???
+    ReleaseNoteVersion=${ReleaseVersion%%-*}
     set +e
-    run_command zanata-release-notes-prepend -j $ArtifactId $ReleaseVersion
+    run_command zanata-release-notes-prepend -j $ArtifactId $ReleaseNoteVersion
     set -e
     case $ExitCode in
         $EXIT_OK )
