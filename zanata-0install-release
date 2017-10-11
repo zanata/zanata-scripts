@@ -135,7 +135,14 @@ create_feed $Package-jre $Package-jre.xml.template
 rm -f $Package*-$version.xml
 rm -f *.zip
 
+cd files/0install
+## Remove the old keys
+git rm -f *.gpg keys/*.gpg || echo_stderr "No old GPG keys"
+
+## copy the public files to repo
+cp -Rv $ZEROREPO_DIR/$Package/public/* .
+
 git add *.gpg catalog.xml "${Package}*.xml"
-git add keys/.
+git add keys/*.gpg
 git add resources/.
 git commit -m "Update $Package 0install: $version"
