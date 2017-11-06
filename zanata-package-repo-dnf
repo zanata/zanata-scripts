@@ -68,10 +68,10 @@ source "${ScriptDir}/zanata-rpm-functions"
 ###         Default: "--cvs-exclude --recursive --verbose --links --update --compress --exclude '*.core' --stats --progress --archive  --keep-dirlinks"
 : ${RSYNC_OPTIONS:=--cvs-exclude --recursive --verbose --links --update --compress --exclude '*.core' --stats --progress --archive  --keep-dirlinks}
 ###
-###     FEDORA_RELEASES
+###     EPEL_VERSIONS
 ###         Fedora or epel releases to be build
-###         Default: "epel-7 epel-6"
-: ${FEDORA_RELEASES:="epel-7 epel-6"}
+###         Default: "7 6"
+: ${EPEL_VERSIONS:="7 6"}
 ###
 ###     RESULT_DIR
 ###         The directory for mock output
@@ -191,7 +191,7 @@ print_status -t prepare -s "Start"
 ## Check depending programs
 print_status " check depending programs"
 ExitStatus=${EXIT_OK}
-for dep in rpmbuild mock createrepo; do
+for dep in rpmbuild createrepo docker; do
     if ! which $dep &>/dev/null ; then
         ExitStatus=${EXIT_FATAL_MISSING_DEPENDENCY}
         EXIT_MSG+=" $dep"
@@ -206,22 +206,6 @@ cd ${LOCAL_DIR}
 if [ -z "${StartFrom}" ];then
     print_status " Sync remote directory to local"
     rsync ${RSYNC_OPTIONS} --delete  ${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/ .
-
-    print_status "  Create missing directories and links"
-    for fr in ${FEDORA_RELEASES}; do
-        mkdir -p "$fr"
-
-        ## RHEL usually use something like epel-7Server
-        for e in Client Workstation Server; do
-            if [ ! -r "$fr$e" ];then
-                ln -sf "$fr" "$fr$e"
-            fi
-        done
-
-        for arch in SRPMS i386 x86_64; do
-            mkdir -p "$fr/$arch"
-        done
-    done
 fi
 
 ##=== spec Start ===
@@ -234,55 +218,12 @@ if [ -z "${StartFrom}" ];then
     spectool -g -S "${SpecFilename}" -C ${CACHE_DIR}
 fi
 
+##=== RPM build and Repo update Start ===
 
-##=== rpmbuild Start ===
-
-## For each koji-target
-for fr in ${FEDORA_RELEASES}; do
-    print_status -t "$fr" -s "Start"
-    DistTag=$(fedora_release_to_dist_tag "$fr")
-
-    ## Create missing SRPMS
-    SRpmFilename="${PackageName}-${Version}-${SpecRelease}.${DistTag}.src.rpm"
-    SRpmDir="$fr/SRPMS"
-    SrpmPath="$SRpmDir/${SRpmFilename}"
-
-    mkdir -p "${SRpmDir}"
-    if [ ! -r "${SrpmPath}" ];then
-        ## Create srpm
-        print_status " creating SRPM: ${SrpmPath}"
-        rpmbuild -bs --define "dist .${DistTag}" --define "_sourcedir ${CACHE_DIR}" --define "_srcrpmdir ${SRpmDir}" "${SpecFilename}"
-        update_dnf_repo_dir $fr SRPMS
-    fi
-
-    ## Create missing RPMS
-    for arch in x86_64 i386; do
-        SpecArch=$(rpm -qp --qf '%{arch}' "${SrpmPath}")
-        RpmFilename="${PackageName}-${Version}-${SpecRelease}.$DistTag.${SpecArch}.rpm"
-        RpmDir="$fr/$arch"
-        RpmPath="$RpmDir/${RpmFilename}"
-        print_status " RpmPath=${RpmPath}"
-
-        if [ ! -r "${RpmPath}" ];then
-            ## Creating rpm
-            if [[ "$SpecArch" = "noarch" && "$arch" == i?86 ]];then
-                ## noarch in i?86 can just link to  x86_64.rpm
-                Rpm64RelativePath="../x86_64/${RpmFilename}"
-                if [ -r "$Rpm64RelativePath" ];then
-                    print_status " linking ${Rpm64RelativePath} to ${RpmPath}"
-                    ln -sf ${Rpm64RelativePath} ${RpmPath}
-                else
-                    print_status " ${Rpm64RelativePath} does not exist, remove ${RpmPath}"
-                    rm -f ${Rpm64RelativePath} ${RpmPath}
-                fi
-            else
-                print_status " creating ${RpmPath}"
-#                mock  -r "${fr}-${arch}" -D "dist .${DistTag}" --resultdir "${RESULT_DIR}" --rebuild "${SrpmPath}"
-#                cp -v ${RESULT_DIR}/${RpmFilename} ${RpmDir}
-            fi
-            update_dnf_repo_dir $fr $arch
-        fi
-    done
+## For each EPEL versions
+for ev in ${EPEL_VERSIONS}; do
+    print_status -t "$ev" -s "Start"
+    docker run --rm --name zanata-epel${ev}-builder -v ${LOCAL_DIR}:/repo:Z  docker.io/zanata/centos-repo-builder:${ev} $SpecFilename
 done
 
 ##=== repo-upload Start ===
