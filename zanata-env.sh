@@ -93,3 +93,14 @@ export WORK_ROOT
 : ${ZANATA_GIT_URL_PREFIX:=git@github.com:zanata}
 export ZANATA_GIT_URL_PREFIX
 
+MAVEN_COMMON_OPTION_ARRAY=( -T 1 )
+
+MAVEN_RELEASE_OPTION_ARRAY=( -Dallow.deploy.skip=false -Dcheckstyle.skip=true\
+    -Denforcer.skip=true -Dfindbugs.skip=true\
+    -Dgpg.executable=gpg2 -Dgpg.useagent=true\
+    -Doptimise\
+    -DskipArqTests=true -DskipFuncTests=true -DskipTests=true\
+    -DupdateReleaseInfo=true\
+    -Prelease\
+)
+

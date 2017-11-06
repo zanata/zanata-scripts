@@ -49,12 +49,7 @@ FunctionScriptFile=${ScriptDir}/zanata-functions
 source "$FunctionScriptFile"
 trap exit_print_error EXIT
 
-## Options that will be run in forked build
-## i.e options that will be passed as -Darguments for maven-release-plugin
-MavenReleaseForkedArgumentArray=( -T 1 -e -Dgwt.validateOnly -DskipTests -DskipArqTests -DskipFuncTests -Dfindbugs.skip)
-
-## Maven options
-MavenOptionArray=( "${MavenReleaseForkedArgumentArray[@]}" -Doptimise -Dgpg.useagent=true -DupdateReleaseInfo=true -Dgpg.executable=gpg2)
+## Maven options are defined in zanata-env.sh
 
 ###
 ###     NEXUS_STAGING_OPTIONS
@@ -314,23 +309,23 @@ esac
 ## Set to release version
 print_status " Set release version to $ReleaseVersion"
 sed -i -e 's|<tag>HEAD</tag>|<tag>'$ArtifactId'-'$ReleaseVersion'</tag>|' $(find . -name pom.xml | xargs )
-run_command ./mvnw "${MavenOptionArray[@]}" "${MavenTagProjects[@]}" versions:set -DnewVersion=$ReleaseVersion
+run_command ./mvnw "${MAVEN_COMMON_OPTION_ARRAY[@]}" "${MavenTagProjects[@]}" versions:set -DnewVersion=$ReleaseVersion
 run_command ./mvnw scm:checkin -Dmessage="chore(version): set version ${ReleaseVersion}" -DpushChanges=false
+
+## Tag before release, so the git description looks correct
+run_command git tag -a -m "tag $ArtifactId-$ReleaseVersion" $ArtifactId-$ReleaseVersion
 
 ## Deploy for release
 print_status " deploy for release"
-run_command ./mvnw "${MavenOptionArray[@]}" "${NexusReleaseProjects[@]}" -Prelease -Dallow.deploy.skip=false deploy
+run_command ./mvnw "${MAVEN_COMMON_OPTION_ARRAY[@]}" "${MAVEN_RELEASE_OPTION_ARRAY[@]}" "${NexusReleaseProjects[@]}" deploy
 
 ## Release with sonatype
 nexus_release
 
-## Tag after nexus_release is completed, so you don't need to remove the tag when something wrong
-run_command git tag -a -m "tag $ArtifactId-$ReleaseVersion" $ArtifactId-$ReleaseVersion
-
 ## Set to development version
 print_status " Set to development version"
 run_command sed -i -e 's|<tag>.*</tag>|<tag>HEAD</tag>|' $(find . -name pom.xml | xargs )
-run_command ./mvnw "${MavenOptionArray[@]}" "${MavenTagProjects[@]}" versions:set -DnewVersion=$DevelopmentVersion
+run_command ./mvnw "${MAVEN_COMMON_OPTION_ARRAY[@]}" "${MavenTagProjects[@]}" versions:set -DnewVersion=$DevelopmentVersion
 run_command ./mvnw -N scm:checkin -Dmessage="chore(version): new snapshot version ${DevelopmentVersion}" -DpushChanges=true
 
 ## Push the relevant tags
