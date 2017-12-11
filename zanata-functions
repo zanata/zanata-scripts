@@ -17,6 +17,12 @@
 ###
 ###         zanata-functions run <function> [functionArguments]
 ###
+###     If you don't want to clone the whole zanata-scripts, you can invoke this
+###     by:
+###
+###         curl -q https://raw.githubusercontent.com/zanata/zanata-scripts/master/zanata-functions | bash -s - [opt1...]
+###
+###
 ### FUNCTIONS
 function zanata_functions_get_path(){
     shopt -s extdebug
@@ -27,20 +33,35 @@ function zanata_functions_get_path(){
 ###
 ###     zanata_help_raw <script>
 ###         Print raw help (the lines start with '###') of a script.
-function zanata_help_raw(){
+zanata_help_raw(){
     local script="$1"
     [ -z "$script" ] && script=$0
     sed -r -n -e '/^### ?/ {s|^### ?||p}' $script
 }
 
-function zanata_help_list_sections_from_string(){
-    local -A idx
-    for section in $(sed -n -e '/^[A-Z]/ p' <<<"$1" | xargs); do
-        if [ -z "${idx[$section]-}"   ];then
-            idx[$section]=1
-            echo "$section"
+zanata_help_parse_raw(){
+    declare -gA ZanataHelpSections
+    local currentSection=''
+    local regex='^[A-Z][A-Z_]*'
+    while read ;do
+        if [[ $REPLY =~ $regex ]];then
+            currentSection=$REPLY
+        elif [[ -n $currentSection ]];then
+            [[ -n ${ZanataHelpSections[$currentSection]:-} ]] && ZanataHelpSections[$currentSection]+='\n'
+            ZanataHelpSections[$currentSection]+="$REPLY"
         fi
     done
+}
+
+###
+###     zanata_help_init <script>
+###         Read help from script and zanata-env.sh when ZanataHelpSections is not defined
+zanata_help_init(){
+    local script="$1"
+    if [[ -z  ${ZanataHelpSections:-} ]]; then
+        zanata_help_parse_raw < <(zanata_help_raw $script)
+        [[ -n ${ZanataEnvSh:-} &&  -r $ZanataEnvSh ]] && zanata_help_parse_raw < <(zanata_help_raw "$ZanataEnvSh")
+    fi
 }
 
 ###
@@ -48,46 +69,20 @@ function zanata_help_list_sections_from_string(){
 ###         List the help sections of a script.
 function zanata_help_list_sections(){
     local script="$1"
-    zanata_help_list_sections_from_string "$(zanata_help_raw $script)"
-}
-
-function zanata_help_section_from_string(){
-    local section="$1"
-    local buf="$2"
-
-    local currentHeader=
-    local headerPrinted=0
-    IFS_BAK="${IFS}"
-    IFS=''
-    echo "$buf" | while read line ; do
-        ## update currentHeader
-        if [[ "$line" =~ ^[A-Z].* ]];then
-            currentHeader=$(sed -e 's/\s*$//' <<< "$line")
-        fi
-
-        ## print if current Header is section
-        if [[ "$currentHeader" = "$section" ]];then
-            ## print section header if not already
-            if [[ "$line" =~ $section\s* ]];then
-                if [ $headerPrinted -eq 0 ];then
-                    headerPrinted=1
-                    echo "$line"
-                fi
-            else
-                echo "$line"
-            fi
-        fi
+    zanata_help_init "$script"
+    for section in "${!ZanataHelpSections[@]}"; do
+        echo $section
     done
-    IFS="${IFS_BAK}"
 }
 
 ###
 ###     zanata_help_section <script> <section>
 ###         Print the specified help section of a script.
 function zanata_help_section(){
-    local script=$1
-    local section=$2
-    zanata_help_section_from_string "$section" "$(zanata_help_raw $script)"
+    local script="$1"
+    local section="$2"
+    zanata_help_init "$script"
+    echo -e "${ZanataHelpSections[$section]}"
 }
 
 ###
@@ -95,32 +90,14 @@ function zanata_help_section(){
 ###         Print the short help of a script.
 function zanata_script_help_short(){
     local script=$1
-    local buf=$(zanata_help_raw $script)
-    local zanataFunc=$(zanata_functions_get_path)
-    if [ "$script" != "${zanataFunc}" ];then
-        buf+=$'\n'$'\n'
-        buf+=$(zanata_help_section "$ZanataEnvSh" "ENVIRONMENT")
-    fi
+    zanata_help_init "$script"
+    MustHaveSectionArray=( SYNOPSIS ARGUMENTS OPTIONS ENVIRONMENT )
 
-    for section in $(zanata_help_list_sections_from_string "$buf" | xargs );do
-        case "$section" in
-            SYNOPSIS )
-                zanata_help_section_from_string "$section" "$buf"
-                echo
-                ;;
-            ARGUMENTS )
-                zanata_help_section_from_string "$section" "$buf"
-                echo
-                ;;
-            OPTIONS )
-                zanata_help_section_from_string "$section" "$buf"
-                echo
-                ;;
-            ENVIRONMENT )
-                zanata_help_section_from_string "$section" "$buf"
-                echo
-                ;;
-        esac
+    for section in "${MustHaveSectionArray[@]}"; do
+        if [[ -n ${ZanataHelpSections[$section]:-} ]]; then
+            echo $section
+            echo -e "${ZanataHelpSections[$section]}\n"
+        fi
     done
 }
 
@@ -129,18 +106,37 @@ function zanata_script_help_short(){
 ###         Print the detail help of a script.
 function zanata_script_help(){
     local script=$1
-    local buf=$(zanata_help_raw $script)
-    local zanataFunc=$(zanata_functions_get_path)
-    if [ "$script" != "${zanataFunc}" ];then
-        buf+=$'\n'$'\n'
-        buf+=$(zanata_help_section "$ZanataEnvSh" "EXIT_STATUS")
-        buf+=$'\n'$'\n'
-        buf+=$(zanata_help_section "$ZanataEnvSh" "ENVIRONMENT")
-    fi
+    zanata_help_init "$script"
+    HeaderSectionArray=( NAME SYNOPSIS DESCRIPTION ARGUMENTS OPTIONS )
+    FooterSectionArray=( EXIT_STATUS ENVIRONMENT FILES NOTES BUGS EXAMPLE SEE_ALSO )
+    declare -a MidSectionArray
 
-    for section in $(zanata_help_list_sections_from_string "$buf" | xargs );do
-        zanata_help_section_from_string "$section" "$buf"
-        echo
+    for section in "${HeaderSectionArray[@]}"; do
+        if [[ -n ${ZanataHelpSections[$section]:-} ]]; then
+            echo $section
+            echo -e "${ZanataHelpSections[$section]}\n"
+        fi
+    done
+
+    ## Other sections should be in middle
+    for section in "${!ZanataHelpSections[@]}"; do
+        for sec in "${HeaderSectionArray[@]}"; do
+            [[ $sec == $section ]] && break
+        done
+        [[ $sec == $section ]] && continue
+        for sec in "${FooterSectionArray[@]}"; do
+            [[ $sec == $section ]] && break
+        done
+        [[ $sec == $section ]] && continue
+        echo $section
+        echo -e "${ZanataHelpSections[$section]}\n"
+    done
+
+    for section in "${FooterSectionArray[@]}"; do
+        if [[ -n ${ZanataHelpSections[$section]:-} ]]; then
+            echo $section
+            echo -e "${ZanataHelpSections[$section]}\n"
+        fi
     done
 }
 
@@ -235,6 +231,15 @@ function checkout_branch(){
     git pull > /dev/stderr
     cd - > /dev/stderr
 }
+
+###     detect_remote_repo_latest_version <URL> <tagGlob>
+###         This does not need to clone the repository to get the latest version
+detect_remote_repo_latest_version(){
+    local url=$1
+    local tagGlob=$2
+    git ls-remote --tags "$url" "refs/tags/$tagGlob" | awk -F '-' '{ print $2, ($3 == "" )?"zfinal":$3, $4}' | sort -V | tr ' ' '-' | sed -e 's/-zfinal-//g' | tail -n 1
+}
+
 
 ###
 ###     detect_module_tag [-q] <-j|module>
@@ -741,28 +746,49 @@ function version_next(){
 }
 
 ## Find zanata-env.sh
-ZanataScriptsDir=$(dirname $(readlink -q -f ${BASH_SOURCE[0]}))
-ZanataEnvSh="${ZanataScriptsDir}/zanata-env.sh"
-source "$ZanataEnvSh"
-mkdir -p "${TMP_ROOT}"
+case $(basename $0) in
+    bash )
+        ## Remote Mode assumed
+        ZANATA_REMOTE=1
+        : ${ZANATA_SCRIPTS_BRANCH:=branch}
+        source <(curl -q https://raw.githubusercontent.com/zanata/zanata-scripts/$ZANATA_SCRIPTS_BRANCH/zanata-env.sh)
 
-ProgramFullFilename=${BASH_SOURCE[$((${#BASH_SOURCE[@]}-1))]}
-ProgramName=$(basename ${ProgramFullFilename})
+        ## We keep a copy in local so help works
+        mkdir -p "$TMP_ROOT"
+        ZanataScriptsDir=$TMP_ROOT
+
+        ZanataEnvSh="$ZanataScriptsDir/zanata-env.sh"
+        curl -o "$ZanataEnvSh" -q https://raw.githubusercontent.com/zanata/zanata-scripts/$ZANATA_SCRIPTS_BRANCH/zanata-env.sh
+        ProgramName=zanata-functions
+        ProgramFullFilename=$ZanataScriptsDir/$ProgramName
+        curl -o $ProgramFullFilename -q https://raw.githubusercontent.com/zanata/zanata-scripts/$ZANATA_SCRIPTS_BRANCH/zanata-functions
+        ;;
+    * )
+        ZanataScriptsDir=$(dirname $(realpath ${BASH_SOURCE[0]}))
+        ZanataEnvSh="$ZanataScriptsDir/zanata-env.sh"
+        source "$ZanataEnvSh"
+        mkdir -p "$TMP_ROOT"
+
+        ProgramFullFilename=${BASH_SOURCE[$((${#BASH_SOURCE[@]}-1))]}
+        ProgramName=$(basename $ProgramFullFilename)
+        ;;
+esac
+
 case $ProgramName in
     *-functions )
         trap exit_print_error EXIT
         case ${1-} in
             help )
-                zanata_script_help $0
-                exit ${EXIT_OK}
+                zanata_script_help $ProgramFullFilename
+                exit $EXIT_OK
                 ;;
             help-section )
-                zanata_help_section $0 $2
-                exit ${EXIT_OK}
+                zanata_help_section $ProgramFullFilename $2
+                exit $EXIT_OK
                 ;;
             help-list-sections )
-                zanata_help_list_sections $0
-                exit ${EXIT_OK}
+                zanata_help_list_sections $ProgramFullFilename
+                exit $EXIT_OK
                 ;;
             run )
                 shift
@@ -770,10 +796,11 @@ case $ProgramName in
                 exit $?
                 ;;
             ?* )
-                failed ${EXIT_FATAL_INVALID_OPTIONS} "Invalid option $1"
+                failed $EXIT_FATAL_INVALID_OPTIONS "Invalid option $1"
                 ;;
         esac
-        zanata_script_help_short $0
+        zanata_script_help_short $ProgramFullFilename
     ;;
 esac
 
+# vim: set expandtab ts=4 sw=4 si:
