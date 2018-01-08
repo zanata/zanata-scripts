@@ -155,7 +155,7 @@ if [ ! -r ${LocalZanataWar} ];then
     if [ -n "${War-}" ];then
         cp $War $LocalZanataWar
     else
-        wget -c -P ${VersionTag} https://github.com/zanata/zanata-server/releases/download/${VersionTag}/zanata-war-${Version}.war
+        wget -c -P ${VersionTag} https://github.com/zanata/zanata-platform/releases/download/${VersionTag}/zanata-war-${Version}.war
         cp ${OverlayWorkDir}/$VersionTag/zanata-war-${Version}.war $LocalZanataWar
     fi
 fi
