@@ -3,15 +3,15 @@
 ###     zanata-release-branching - Do branching for big release (non-point release).
 ###
 ### SYNOPSIS
-###     zanata-release-branching [Options] <module> <DevelopmentVersion>
+###     zanata-release-branching [Options] <RepoName> <DevelopmentVersion>
 ###
 ### DESCRIPTION
 ###     This script performs branching chores for big releases of
 ###     zanata-platform.
 ###
-###     If branching succeeds and is pushes to GitHub, it returns EXIT_OK
+###     If branching succeeds and pushes to GitHub, it returns EXIT_OK (0).
 ###     If branching succeeds but not pushed to GitHub,
-###     it returns EXIT_RETURN_FALSE.
+###        it returns EXIT_RETURN_FALSE (40).
 export LC_ALL=C
 set -eu
 shopt -s globstar
@@ -46,7 +46,7 @@ while getopts "hBjlp" opt;do
             ;;
 ###
 ###     -j: Just use current directory
-###         This assumes that current directory is <module> work directory,
+###         This assumes that current directory is <RepoName> work directory,
 ###         and correct branch is checked out.
         j )
             JustUseCurrentDirectoryMode=1
