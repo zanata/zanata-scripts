@@ -323,14 +323,14 @@ function ensure_repo_generic(){
         git_repo_url=${ZANATA_GIT_URL_PREFIX}/${module}.git
     fi
     mkdir -p ${parentDir}
-    pushd ${parentDir} >/dev/null
+    cd ${parentDir}
     if [ ! -d ${module} ];then
         git clone "${git_repo_url}"
         if [ $? -ne 0 ];then
             failed ${EXIT_FATAL_MISSING_DEPENDENCY} "[ERROR] Failed to clone ${git_repo_url}"
         fi
     fi
-    popd >/dev/null
+    cd -
 }
 
 ###

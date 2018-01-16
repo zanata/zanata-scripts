@@ -1,4 +1,4 @@
-#!/bin/bash -eu
+#!/bin/bash
 ### NAME
 ###     zanata-release-notes-prepend - Update the Zanata dependencies
 ###
@@ -47,11 +47,13 @@
 ###
 
 shopt -s globstar
+export LC_ALL=C
+set -eu
 ScriptDir=$(dirname $(readlink  -q -f $0))
 FunctionScriptFile=${ScriptDir}/zanata-functions
-source "${FunctionScriptFile}"
+source "$FunctionScriptFile"
 trap exit_print_error EXIT
-ProgramName=$(basename $0)
+
 ##== function start ==
 ## version_greater ver1 ver2
 ##     return 0 when ver1 > ver2
@@ -125,7 +127,7 @@ print_status -t "jira" -s "Start"
 TmpFileJira=`mktemp ${TMP_ROOT}/zanata-release-notes.jira.XXXXXXXX`
 
 set +e
-zanata-jira-get-release-notes ${JiraGetReleaseNoteOptArray[@]-} "$ArtifactId-$Version" > $TmpFileJira
+$ScriptDir/zanata-jira-get-release-notes ${JiraGetReleaseNoteOptArray[@]-} "$ArtifactId-$Version" > $TmpFileJira
 ExitCode=$?
 set -e
 case $ExitCode in
