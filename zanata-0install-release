@@ -34,7 +34,7 @@
 ###         The stability of this release.
 ###         Valid values: Auto, stable, testing, developer, buggy, insecure
 ###         Auto means it will give Stable to official release, and Testing for
-###         release candidate (rc).
+###         pre-release like rc (rc) or alpah (pre).
 ###         Default: Auto
 : ${STABILITY:=Auto}
 ###
@@ -90,7 +90,7 @@ Package=$1
 artifactVersion=$VERSION
 
 ## 0install accept rcX but not rc-X
-version=$(sed -e 's/rc-/rc/' <<<$VERSION)
+version=$(sed -e 's/alpha-/pre/' <<<$(sed -e 's/rc-/rc/' <<<$VERSION))
 
 if [[ $STABILITY = Auto ]];then
     if [[ $artifactVersion =~ rc-[0-9][0-9]* ]]; then
@@ -105,6 +105,7 @@ fi
 DIST_URL_PREFIX="https://repo1.maven.org/maven2/org/zanata/$Package"
 
 ## Download 0install tools
+
 mkdir -p $HOME_BIN_DIR
 for prog in 0template 0repo ; do
     [[ ! -r $HOME_BIN_DIR/$prog ]] && 0install add $prog http://0install.net/tools/$prog.xml
