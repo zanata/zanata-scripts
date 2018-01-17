@@ -750,7 +750,7 @@ case $(basename $0) in
     bash )
         ## Remote Mode assumed
         ZANATA_REMOTE=1
-        : ${ZANATA_SCRIPTS_BRANCH:=branch}
+        : ${ZANATA_SCRIPTS_BRANCH:=master}
         source <(curl -q https://raw.githubusercontent.com/zanata/zanata-scripts/$ZANATA_SCRIPTS_BRANCH/zanata-env.sh)
 
         ## We keep a copy in local so help works
