@@ -169,10 +169,10 @@ if [ ${AutoDetect} -eq 0 ];then
     EXIT_MSG=
 
     test -n "$SpecRelease"
-    exit_if_failed "$?" ${EXIT_FATAL_INVALID_OPTION} "Failed to get SPEC release from ${VersionRelease}"
+    exit_if_failed "$?" ${EXIT_FATAL_INVALID_OPTIONS} "Failed to get SPEC release from ${VersionRelease}"
     Version=$(sed -e 's/-'$SpecRelease'$//' <<<$VersionRelease)
     test -n "$Version"
-    exit_if_failed "$?" ${EXIT_FATAL_INVALID_OPTION} "Failed to get version from ${VersionRelease}"
+    exit_if_failed "$?" ${EXIT_FATAL_INVALID_OPTIONS} "Failed to get version from ${VersionRelease}"
 else
     ## Auto detect version
     Version=$(detect_module_version ${Module})
