@@ -93,14 +93,20 @@ export WORK_ROOT
 : ${ZANATA_GIT_URL_PREFIX:=git@github.com:zanata}
 export ZANATA_GIT_URL_PREFIX
 
-MAVEN_COMMON_OPTION_ARRAY=( -T 1 )
+MAVEN_COMMON_OPTIONS="-T 1"
 
-MAVEN_RELEASE_OPTION_ARRAY=( -Dallow.deploy.skip=false -Dcheckstyle.skip=true\
-    -Denforcer.skip=true -Dfindbugs.skip=true\
-    -Dgpg.executable=gpg2 -Dgpg.useagent=true\
-    -Doptimise\
-    -DskipArqTests=true -DskipFuncTests=true -DskipTests=true\
-    -DupdateReleaseInfo=true\
-    -Prelease\
-)
+MAVEN_RELEASE_OPTIONS="-Dallow.deploy.skip=false -Dcheckstyle.skip=true -Denforcer.skip=true -Dfindbugs.skip=true -Dgpg.executable=gpg2 -Dgpg.useagent=true -Doptimise -DskipArqTests=true -DskipFuncTests=true -DskipTests=true -DupdateReleaseInfo=true -Prelease"
+
+###
+###     MAVEN_NEXUS_STAGING_PLUGIN
+###          Maven plugin for nexus staging
+MAVEN_NEXUS_STAGING_PLUGIN="org.sonatype.plugins:nexus-staging-maven-plugin"
+
+###     MAVEN_NEXUS_STAGING_OPTIONS
+###          The maven options for nexus plugin
+MAVEN_NEXUS_STAGING_OPTIONS="-e -DnexusUrl=https://oss.sonatype.org/ -DserverId=sonatype-staging -Prelease"
+
+PLATFORM_MAVEN_VERSION_PROJECT="build-tools,parent"
+PLATFORM_MAVEN_NEXUS_RELEASE_PROJECTS="!server/zanata-test-war,!server/functional-test"
+PLATFORM_RELEASING_BRANCH="release"
 
