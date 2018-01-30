@@ -10,6 +10,11 @@
 ###     <package>
 ###         The package to be released, so far we have "zanata-cli"
 ###
+###     <version>
+###         The version of package to be release. 
+###         e.g. 4.4.0, 4.4.0-alpha-3, 4.5.0-rc-2
+###
+###
 ### DESCRIPTION
 ###     zanata-0install-release releases package via 0install.
 ###
@@ -24,9 +29,6 @@
 ###     such as 0template and 0repo in $HOME/bin
 ###
 ### ENVIRONMENT
-###     VERSION
-###         (Required) The version to be released. This version MUST BE in maven central.
-###
 ###     GPG_SIGNING_KEY
 ###         (Required) The GPG Key used to sign the feed.
 ###
@@ -34,7 +36,7 @@
 ###         The stability of this release.
 ###         Valid values: Auto, stable, testing, developer, buggy, insecure
 ###         Auto means it will give Stable to official release, and Testing for
-###         pre-release like rc (rc) or alpah (pre).
+###         pre-release like rc (rc) or alpha (pre).
 ###         Default: Auto
 : ${STABILITY:=Auto}
 ###
@@ -44,106 +46,85 @@
 ###         you can specify the pull request branch.
 ###         Default: master
 : ${BRANCH:=master}
-##
-###     ZEROREPO_DIR
-###         Data directory for 0repo.
-###         Default: $HOME/0repo
-: ${ZEROREPO_DIR:=$HOME/0repo}
 
 HOME_BIN_DIR=$HOME/bin
 FEED_UPLOAD_DIR=$(pwd)
 EXIT_FATAL_INVALID_OPTIONS=3
 
-function echo_stderr(){
+echo_stderr(){
     echo "$1" > /dev/stderr
 }
 
-function zerorepo_config_set(){
-    local bakSuffix=$1
-    local key=$2
-    local value=$3
-    sed -i${bakSuffix} -e "/$key\s*=/"' s|^\([^=]*=\).*$|\1 "'"${value}"'"|' $ZEROREPO_DIR/$Package/0repo-config.py
+install_zero_program(){
+    local prog=$1
+    local url=$2
+    [[ -r $HOME_BIN_DIR/$prog ]] || 0install add $prog $url
 }
 
-function create_feed(){
+create_feed(){
     local feedPrefix=$1
     local templateFile=$2
     local feedFile=$feedPrefix-$version.xml
 
     if [[ ! -e $feedFile ]]; then
         echo_stderr "Creating $feedFile from $templateFile - version $version"
-        $HOME_BIN_DIR/0template $templateFile version=$version artifactVersion=$artifactVersion stability=$Stability "dist_url_prefix=$DIST_URL_PREFIX"
+        $HOME_BIN_DIR/0template $templateFile version=$version stability=$Stability "dist_url=$DistUrl"
     fi
-
-    $HOME_BIN_DIR/0repo add $feedFile
 }
 
-[[ -z ${VERSION-} ]] && echo_stderr "Environment VERSION is needed" && exit $EXIT_FATAL_INVALID_OPTIONS
+publish_interface(){
+    local interface=$1
+    set -x
+    0publish --add-version=$version --archive-extract=$Package-$ArtifactVersion --archive-url=$DistUrl --archive-file=/tmp/$PackageFilename "--key=$GPG_SIGNING_KEY" --xmlsign --set-released=today --set-stability=$Stability  --set-main=bin/zanata-cli $interface.xml
+    set +x
+}
 
 [[ -z ${GPG_SIGNING_KEY-} ]] && echo_stderr "Environment GPG_SIGNING_KEY is needed" && exit $EXIT_FATAL_INVALID_OPTIONS
 
-[[ -z ${1-} ]] && echo_stderr "Package name is needed" && exit $EXIT_FATAL_INVALID_OPTIONS
+if [[ $# -lt 2 ]]; then
+    sed -rn -e '/^###/ s/^###( )?//p' $0
+    exit $EXIT_FATAL_INVALID_ARUGMENTS
+fi
 
 Package=$1
-
-## artifactVersion use version convention in maven artifact, i.e. 4.2.0-rc-4
-artifactVersion=$VERSION
+ArtifactVersion=$2
 
 ## 0install accept rcX but not rc-X
-version=$(sed -e 's/alpha-/pre/' <<<$(sed -e 's/rc-/rc/' <<<$VERSION))
+version=$(sed -e 's/alpha-/pre/' <<<$(sed -e 's/rc-/rc/' <<<$ArtifactVersion))
 
 if [[ $STABILITY = Auto ]];then
-    if [[ $artifactVersion =~ rc-[0-9][0-9]* ]]; then
-        Stability=testing
-    else
-	Stability=stable
-    fi
+    case $ArtifactVersion in
+        *-rc-* | *-alpha-* )
+            Stability=testing
+            ;;
+        * )
+            Stability=stable
+            ;;
+    esac
 else
     Stability=$STABILITY
 fi
 
-DIST_URL_PREFIX="https://repo1.maven.org/maven2/org/zanata/$Package"
+DistUrlPrefix="https://repo1.maven.org/maven2/org/zanata/$Package"
+PackageFilename="$Package-$ArtifactVersion-dist.zip"
+DistUrl="$DistUrlPrefix/$ArtifactVersion/$PackageFilename"
 
-## Download 0install tools
+InterfaceUrlPrefix="https://raw.githubusercontent.com/zanata/zanata.github.io/master/files/0install"
 
+## Install 0install tools
 mkdir -p $HOME_BIN_DIR
-for prog in 0template 0repo ; do
-    [[ ! -r $HOME_BIN_DIR/$prog ]] && 0install add $prog http://0install.net/tools/$prog.xml
-done
+install_zero_program 0template http://0install.net/tools/0template.xml
+install_zero_program 0publish  http://0install.net/2006/interfaces/0publish
 
-## Setup 0repo
-mkdir -p $ZEROREPO_DIR
-if [[ ! -e $ZEROREPO_DIR/$Package ]] ;then
-    $HOME_BIN_DIR/0repo create $ZEROREPO_DIR/$Package "$GPG_SIGNING_KEY"
-    cd $ZEROREPO_DIR/$Package
-    mkdir -p archive-backups
-    curl -o 0repo-config.py --silent --insecure --location "https://raw.githubusercontent.com/zanata/zanata-scripts/$BRANCH/0install/0repo-config.in.py"
-    zerorepo_config_set '.repo.bak' 'REPOSITORY_BASE_URL' 'https://raw.githubusercontent.com/zanata/zanata.github.io/master/files/0install'
-    zerorepo_config_set '.archive.bak' 'ARCHIVES_BASE_URL' "$DIST_URL_PREFIX"
-    zerorepo_config_set '.gpg.bak' 'GPG_SIGNING_KEY' "$GPG_SIGNING_KEY"
-    zerorepo_config_set '.gpg.bak' 'FEED_UPLOAD_DIR' "$FEED_UPLOAD_DIR"
-    $HOME_BIN_DIR/0repo register
-    cd -
-
-    ## Import existing feed
-    $HOME_BIN_DIR/0repo add $Package.xml $Package-jre.xml
-fi
-
-create_feed $Package $Package.xml.template
-create_feed $Package-jre $Package-jre.xml.template
-
-## 0repo add will download the dist.zip
-rm -f $Package*-$version.xml
-rm -f *.zip
+## Download 
+curl -L -o /tmp/$PackageFilename $DistUrl
 
 cd files/0install
-## Remove the old keys
-git rm -f *.gpg keys/*.gpg || echo_stderr "No old GPG keys"
+#create_feed zanata-cli zanata-cli.xml.template
+#create_feed zanata-cli-jre zanata-cli-jre.xml.template
 
-## copy the public files to repo
-cp -Rv $ZEROREPO_DIR/$Package/public/* .
+publish_interface ${Package}
+publish_interface ${Package}-jre
 
-git add *.gpg catalog.xml "${Package}*.xml"
-git add keys/*.gpg
-git add resources/.
-git commit -m "Update $Package 0install: $version"
+git add *.gpg catalog.xml "${Package}.xml" "${Package}-jre.xml"
+git commit -m "update(0install) $Package-$version"
