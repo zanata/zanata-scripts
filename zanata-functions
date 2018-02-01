@@ -266,7 +266,7 @@ function detect_module_tag(){
     ## This tell you the latest tag of all branch.
     local latestTag=$(git describe --tags $( git rev-list --tags --max-count 1))
     if [ $justUseCurrentDirectoryMode -eq 0 ];then
-        cd - >/dev/null
+        cd - > /dev/stderr
     fi
 
     if [ $quietMode -eq 0 ];then
@@ -330,7 +330,7 @@ function ensure_repo_generic(){
             failed ${EXIT_FATAL_MISSING_DEPENDENCY} "[ERROR] Failed to clone ${git_repo_url}"
         fi
     fi
-    cd -
+    cd - >/dev/null
 }
 
 ###
