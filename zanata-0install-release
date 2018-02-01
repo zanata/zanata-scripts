@@ -3,7 +3,7 @@
 ###     zanata-0install-release - release package via 0install
 ###
 ### SYNOPSIS
-###     zanata-0install-release <package>
+###     zanata-0install-release <package> <version>
 ###
 ###
 ### ARGUMENTS
@@ -49,7 +49,9 @@
 
 HOME_BIN_DIR=$HOME/bin
 FEED_UPLOAD_DIR=$(pwd)
-source <(curl -q https://raw.githubusercontent.com/zanata/zanata-scripts/$BRANCH/zanata-functions.sh)
+export ZANATA_REMOTE_PROGRAM=zanata-0install-release
+export ZANATA_SCRIPTS_BRANCH=$BRANCH
+source <(curl -q https://raw.githubusercontent.com/zanata/zanata-scripts/$BRANCH/zanata-functions)
 
 install_zero_program(){
     local prog=$1
@@ -126,5 +128,5 @@ cd files/0install
 publish_interface ${Package}
 publish_interface ${Package}-jre
 
-#git add *.gpg catalog.xml "${Package}.xml" "${Package}-jre.xml"
-#git commit -m "update(0install) $Package-$version"
+git add *.gpg catalog.xml "${Package}.xml" "${Package}-jre.xml"
+git commit -m "update(0install) $Package-$version"

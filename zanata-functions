@@ -237,7 +237,7 @@ function checkout_branch(){
 detect_remote_repo_latest_version(){
     local url=$1
     local tagGlob=$2
-    git ls-remote --tags "$url" "refs/tags/$tagGlob" | awk -F '-' '{ print $2, ($3 == "" )?"zfinal":$3, $4}' | sort -V | tr ' ' '-' | sed -e 's/-zfinal-//g' | tail -n 1
+    git ls-remote --tags "$url" "refs/tags/$tagGlob[^^{}]" | awk -F '-' '{ print $2, ($3 == "" )?"zfinal":$3, $4}' | sort -V | tr ' ' '-' | sed -e 's/-zfinal-//g' | tail -n 1
 }
 
 
@@ -749,30 +749,36 @@ function version_next(){
 case $(basename $0) in
     bash )
         ## Remote Mode assumed
-        ZANATA_REMOTE=1
+        export ZANATA_REMOTE_PROGRAM=zanata-functions
         : ${ZANATA_SCRIPTS_BRANCH:=master}
-        source <(curl -q https://raw.githubusercontent.com/zanata/zanata-scripts/$ZANATA_SCRIPTS_BRANCH/zanata-env.sh)
-
-        ## We keep a copy in local so help works
-        mkdir -p "$TMP_ROOT"
-        ZanataScriptsDir=$TMP_ROOT
-
-        ZanataEnvSh="$ZanataScriptsDir/zanata-env.sh"
-        curl -o "$ZanataEnvSh" -q https://raw.githubusercontent.com/zanata/zanata-scripts/$ZANATA_SCRIPTS_BRANCH/zanata-env.sh
-        ProgramName=zanata-functions
-        ProgramFullFilename=$ZanataScriptsDir/$ProgramName
-        curl -o $ProgramFullFilename -q https://raw.githubusercontent.com/zanata/zanata-scripts/$ZANATA_SCRIPTS_BRANCH/zanata-functions
         ;;
     * )
-        ZanataScriptsDir=$(dirname $(realpath ${BASH_SOURCE[0]}))
-        ZanataEnvSh="$ZanataScriptsDir/zanata-env.sh"
-        source "$ZanataEnvSh"
-        mkdir -p "$TMP_ROOT"
-
-        ProgramFullFilename=${BASH_SOURCE[$((${#BASH_SOURCE[@]}-1))]}
-        ProgramName=$(basename $ProgramFullFilename)
         ;;
 esac
+
+if [[ -n ${ZANATA_REMOTE_PROGRAM:-} ]]; then
+    ## We keep a copy in local so help works
+    mkdir -p "${TMP_ROOT:=/tmp/zanata}"
+    ZanataScriptsDir=$TMP_ROOT
+
+    ## Download zanata-env and zanata-functions so help works
+    ZanataEnvSh="$ZanataScriptsDir/zanata-env.sh"
+    curl -o "$ZanataEnvSh" -q https://raw.githubusercontent.com/zanata/zanata-scripts/$ZANATA_SCRIPTS_BRANCH/zanata-env.sh
+    source "$ZanataEnvSh"
+
+    ProgramName="$ZANATA_REMOTE_PROGRAM"
+    ProgramFullFilename=$ZanataScriptsDir/$ProgramName
+    if [[ $ProgramName = 'zanata-functions' ]]; then
+        curl -o $ProgramFullFilename -q https://raw.githubusercontent.com/zanata/zanata-scripts/$ZANATA_SCRIPTS_BRANCH/zanata-functions
+    fi
+else
+    ZanataScriptsDir=$(dirname $(realpath ${BASH_SOURCE[0]}))
+    ZanataEnvSh="$ZanataScriptsDir/zanata-env.sh"
+    source "$ZanataEnvSh"
+
+    ProgramFullFilename=${BASH_SOURCE[$((${#BASH_SOURCE[@]}-1))]}
+    ProgramName=$(basename $ProgramFullFilename)
+fi
 
 case $ProgramName in
     *-functions )
@@ -795,8 +801,8 @@ case $ProgramName in
                 $@
                 exit $?
                 ;;
-            ?* )
-                failed $EXIT_FATAL_INVALID_OPTIONS "Invalid option $1"
+            * )
+                failed $EXIT_FATAL_INVALID_OPTIONS "Invalid sub-command $1"
                 ;;
         esac
         zanata_script_help_short $ProgramFullFilename
