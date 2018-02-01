@@ -749,7 +749,7 @@ function version_next(){
 case $(basename $0) in
     bash )
         ## Remote Mode assumed
-        export ZANATA_REMOTE_PROGRAM=zanata-functions
+        export ZANATA_REMOTE_PROGRAM=${ZANATA_REMOTE_PROGRAM:=zanata-functions}
         : ${ZANATA_SCRIPTS_BRANCH:=master}
         ;;
     * )
