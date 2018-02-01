@@ -56,8 +56,8 @@ source "${ScriptDir}/zanata-rpm-functions"
 ###
 ###     REMOTE_DIR
 ###         The remote directory that hold repo
-###         Default: /home/${REMOTE_USER}/srv/repos/${REMOTE_USER}/
-: ${REMOTE_DIR:=/srv/repos/${REMOTE_USER}/zanata}
+###         Default: /srv/repos/Zanata_Team/zanata
+: ${REMOTE_DIR:=/srv/repos/Zanata_Team/zanata}
 ###
 ###            LOCAL_DIR
 ###         The local directory that mirror the remote directory
