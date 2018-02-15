@@ -143,11 +143,9 @@ function zanata_script_help(){
 ###
 ###     echo_stderr [args] ...
 ###         Echo to stderr. Args are same with echo.
-###         If ZANATA_QUITE_MODE=1, this function does nothing.
-function echo_stderr(){
-    if [[ ${ZANATA_QUIET_MODE-} != 1 ]];then
-        echo "$@" > /dev/stderr
-    fi
+###         Note that ZANATA_QUIET_MODE has no effect on this function
+echo_stderr(){
+    echo "$@" > /dev/stderr
 }
 
 ###
@@ -164,7 +162,8 @@ function echo_stderr(){
 ###            RepoName: Repository name
 ###            Module: (Deprecated) Same as RepoName.
 ###            ShiftOffset: how many argument need to be shift
-###         Prints: shift offset (either 0 or 1)
+###            Prints: shift offset (either 0 or 1)
+###            WorkingBranch: Branch that will be working on.
 function branch_prepare(){
     local branch=$1
     shift
@@ -229,6 +228,7 @@ function checkout_branch(){
     git remote update origin > /dev/stderr
     git checkout ${branch} > /dev/stderr
     git pull > /dev/stderr
+    git reset --hard origin/$branch > /dev/stderr
     cd - > /dev/stderr
 }
 
@@ -358,7 +358,7 @@ function exit_if_failed(){
 EXIT_MSG=
 function exit_print_error(){
     local exitStatus=$?
-    if [[ ${ZANATA_QUIET_MODE-} != 0 ]];then
+    if [[ ${ZANATA_QUIET_MODE-} -ne 1 ]];then
         if [ -n "${exitStatus-}" ];then
             case $exitStatus in
                 ${EXIT_OK} )
@@ -644,7 +644,7 @@ function print_status(){
     local optionN=0
     local optionS=0
 
-    if [[ ${ZANATA_QUIET_MODE-} = 1 ]];then
+    if [[ ${ZANATA_QUIET_MODE-} -eq 1 ]];then
         return
     fi
 
