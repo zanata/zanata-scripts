@@ -207,7 +207,7 @@ timestamps {
         }
         stage('NexusRelease') {
           // Release nexus staging repo and push the git tag
-          sh "bash $WORKSPACE/zanata-nexus-release -s $nexusStagingRepositoryPrefix -p $nexusStagingProjects"
+          sh "bash $WORKSPACE/zanata-nexus-release -b $PROJ_BRANCH -s $nexusStagingRepositoryPrefix -p $nexusStagingProjects"
         }
         stage('SetSnapshotVersion') {
           sh(returnStatus: true,

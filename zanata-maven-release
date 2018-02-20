@@ -298,7 +298,7 @@ $ScriptDir/zanata-nexus-staging "$NexusReleaseProjects"
 ## Release staged artifacts from Nexus Staging
 ## after which they will be synced to Maven Central
 print_status " Release staged artifacts from Nexus Staging"
-$ScriptDir/zanata-nexus-release -s "$NexusStagingRepositoryPrefix" -p "$NexusReleaseProjects"
+$ScriptDir/zanata-nexus-release -b "$WorkingBranch" -s "$NexusStagingRepositoryPrefix" -p "$NexusReleaseProjects"
 
 ##  Set pom.xml version to next SNAPSHOT version $DevelopmentVersion
 ##  e.g. 4.6.0-SNAPSHOT
