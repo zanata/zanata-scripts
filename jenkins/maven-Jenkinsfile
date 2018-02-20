@@ -42,6 +42,10 @@ timestamps {
     //  e.g. parent/pom.xml in zanata-platform
     String versionPomXml = "${WORK_DIR}/pom.xml"
 
+    //  Prefix of Nexus Staging repository
+    //  e.g. orgzanata
+    String nexusStagingRepositoryPrefix = 'orgzanata'
+
     boolean hasReleaseNotes = false
 
 
@@ -115,7 +119,10 @@ timestamps {
           nexusStagingProjects = env.PLATFORM_MAVEN_NEXUS_RELEASE_PROJECTS
           versionPomXml = "${WORK_DIR}/parent/pom.xml"
           hasReleaseNotes = true
+        } else if (REPO_NAME == 'openprops')  {
+          nexusStagingRepositoryPrefix = 'orgfedorahostedopenprops'
         }
+
         dir(WORK_DIR) {
 
           checkout changelog: false, poll: false, scm:
@@ -200,7 +207,7 @@ timestamps {
         }
         stage('NexusRelease') {
           // Release nexus staging repo and push the git tag
-          sh "bash $WORKSPACE/zanata-nexus-release -p $nexusStagingProjects"
+          sh "bash $WORKSPACE/zanata-nexus-release -s $nexusStagingRepositoryPrefix -p $nexusStagingProjects"
         }
         stage('SetSnapshotVersion') {
           sh(returnStatus: true,

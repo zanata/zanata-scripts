@@ -263,6 +263,7 @@ print_status -t release -s "Start"
 MavenVersionProjects=
 NexusReleaseProjects=
 TagPrefix=
+NexusStagingRepositoryPrefix=
 case $RepoName in
     zanata-platform )
         ## chooses projects whose versions should be changed
@@ -275,6 +276,11 @@ case $RepoName in
 
         ## the prefix for the git tag, eg platform-
         TagPrefix="${ArtifactId}-"
+
+        NexusStagingRepositoryPrefix='orgzanata'
+        ;;
+    openprops )
+        NexusStagingRepositoryPrefix='org.zanata'
         ;;
     * )
         ;;
@@ -292,7 +298,7 @@ $ScriptDir/zanata-nexus-staging "$NexusReleaseProjects"
 ## Release staged artifacts from Nexus Staging
 ## after which they will be synced to Maven Central
 print_status " Release staged artifacts from Nexus Staging"
-$ScriptDir/zanata-nexus-release -p "$NexusReleaseProjects"
+$ScriptDir/zanata-nexus-release -s "$NexusStagingRepositoryPrefix" -p "$NexusReleaseProjects"
 
 ##  Set pom.xml version to next SNAPSHOT version $DevelopmentVersion
 ##  e.g. 4.6.0-SNAPSHOT

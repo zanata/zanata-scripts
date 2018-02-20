@@ -37,9 +37,10 @@ source "$FunctionScriptFile"
 trap exit_print_error EXIT
 
 PushMode=0
+NexusStagingRepositoryPrefix=orgzanata
 ###
 ### OPTIONS
-while getopts "hp" opt;do
+while getopts "hps:" opt;do
     case $opt in
 ###     -h: Show detail help
         h )
@@ -48,6 +49,9 @@ while getopts "hp" opt;do
             ;;
         p )
             PushMode=1
+            ;;
+        s )
+            NexusStagingRepositoryPrefix=$OPTARG
             ;;
         * )
             failed ${EXIT_FATAL_INVALID_OPTIONS} "$opt"
@@ -84,7 +88,7 @@ fi
 get_StagingRepository(){
     ## We only query the "root" project, which only takes 10 secs
     ## Querying on all projects takes 1:09 minutes.
-    local StagingRepositoryBuffer=$(run_command ./mvnw $MAVEN_NEXUS_STAGING_OPTIONS ${MAVEN_NEXUS_STAGING_PLUGIN}:rc-list -pl . | sed -r -n -e '/orgzanata-.* / s/^\[INFO\] (orgzanata-[0-9]+)\s*([A-Z]+)/\1 \2/ p'  )
+    local StagingRepositoryBuffer=$(run_command ./mvnw $MAVEN_NEXUS_STAGING_OPTIONS ${MAVEN_NEXUS_STAGING_PLUGIN}:rc-list -pl . | sed -r -n -e '/'$NexusStagingRepositoryPrefix'-.* / s/^\[INFO\] ('$NexusStagingRepositoryPrefix'-[0-9]+)\s*([A-Z]+)/\1 \2/ p'  )
     if [[ $DryRunMode -eq 0 ]]; then
         if [[ -n $StagingRepositoryBuffer ]]; then
             StagingRepositoryId=$( awk '{print $1}' <<<"$StagingRepositoryBuffer" | tail -n 1 )
