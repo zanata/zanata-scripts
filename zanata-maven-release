@@ -307,6 +307,6 @@ $ScriptDir/zanata-pom-set-version "$TagPrefix" "$DevelopmentVersion" "$MavenVers
 
 if [[ -z $ZANATA_RELEASE_MODE ]]; then
     ## Push the SNAPSHOT commit
-    run_command git push origin $WorkingBranch
+    run_command git push --follow-tags origin $WorkingBranch
 fi
 

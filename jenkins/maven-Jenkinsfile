@@ -28,6 +28,7 @@ timestamps {
     def envArray = new ArrayList()
 
     String releaseVersion = null
+    String developmentVersion = null
     String artifactId = null
 
     //  chooses projects whose versions should be changed
@@ -165,7 +166,6 @@ timestamps {
     }
 
     withEnv(envArray) {
-      String developmentVersion = null
       String tagName = null
 
       dir (WORK_DIR) {
@@ -220,7 +220,7 @@ timestamps {
             ]
           ]) {
             if ( params.ZANATA_RELEASE_MODE == '') {
-              sh "git push https://$GIT_USERNAME:$GITHUB_OAUTH2_TOKEN@${PROJ_BASE} ${PROJ_BRANCH}"
+              sh "git push --follow-tags https://$GIT_USERNAME:$GITHUB_OAUTH2_TOKEN@${PROJ_BASE} ${PROJ_BRANCH}"
             }
           }
         }
