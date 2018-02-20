@@ -67,7 +67,7 @@ else
     ScmTag="$TagPrefix$Version"
 fi
 
-if [[ -n $Projects ]]; then
+if [[ -n $Projects && $Projects != 'null' ]]; then
     ProjectOpts="-pl $Projects"
 else
     ProjectOpts=""

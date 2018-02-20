@@ -1,0 +1,147 @@
+#!/bin/bash
+### NAME
+###     zanata-nexus-release - Release maven artifacts in nexus-staging
+###
+### SYNOPSIS
+###     zanata-nexus-release [options] [Projects]
+###
+### DESCRIPTION
+###     This script releases artifacts that already in nexus staging.
+###
+###     Note that this script assume you are already in correct directory and
+###     checkout correct branch.
+###
+###     plugin docs:
+###         https://github.com/sonatype/nexus-maven-plugins/tree/master/staging/maven-plugin
+###
+### OPTIONS
+###     -p: Push commits and tag to Git
+###         Push when nexus staging repository is successfully closed
+###
+###
+### ENVIRONMENT
+###     ZANATA_RELEASE_MODE:
+###         <empty>  : Default mode. Builds, deploy to nexus staging, and push changes
+###                to source control
+###         testBuild: Builds,  deploy to nexus staging, but does not push changes to
+###                source control, and nor does it close the nexus staging repo
+###         dryRun   : Only show command to be run.
+: ${ZANATA_RELEASE_MODE:=}
+: ${DryRunMode:=0}
+
+export LC_ALL=C
+set -eu
+ScriptDir=$(dirname $(readlink  -q -f $0))
+FunctionScriptFile=${ScriptDir}/zanata-functions
+source "$FunctionScriptFile"
+trap exit_print_error EXIT
+
+PushMode=0
+###
+### OPTIONS
+while getopts "hp" opt;do
+    case $opt in
+###     -h: Show detail help
+        h )
+            zanata_script_help $0
+            exit ${EXIT_OK}
+            ;;
+        p )
+            PushMode=1
+            ;;
+        * )
+            failed ${EXIT_FATAL_INVALID_OPTIONS} "$opt"
+            ;;
+    esac
+done
+shift $((OPTIND-1))
+
+case $ZANATA_RELEASE_MODE in
+    dryRun )
+        DryRunMode=1
+        ;;
+    testBuild )
+        DryRunMode=0
+        ;;
+    * )
+        ;;
+esac
+export DryRunMode
+
+Projects="${1-}"
+
+if [[ -n $Projects && $Projects != 'null' ]]; then
+    ProjectOpts="-pl $Projects"
+else
+    ProjectOpts=""
+fi
+
+
+
+## This function runs the staging plugin to fetch the repository id and state into these variables:
+##     StagingRepositoryId
+##     StagingRepositoryState
+get_StagingRepository(){
+    ## We only query the "root" project, which only takes 10 secs
+    ## Querying on all projects takes 1:09 minutes.
+    local StagingRepositoryBuffer=$(run_command ./mvnw $MAVEN_NEXUS_STAGING_OPTIONS ${MAVEN_NEXUS_STAGING_PLUGIN}:rc-list -pl . | sed -r -n -e '/orgzanata-.* / s/^\[INFO\] (orgzanata-[0-9]+)\s*([A-Z]+)/\1 \2/ p'  )
+    if [[ $DryRunMode -eq 0 ]]; then
+        if [[ -n $StagingRepositoryBuffer ]]; then
+            StagingRepositoryId=$( awk '{print $1}' <<<"$StagingRepositoryBuffer" | tail -n 1 )
+            StagingRepositoryState=$( awk '{print $2}' <<<"$StagingRepositoryBuffer" | tail -n 1 )
+        elif [[ $ZANATA_RELEASE_MODE = testBuild ]]; then
+            print_status " [testBuild] StagingRepositoryId is not necessary available"
+            StagingRepositoryId=StagingRepositoryId
+            StagingRepositoryState=OPEN
+        else
+            failed $EXIT_FATAL_FAIL " Failed to find artifacts in ${MAVEN_NEXUS_STAGING_PLUGIN}:rc-list"
+        fi
+
+    else
+        print_status " [Dry-Run] No StagingRepositoryId available in DryRunMode, use pseudo Id instead"
+        ## Provide pseudo Id and state for display
+        StagingRepositoryId=StagingRepositoryId
+        StagingRepositoryState=OPEN
+    fi
+}
+
+print_status -t nexus-release -s "Start"
+get_StagingRepository
+
+## TODO: Try -DautoReleaseAfterClose (and skip the release goal below)
+if [ "$StagingRepositoryState" = "OPEN" ];then
+    print_status " nexus-staging:close"
+
+    ## No closing in testBuild mode
+    if [[ $ZANATA_RELEASE_MODE = testBuild ]]; then
+        export DryRunMode=1
+    fi
+    set +e
+    run_command ./mvnw $MAVEN_NEXUS_STAGING_OPTIONS ${MAVEN_NEXUS_STAGING_PLUGIN}:close \
+        -DstagingRepositoryId=${StagingRepositoryId} ${ProjectOpts}
+    set -e
+
+    if [[ $ExitCode -eq 0 ]]; then
+        if [[ $PushMode -eq 1 ]]; then
+            ## Push when success
+            run_command git push --follow-tags origin $(get_current_branch)
+        fi
+    fi
+
+    if [[ $ZANATA_RELEASE_MODE = testBuild ]]; then
+        export DryRunMode=0
+    fi
+fi
+
+
+print_status " nexus-staging:release"
+if [[ $ZANATA_RELEASE_MODE = testBuild ]]; then
+    export DryRunMode=1
+fi
+get_StagingRepository
+if [ "$StagingRepositoryState" = "CLOSED" ];then
+    run_command ./mvnw $MAVEN_NEXUS_STAGING_OPTIONS ${MAVEN_NEXUS_STAGING_PLUGIN}:release \
+        -DstagingRepositoryId=${StagingRepositoryId} ${ProjectOpts}
+fi
+## No need to restore DryRunMode in end of the script
+

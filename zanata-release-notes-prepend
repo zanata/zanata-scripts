@@ -124,6 +124,7 @@ fi
 
 ##== retrieve Jira  Start ==
 print_status -t "jira" -s "Start"
+mkdir -p "$TMP_ROOT"
 TmpFileJira=`mktemp ${TMP_ROOT}/zanata-release-notes.jira.XXXXXXXX`
 
 set +e

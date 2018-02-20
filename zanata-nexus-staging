@@ -1,0 +1,66 @@
+#!/bin/bash
+### NAME
+###     zanata-nexus-staging - Deploy maven artifacts to nexus-staging
+###
+### SYNOPSIS
+###     zanata-nexus-staging [options] [Projects]
+###
+### DESCRIPTION
+###     This script uses nexus-staging-maven-plugin to deploy to nexus staging.
+###
+###     Note that this script assume you are already in correct directory and
+###     checkout correct branch.
+###
+### ARGUMENTS
+###     Projects
+###         Comma-delimited list of specified reactor projects, it will be passed as
+###         parameter of mvn -pl
+###
+### ENVIRONMENT
+###     ZANATA_RELEASE_MODE:
+###         <empty>  : Default mode. Builds, deploy to staging, and push changes
+###                to source control
+###         testBuild: Builds,  deploy to staging, but does not push changes to
+###                source control
+###         dryRun   : Only show command to be run.
+: ${ZANATA_RELEASE_MODE:=}
+
+export LC_ALL=C
+set -eu
+ScriptDir=$(dirname $(readlink  -q -f $0))
+FunctionScriptFile=${ScriptDir}/zanata-functions
+source "$FunctionScriptFile"
+trap exit_print_error EXIT
+
+###
+### OPTIONS
+while getopts "h" opt;do
+    case $opt in
+###     -h: Show detail help
+        h )
+            zanata_script_help $0
+            exit ${EXIT_OK}
+            ;;
+        * )
+            failed ${EXIT_FATAL_INVALID_OPTIONS} "$opt"
+            ;;
+    esac
+done
+shift $((OPTIND-1))
+
+Projects="${1-}"
+
+if [[ -n $Projects && $Projects != 'null' ]]; then
+    ProjectOpts="-pl $Projects"
+else
+    ProjectOpts=""
+fi
+
+
+if [[ $ZANATA_RELEASE_MODE == testBuild ]]; then
+    Goal=verify
+else
+    Goal=deploy
+fi
+
+run_command ./mvnw ${MAVEN_COMMON_OPTIONS:-} ${MAVEN_RELEASE_OPTIONS:-} $ProjectOpts $Goal

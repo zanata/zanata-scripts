@@ -1,0 +1,229 @@
+#!/usr/bin/env groovy
+/**
+ * Jenkinsfile for zanata-scripts
+ */
+
+@Field
+public static final String ORG_BASE = 'github.com/zanata'
+
+@Library('github.com/zanata/zanata-pipeline-library@v0.3.1')
+import static org.zanata.jenkins.StackTraces.getStackTrace
+
+import groovy.transform.Field
+
+timestamps {
+// We need a node with release label
+  node('release') {
+    currentBuild.displayName = currentBuild.displayName + " {${env.NODE_NAME}}"
+
+    // To override the following variables, configure the pipeline job configuration in Jenkins,
+    // enable "Prepare an environment for the run", then fill in KEY=VALUE in "Properties Content"
+    String REPO_NAME = (env.REPO_NAME) ?: 'zanata-platform'
+    String PROJ_BASE = (env.PROJ_BASE) ?: "${ORG_BASE}/${REPO_NAME}"
+    String PROJ_BRANCH = (env.PROJ_BRANCH) ?: 'release'
+    String ZANATA_SCRIPTS_BRANCH = (env.ZANATA_SCRIPTS_BRANCH) ?: 'master'
+    String WORK_ROOT = (env.WORK_ROOT) ?: "${env.WORKSPACE}/zanata-work-root"
+    String WORK_DIR = "${WORK_ROOT}/${REPO_NAME}"
+
+    def envArray = new ArrayList()
+
+    String releaseVersion = null
+    String artifactId = null
+
+    //  chooses projects whose versions should be changed
+    //  To be passed as -pl <Projects> in maven
+    String setPomVersionProjects = null
+
+    //  List all artifacts to be released in sonatype nexus
+    //  To be passed as -pl <Projects> in maven
+    String nexusStagingProjects = null
+
+    //  pom.xml that has valid version
+    //  e.g. parent/pom.xml in zanata-platform
+    String versionPomXml = "${WORK_DIR}/pom.xml"
+
+    boolean hasReleaseNotes = false
+
+
+    ansiColor('xterm') {
+
+      def projectProperties = [
+        [
+          $class: 'BuildDiscarderProperty',
+          strategy: [$class: 'LogRotator',
+            daysToKeepStr: '731', // keep records no more than X days
+            numToKeepStr: '',        // keep records for at most X builds
+            artifactDaysToKeepStr: '180', // keep artifacts no more than X days
+            artifactNumToKeepStr: '', // keep artifacts for at most X builds
+          ]
+        ],
+        [$class: 'GithubProjectProperty',
+          projectUrlStr: "https://${PROJ_BASE}"
+        ],
+        [$class: 'ParametersDefinitionProperty',
+          parameterDefinitions: [
+            [$class: 'StringParameterDefinition',
+              defaultValue: 'auto',
+              description: 'Version to release like "4.4.0", "4.4.0-alpha-1", or "auto" to release the SNAPSHOT',
+              name: 'RELEASE_VERSION'
+            ],
+            [$class: 'StringParameterDefinition',
+              defaultValue: 'testBuild',
+              description: '"" for build and commit; "testBuild" for build but not commit; "dryRun" for knowing commands to be run ',
+              name: 'ZANATA_RELEASE_MODE'
+            ],
+          ]
+        ],
+      ]
+
+      properties(projectProperties)
+    }
+
+
+    if (params.ZANATA_RELEASE_MODE != "" ){
+      currentBuild.displayName = currentBuild.displayName + " [${params.ZANATA_RELEASE_MODE}]"
+    }
+
+    stage('Checkout') {
+      // This checkout zanata-scripts
+      checkout scm
+
+      artifactId = sh(returnStdout: true,
+          script: "bash $WORKSPACE/zanata-functions run get_artifact_id ${REPO_NAME}"
+      ).trim()
+
+      envArray.addAll(
+        sh( returnStdout: true,
+        script: "sed -rn -e '/[A-Z_]*=/ s/^[^A-Z_]*([A-Z_]*=[^}]*)/\\1/p' $WORKSPACE/zanata-env.sh",
+        )?.split("\n")
+      )
+
+      envArray.addAll([
+        "WORK_ROOT=${WORK_ROOT}",
+        "ZANATA_RELEASE_MODE=${params.ZANATA_RELEASE_MODE}",
+        "ZANATA_GIT_URL_PREFIX=https://${ORG_BASE}",
+        ])
+
+      if (params.ZANATA_RELEASE_MODE == 'dryRun') {
+        envArray.add("DryRunMode=1")
+      }
+
+      withEnv(envArray) {
+        // Different repo has different configuration
+        if (REPO_NAME == 'zanata-platform') {
+          setPomVersionProjects = env.PLATFORM_MAVEN_VERSION_PROJECT
+          nexusStagingProjects = env.PLATFORM_MAVEN_NEXUS_RELEASE_PROJECTS
+          versionPomXml = "${WORK_DIR}/parent/pom.xml"
+          hasReleaseNotes = true
+        }
+        dir(WORK_DIR) {
+
+          checkout changelog: false, poll: false, scm:
+            [$class: 'GitSCM', branches: [[name: "*/${PROJ_BRANCH}"]],
+              doGenerateSubmoduleConfigurations: false,
+              extensions: [], submoduleCfg: [],
+              userRemoteConfigs: [[credentialsId: 'zanata-jenkins', url: "http://${ORG_BASE}/${REPO_NAME}"]]
+            ]
+          if (params.RELEASE_VERSION == 'auto') {
+            releaseVersion = readMavenPom(file: versionPomXml).getVersion().replaceAll('-SNAPSHOT', '')
+          } else {
+            releaseVersion = params.RELEASE_VERSION
+          }
+
+          currentBuild.displayName = currentBuild.displayName + " $releaseVersion"
+          tagName = "${artifactId}-${releaseVersion}"
+
+          developmentVersion = sh(returnStdout: true,
+            script: "bash $WORKSPACE/zanata-functions run version_next $releaseVersion",
+          ).trim() + '-SNAPSHOT'
+          echo "Release Version=$releaseVersion     Development Version=$developmentVersion"
+
+          // Is this version already been tag/build ?
+          String remoteTagLine = sh(returnStdout: true,
+            script: "git ls-remote https://github.com/zanata/$REPO_NAME refs/tags/${tagName}",
+          )?.trim()
+          if ( remoteTagLine ){
+            error "tag ${tagName} is already in remote"
+          }
+
+          def tagExistExitStatus = sh(returnStatus: true,
+            script: "git show-ref ${tagName}",
+          )
+          if ( tagExistExitStatus == 0 ){
+            // Remove only local tag (possibly from a failed build)
+            sh "git tag -d $tagName"
+          }
+        }
+      }
+    }
+
+    withEnv(envArray) {
+      String developmentVersion = null
+      String tagName = null
+
+      dir (WORK_DIR) {
+        if (hasReleaseNotes){
+          stage('ReleaseNotes') {
+            String releaseNoteVersion = releaseVersion.replaceAll(/[-.]/, '')
+            echo "releaseNoteVersion: $releaseNoteVersion"
+            def releaseNoteStatus = sh(returnStatus: true,
+              script: "bash $WORKSPACE/zanata-release-notes-prepend -j $artifactId $releaseVersion",
+            )
+            echo "releaseNoteStatus: $releaseNoteStatus"
+            switch(releaseNoteStatus) {
+              case 0: // EXIT_OK
+                // ReleaseNotes updated. Git commit is done by zanata-release-notes-prepend
+                break
+              case 40: // EXIT_RETURN_FALSE
+                // ReleaseNotes does not changed
+                break
+              default:
+                error "Status($releaseNoteStatus) Failed to get related jira issues"
+                break
+            }
+          }
+        }
+
+        stage('SetReleaseVersion') {
+          sh(returnStatus: true,
+            script: "bash $WORKSPACE/zanata-pom-set-version ${artifactId}- $releaseVersion $setPomVersionProjects",
+          )
+        }
+        // We cannot use org.sonatype.plugins:nexus-staging-maven-plugin:1.6.8:deploy here
+        // It generate following error
+        // [ERROR] Failed to execute goal org.sonatype.plugins:nexus-staging-maven-plugin:1.6.8:deploy (default-cli) on project build-tools: The packaging for this project did not assign a file to the build artifact
+        //stage('Nexus') {
+        //  sh "bash $WORKSPACE/zanata-nexus $PLATFORM_MAVEN_NEXUS_RELEASE_PROJECTS"
+        //}
+        stage('NexusStaging') {
+          sh "bash $WORKSPACE/zanata-nexus-staging $nexusStagingProjects"
+        }
+        stage('NexusRelease') {
+          // Release nexus staging repo and push the git tag
+          sh "bash $WORKSPACE/zanata-nexus-release -p $nexusStagingProjects"
+        }
+        stage('SetSnapshotVersion') {
+          sh(returnStatus: true,
+            script: "bash $WORKSPACE/zanata-pom-set-version ${artifactId}- $developmentVersion $setPomVersionProjects"
+          )
+          withCredentials([
+            [$class: 'UsernamePasswordMultiBinding',
+              credentialsId: 'zanata-jenkins',
+              usernameVariable: 'GIT_USERNAME', passwordVariable: 'GITHUB_OAUTH2_TOKEN'
+            ]
+          ]) {
+            if ( params.ZANATA_RELEASE_MODE == '') {
+              sh "git push https://$GIT_USERNAME:$GITHUB_OAUTH2_TOKEN@${PROJ_BASE} ${PROJ_BRANCH}"
+            }
+          }
+        }
+      }
+      stage('ArtifactList') {
+        sh("bash $WORKSPACE/zanata-artifact-m2repo -l | sort -u > artifact-list.txt")
+        archiveArtifacts(artifacts: 'artifact-list.txt')
+      }
+    }
+  }
+}
+
+
