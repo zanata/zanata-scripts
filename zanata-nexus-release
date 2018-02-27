@@ -31,9 +31,15 @@ FunctionScriptFile=${ScriptDir}/zanata-functions
 source "$FunctionScriptFile"
 trap exit_print_error EXIT
 
+##=== parsing Start ===
+print_status -t parsing -s "Start"
+
+RepoName=$(sed -nr -e 's|^.*/([A-Za-z0-9-]*)(.git)?$|\1|p' <<<$(git config --get remote.origin.url))
+ArtifactId=$(get_artifact_id $RepoName)
+NexusStagingRepositoryPrefix=$(get_artifact_var_name $ArtifactId staging_repository)
 PushMode=0
-NexusStagingRepositoryPrefix=orgzanata
 PushBranch=master
+
 ###
 ### OPTIONS
 while getopts "hb:ps:" opt;do
@@ -81,6 +87,7 @@ esac
 export DryRunMode
 
 Projects="${1-}"
+
 
 if [[ -n $Projects && $Projects != 'null' ]]; then
     ProjectOpts="-pl $Projects"

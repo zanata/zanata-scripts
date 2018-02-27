@@ -149,6 +149,73 @@ echo_stderr(){
 }
 
 ###
+###     branch_checkout <repoName> <branch> [parentDir]
+###         checkout <branch> for <repoName>.
+###         Note that this won't change to the repoName directory.
+branch_checkout(){
+    local repoName=$1
+    local branch=$2
+    local parentDir=${3-}
+    [[ -z $parentDir ]] && parentDir=${PWD}
+    cd ${parentDir}/${repoName}
+    git remote update origin > /dev/stderr
+    git checkout ${branch} > /dev/stderr
+    git pull > /dev/stderr
+    git reset --hard origin/$branch > /dev/stderr
+    cd - > /dev/stderr
+}
+
+###
+###     branch_does_exist <branch>
+###         Tell whether the <branch> exists.
+###         This function assumes you are already in the git checkout
+###         directory.
+###         Prints:
+###            yes: branch exists.
+###            remote: branch exists at remote, not local.
+###            no: branch does not exist in remote and local.
+###         Returns:
+###            EXIT_OK: The branch exists
+###            EXIT_RETURN_FALSE: The branch does not exists.
+branch_does_exist(){
+    local branch=$1
+    if git rev-parse --verify ${branch} &>/dev/null;then
+        echo "yes"
+        return $EXIT_OK
+    elif git ls-remote --heads origin $branch | grep $branch >& /dev/null ;then
+        echo "remote"
+        return $EXIT_OK
+    fi
+    echo "no"
+    return $EXIT_RETURN_FALSE
+}
+
+###
+###     branch_get_current
+###         Return current branch name, or HEAD when detach.
+###         Note that this does not work with git detach mode.
+branch_get_current(){
+    git rev-parse --abbrev-ref HEAD
+}
+
+###
+###     branch_get_releasing
+###         Determine RELEASING_BRANCH, the branch that we recommend downstream to use,
+###         and release process should mainly happen here.
+###         This function assumes you are in correct checkout directory.
+###         It is:
+###             'release' if that branch exists; otherwise "master"
+branch_get_releasing(){
+    local ret=$(branch_does_exist release)
+    if [[ $ret = yes || $ret = remote ]] ;then
+        echo "release"
+        return 0
+    fi
+    echo "master"
+    return 0
+}
+
+###
 ###     branch_prepare <branch> [command line args]
 ###         Prepare and checkout correct branch
 ###         <branch> can be actual branch name, or RELEASING for the releasing branch.
@@ -191,45 +258,19 @@ function branch_prepare(){
         ensure_repo $RepoName
         cd ${WORK_ROOT}/${RepoName}
         if [[ $branch = "RELEASING" ]];then
-            WorkingBranch=$(get_releasing_branch)
+            WorkingBranch=$(branch_get_releasing)
         else
             WorkingBranch=$branch
         fi
         print_status " checking out $WorkingBranch of $RepoName"
-        checkout_branch $RepoName $WorkingBranch $WORK_ROOT
+        branch_checkout $RepoName $WorkingBranch $WORK_ROOT
     else
-        WorkingBranch=$(get_current_branch)
+        WorkingBranch=$(branch_get_current)
     fi
 
     ## Make sure the work tree is clean
     git clean -fdX
     Module=$RepoName
-}
-
-
-###
-###     get_current_branch
-###          Return current branch name, or HEAD when detach
-function get_current_branch(){
-    git rev-parse --abbrev-ref HEAD
-}
-
-
-###
-###     checkout_branch <repoName> <branch> [parentDir]
-###         checkout <branch> for <repoName>.
-###         Note that this won't change to the repoName directory.
-function checkout_branch(){
-    local repoName=$1
-    local branch=$2
-    local parentDir=${3-}
-    [ -z $parentDir ] && parentDir=${PWD}
-    cd ${parentDir}/${repoName}
-    git remote update origin > /dev/stderr
-    git checkout ${branch} > /dev/stderr
-    git pull > /dev/stderr
-    git reset --hard origin/$branch > /dev/stderr
-    cd - > /dev/stderr
 }
 
 ###     detect_remote_repo_latest_version <URL> <tagGlob>
@@ -239,7 +280,6 @@ detect_remote_repo_latest_version(){
     local tagGlob=$2
     git ls-remote --tags "$url" "refs/tags/$tagGlob[^^{}]" | awk -F '-' '{ print $2, ($3 == "" )?"zfinal":$3, $4}' | sort -V | tr ' ' '-' | sed -e 's/-zfinal-//g' | tail -n 1
 }
-
 
 ###
 ###     detect_module_tag [-q] <-j|module>
@@ -284,31 +324,6 @@ function detect_module_tag(){
 function detect_module_version(){
     local tag=$(detect_module_tag $@)
     sed -n -e 's/[a-zA-Z-]*-\([0-9][0-9.-]*\)/\1/p' <<< $tag
-}
-
-###
-###     does_branch_exist <branch>
-###         Tell whether the <branch> exists.
-###         This function assumes you are already in the git checkout
-###         directory.
-###         Prints:
-###            yes: branch exists.
-###            remote: branch exists at remote, not local.
-###            no: branch does not exist in remote and local.
-###         Returns:
-###            EXIT_OK: The branch exists
-###            EXIT_RETURN_FALSE: The branch does not exists.
-function does_branch_exist(){
-    local branch=$1
-    if git rev-parse --verify ${branch} &>/dev/null;then
-        echo "yes"
-        return $EXIT_OK
-    elif git ls-remote --heads origin $branch | grep $branch >& /dev/null ;then
-        echo "remote"
-        return $EXIT_OK
-    fi
-    echo "no"
-    return $EXIT_RETURN_FALSE
 }
 
 ###
@@ -403,31 +418,6 @@ function failed(){
 }
 
 ###
-###     get_releasing_branch
-###         Determine RELEASING_BRANCH, the branch that we recommend downstream to use,
-###         and release process should mainly happen here.
-###         This function assumes you are in correct checkout directory.
-###         It is:
-###             'release' if that branch exists; otherwise "master"
-function get_releasing_branch(){
-    local ret=$(does_branch_exist release)
-    if [[ $ret = yes || $ret = remote ]] ;then
-        echo "release"
-        return 0
-    fi
-    echo "master"
-    return 0
-}
-
-###
-###     get_devel_branch <module>
-###         Determine DEVEL_BRANCH, the branch for committing new features.
-###         It is 'master'.
-function get_devel_branch(){
-    echo "master"
-}
-
-###
 ###     get_module <argument>
 ###         Determine module.
 ###         Print: <module or - for unknown>
@@ -476,6 +466,27 @@ function get_artifact_id(){
             failed ${EXIT_FATAL_UNKNOWN_MODULE} "get_artifact_id: module $1 not recognized "
             ;;
     esac
+}
+
+###
+###     get_artifact_var_value <artifact> <var> [defaultValue]
+###         Get value of environment variable of an artifact.
+###         For example, get_artifact_var_value platform staging_repository
+###         It looks the environment variable PLATFORM_STAGING_REPOSITORY.
+###         If the environment exists, it returns value;
+###         if not, it returns the defaultValue if it is given;
+###         otherwise returns empty string.
+###         Print: <Value>
+function get_artifact_var_value(){
+    local artifactId=$1
+    local var=$2
+    local defaultValue=${3:-}
+    local envVar=$(tr a-z A-Z <<<"${artifactId}_${var}")
+    if [[ -v $envVar ]]; then
+        echo $(eval echo \$$envVar)
+    else
+        echo "$defaultValue"
+    fi
 }
 
 ###

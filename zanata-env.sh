@@ -106,7 +106,14 @@ MAVEN_NEXUS_STAGING_PLUGIN="org.sonatype.plugins:nexus-staging-maven-plugin"
 ###          The maven options for nexus plugin
 MAVEN_NEXUS_STAGING_OPTIONS="-e -DnexusUrl=https://oss.sonatype.org/ -DserverId=sonatype-staging -Prelease"
 
+## zanata-platform
 PLATFORM_MAVEN_VERSION_PROJECT="build-tools,parent"
 PLATFORM_MAVEN_NEXUS_RELEASE_PROJECTS="!server/zanata-test-war,!server/functional-test"
-PLATFORM_RELEASING_BRANCH="release"
+PLATFORM_STAGING_REPOSITORY="orgzanata"
+
+## jgettext
+JGETTEXT_STAGING_REPOSITORY="orgfedorahostedjgettext"
+
+## openprops
+OPENPROPS_STAGING_REPOSITORY="orgfedorahostedopenprops"
 

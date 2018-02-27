@@ -102,7 +102,7 @@ for b in legacy release ;do
     if [[ OverwrittenLegacy -eq 0 && $b = 'legacy' ]]; then
         continue
     fi
-    case $(does_branch_exist $b) in
+    case $(branch_does_exist $b) in
         yes )
             git checkout $b
             ;;

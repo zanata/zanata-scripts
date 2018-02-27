@@ -182,7 +182,7 @@ fi
 
 if [ $PullRequestMode -eq 1 ];then
     WorkingBranch="pr-$ArtifactId-$ReleaseVersion"
-    if ! does_branch_exist $WorkingBranch ;then
+    if ! branch_does_exist $WorkingBranch ;then
         git branch $WorkingBranch
     fi
     git checkout $WorkingBranch
