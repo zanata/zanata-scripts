@@ -22,18 +22,15 @@
 ###    7. Set the next development version.
 ###
 ### EXAMPLES
-###   1. For point release, if you are confident and want to release directly in
-###      release branch, run:
+###   1. (Recommended) To release platform-4.5.1, just run:
+###      zanata-maven-release -r 4.5.1 platform
 ###
-###      zanata-maven-release -r 4.0.1 -d 4.0.2-SNAPSHOT platform
+###      It will release platform 4.5.1 and set the development version to 4.5.2-SNAPSHOT
 ###
-###   2. If you prefer to work in the development branch, first checkout that branch,
-###      then run:
+###   2. If you already checked out and cd to the releasing branch, you can skip the
+###      checkout action by specifying '-j' like:
+###      zanata-maven-release -j -r 4.5.1 platform
 ###
-###      zanata-maven-release -j -r 4.1.0 -d 4.1.1-SNAPSHOT platform
-###
-###   Note that if the development version is just snapshot of last number add one, then
-###      -d <version>-SNAPSHOT can be omitted
 ###
 ### ENVIRONMENT
 ###     ZANATA_RELEASE_MODE:
@@ -119,7 +116,7 @@ while getopts "hd:jnPQr:tT" opt;do
             ;;
 ###
 ###     -r <releaseVersion>
-###         Release Vesion like: 4.2.4
+###         Release Vesion like: 4.4.4
         r )
             ReleaseVersion=$OPTARG
             ;;
@@ -155,21 +152,17 @@ branch_prepare RELEASING "$@"
 shift $ShiftOffset
 print_status " RepoName=$RepoName"
 
+## ReleaseVersion should be exists
+[[ -n "$ReleaseVersion" ]] || failed $EXIT_FATAL_INVALID_OPTIONS "ReleaseVersion missing"
+
 ## Get DevelopmentVersion
 if [[ -z $DevelopmentVersion ]]; then
     DevelopmentVersion="$(version_next $ReleaseVersion)-SNAPSHOT"
 fi
 
-## Final parsing check
-if [ "$RepoName" = "zanata-assets" ];then
-    if [ -z "$ReleaseVersion" ];then
-        failed $EXIT_FATAL_INVALID_OPTIONS "assets requires -r <releaseVersion>"
-    fi
-    if [ -z "$DevelopmentVersion" ];then
-        failed $EXIT_FATAL_INVALID_OPTIONS "assets requires -d <developmentVersion>"
-    fi
-fi
-
+## artifactId in maven
+## We also use artifactId to form the tag
+## e.g. platform-<version>
 ArtifactId=$(get_artifact_id $RepoName)
 
 if [ $JustUseCurrentDirectoryMode -eq 0 ];then
@@ -194,6 +187,17 @@ print_status -t prepare -s "Start"
 ## Invoke gpg-agent by signing an space string
 ## gpg2 is needed here, as in Fedora, gpg means gpg 1
 gpg2 --clearsign <<<" "
+
+ReleaseNotesFile=$(get_artifact_var_value $ArtifactId release_notes_file )
+TagName="$ArtifactId-$ReleaseVersion"
+
+print_status " Checking previous local tag (possibly from a failed build)"
+if git ls-remote --exit-code https://github.com/zanata/$RepoName refs/tags/$TagName; then
+    failed $EXIT_FATAL_INVALID_OPTIONS "Tag ${tagName} is already in remote."
+elif git show-ref $TagName; then
+    print_status " Removing local only tag $TagName"
+    git tag -d $TagName
+fi
 
 ##==== Update Dependencies ====
 if [[ $UpdateDependencies -eq 1 ]];then
@@ -230,7 +234,7 @@ if [[ $UpdateTranslations -eq 1 && ( -r zanata.xml || -r server/zanata.xml ) ]];
 fi
 
 ##==== release-notes-prepend ====
-if [[ $UpdateReleaseNotes -eq 1 && -r docs/release-notes.md ]];then
+if [[ -n $ReleaseNotesFile && $UpdateReleaseNotes -eq 1 ]]; then
     print_status " release-notes-prepend"
     ## Remove -alpha-???
     ReleaseNoteVersion=${ReleaseVersion%%-*}
@@ -260,50 +264,23 @@ fi
 ## zanata-assets does not work is release-plugin anyway.
 print_status -t release -s "Start"
 
-MavenVersionProjects=
-NexusReleaseProjects=
-TagPrefix=
-NexusStagingRepositoryPrefix=
-case $RepoName in
-    zanata-platform )
-        ## chooses projects whose versions should be changed
-        ## eg: -pl build-tools,parent
-        MavenVersionProjects="$PLATFORM_MAVEN_VERSION_PROJECT"
-
-        ## List all artifacts to be released in sonatype nexus
-        ## e.g. !server/zanata-test-war,!server/functional-test
-        NexusReleaseProjects="$PLATFORM_MAVEN_NEXUS_RELEASE_PROJECTS"
-
-        ## the prefix for the git tag, eg platform-
-        TagPrefix="${ArtifactId}-"
-
-        NexusStagingRepositoryPrefix='orgzanata'
-        ;;
-    openprops )
-        NexusStagingRepositoryPrefix='org.zanata'
-        ;;
-    * )
-        ;;
-esac
-
 ## Set pom.xml version to release version $ReleaseVersion
 print_status " Set pom.xml version to release version $ReleaseVersion"
-$ScriptDir/zanata-pom-set-version "$TagPrefix" "$ReleaseVersion" "$MavenVersionProjects"
+$ScriptDir/zanata-pom-set-version "$ReleaseVersion"
 
 ## Build & Deploy to Nexus Staging
 print_status " deploy to nexus staging"
-#$ScriptDir/zanata-nexus "$NexusReleaseProjects"
-$ScriptDir/zanata-nexus-staging "$NexusReleaseProjects"
+$ScriptDir/zanata-nexus-staging
 
 ## Release staged artifacts from Nexus Staging
 ## after which they will be synced to Maven Central
 print_status " Release staged artifacts from Nexus Staging"
-$ScriptDir/zanata-nexus-release -b "$WorkingBranch" -s "$NexusStagingRepositoryPrefix" -p "$NexusReleaseProjects"
+$ScriptDir/zanata-nexus-release -p
 
 ##  Set pom.xml version to next SNAPSHOT version $DevelopmentVersion
 ##  e.g. 4.6.0-SNAPSHOT
 print_status " Set pom.xml version to SNAPSHOT version $DevelopmentVersion"
-$ScriptDir/zanata-pom-set-version "$TagPrefix" "$DevelopmentVersion" "$MavenVersionProjects"
+$ScriptDir/zanata-pom-set-version "$DevelopmentVersion"
 
 if [[ -z $ZANATA_RELEASE_MODE ]]; then
     ## Push the SNAPSHOT commit

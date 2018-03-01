@@ -637,6 +637,22 @@ function gav_to_maven_artifact_file(){
 }
 
 ###
+###     git_detached_merge_branch <branch>
+###         Merge a detached commit to branch.
+###         If the commit is not detached, then no-op.
+git_detached_merge_branch(){
+    local branch=$1
+    local commitSha=$(git rev-parse HEAD)
+    local tmpBranch="br-$commitSha"
+    if [[ $(branch_get_current) = HEAD ]]; then
+        git branch $tmpBranch $commitSha
+        git checkout $branch
+        git merge $tmpBranch
+        git branch -D $tmpBranch  
+    fi
+}
+
+###
 ###     print_status [-n] [-q] [-s] [-t <Stage>] [message]
 ###         Print the status message.
 ###         Options:
@@ -704,18 +720,43 @@ function print_status(){
     ZnatNoEOL=$optionN
 }
 
+###
+### repo_name_get
+###     In current directory, get the GitHub RepoName.
+###     e.g. 'zanata-platform', 'openprops'
+###     This function also set environment
+###     Print: repo_name
+###     Returns:
+###         EXIT_OK: Successfully gets RepoName 
+###         EXIT_FATAL_GIT_FAILED: Failed in git, usually indicated current directory 
+repo_name_get(){
+    ## url variable definition need to be separated with assignment,
+    ## otherwise exitCode will be 0 even when failed.
+    local url
+    set +e
+    url=$(git config --get remote.origin.url)
+    local exitCode=$?
+    set -e
+    [[ $exitCode -eq 0 ]] || failed $EXIT_FATAL_GIT_FAILED "[repo_name_get] Failed in git, wrong directory perhaps"
+
+    sed -nr -e 's|^.*/([A-Za-z0-9-]*)(.git)?$|\1|p' <<<"$url"
+}
+
+##
 ## run_command <command> [args ... ]
 ##     On Dry-run mode, just show the command,
 ##     otherwise run the command.
-function run_command(){
+run_command(){
+    local xtrace=0
     if [[ ${DryRunMode:-} -eq 1 ]];then
         print_status " [Dry-Run] $*"
         ExitCode=$EXIT_OK
     else
-        set -x
+        [[ $- = *x* ]] && xtrace=1
+        [[ $xtrace -eq 0 ]] && set -x
         "$@"
         ExitCode=$?
-        set +x
+        [[ $xtrace -eq 0 ]] && set +x
     fi
 }
 
@@ -755,6 +796,16 @@ function version_next(){
     fi
     echo "$prefix$delimiter$last"
 }
+
+
+## Find maven command
+if [[ -x ./mvnw ]]; then
+    export MvnCmd=$PWD/mvnw
+else
+    set +e
+    MvnCmd=$(which mvn 2>& /dev/null)
+    set -e
+fi
 
 ## Find zanata-env.sh
 case $(basename $0) in

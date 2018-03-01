@@ -34,6 +34,10 @@ declare -i EXIT_FATAL_FAIL=6
 ###             Invalid arguments.
 declare -i EXIT_FATAL_INVALID_ARGUMENTS=7
 
+###         EXIT_FATAL_GIT_FAILED (8)
+###             Git related failed
+declare -i EXIT_FATAL_GIT_FAILED=8
+
 ###
 ###     Error that need to stop before next stage:
 ###         EXIT_ERROR_FAIL (20)
@@ -93,9 +97,9 @@ export WORK_ROOT
 : ${ZANATA_GIT_URL_PREFIX:=git@github.com:zanata}
 export ZANATA_GIT_URL_PREFIX
 
-MAVEN_COMMON_OPTIONS="-T 1"
+MAVEN_COMMON_OPTIONS="-e -T 1"
 
-MAVEN_RELEASE_OPTIONS="-Dallow.deploy.skip=false -Dcheckstyle.skip=true -Denforcer.skip=true -Dfindbugs.skip=true -Dgpg.executable=gpg2 -Dgpg.useagent=true -Doptimise -DskipArqTests=true -DskipFuncTests=true -DskipTests=true -DupdateReleaseInfo=true -Prelease"
+MAVEN_RELEASE_OPTIONS="-Dallow.deploy.skip=false -Dcheckstyle.skip=true -Denforcer.skip=true -Dfindbugs.skip=true -Dgpg.executable=gpg2 -Dgpg.useagent=true -Doptimise -DskipArqTests=true -DskipFuncTests=true -DskipTests=true -DupdateReleaseInfo=true"
 
 ###
 ###     MAVEN_NEXUS_STAGING_PLUGIN
@@ -104,16 +108,20 @@ MAVEN_NEXUS_STAGING_PLUGIN="org.sonatype.plugins:nexus-staging-maven-plugin"
 
 ###     MAVEN_NEXUS_STAGING_OPTIONS
 ###          The maven options for nexus plugin
-MAVEN_NEXUS_STAGING_OPTIONS="-e -DnexusUrl=https://oss.sonatype.org/ -DserverId=sonatype-staging -Prelease"
+MAVEN_NEXUS_STAGING_OPTIONS="-DnexusUrl=https://oss.sonatype.org/ -DserverId=sonatype-staging"
 
 ## zanata-platform
 PLATFORM_MAVEN_VERSION_PROJECT="build-tools,parent"
 PLATFORM_MAVEN_NEXUS_RELEASE_PROJECTS="!server/zanata-test-war,!server/functional-test"
+PLATFORM_MAVEN_RELEASE_PROFILES="release"
 PLATFORM_STAGING_REPOSITORY="orgzanata"
+PLATFORM_RELEASE_NOTES_FILE="docs/release-notes.md"
 
 ## jgettext
-JGETTEXT_STAGING_REPOSITORY="orgfedorahostedjgettext"
+JGETTEXT_STAGING_REPOSITORY="orgfedorahostedtennera"
+JGETTEXT_MAVEN_RELEASE_PROFILES="release"
 
 ## openprops
 OPENPROPS_STAGING_REPOSITORY="orgfedorahostedopenprops"
+OPENPROPS_MAVEN_RELEASE_PROFILES="release"
 

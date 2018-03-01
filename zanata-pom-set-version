@@ -3,7 +3,7 @@
 ###     zanata-pom-set-version - Set pom version
 ###
 ### SYNOPSIS
-###     zanata-pom-set-version [options] <TagPrefix> <Version> <Projects>
+###     zanata-pom-set-version [options] <Version> <Projects>
 ###
 ### DESCRIPTION
 ###     This script
@@ -15,9 +15,6 @@
 ###     checkout correct branch.
 ###
 ### ARGUMENTS
-###     TagPrefix
-###         Prefix of the tag like 'platform-'
-###
 ###     Version
 ###         Version like 4.4.0 or 4.5.0-SNAPSHOT
 ###         Note that final version and SNAPSHOT will have different commit message
@@ -31,6 +28,19 @@ ScriptDir=$(dirname $(readlink  -q -f $0))
 FunctionScriptFile=${ScriptDir}/zanata-functions
 source "$FunctionScriptFile"
 trap exit_print_error EXIT
+
+RepoName=$(repo_name_get)
+ArtifactId=$(get_artifact_id $RepoName)
+
+## chooses projects whose versions should be changed
+## eg: -pl build-tools,parent
+MavenVersionProjects=$(get_artifact_var_value $ArtifactId maven_version_project )
+
+## Tag message refers to release notes if release-notes is not empty
+ReleaseNotesFile=$(get_artifact_var_value $ArtifactId release_notes_file )
+
+## default variables
+Projects=$MavenVersionProjects
 
 ###
 ### OPTIONS
@@ -48,14 +58,13 @@ while getopts "h" opt;do
 done
 shift $((OPTIND-1))
 
-if [[ $# -lt 2 ]]; then
+if [[ $# -lt 1 ]]; then
     zanata_script_help_short $0
     exit ${EXIT_FATAL_INVALID_ARGUMENTS}
 fi
 
-TagPrefix=$1
-Version=$2
-Projects="${3-}"
+Version=$1
+shift
 
 if [[ $Version =~ -SNAPSHOT$ ]]; then
     SnapshotMode=1
@@ -64,9 +73,10 @@ if [[ $Version =~ -SNAPSHOT$ ]]; then
 else
     SnapshotMode=0
     CommitMessage="chore(version): set version ${Version}"
-    ScmTag="$TagPrefix$Version"
+    ScmTag="$ArtifactId-$Version"
 fi
 
+[[ -n ${1:-} ]] && Projects="$1"
 if [[ -n $Projects && $Projects != 'null' ]]; then
     ProjectOpts="-pl $Projects"
 else
@@ -79,16 +89,23 @@ run_command git commit -a -m "$CommitMessage"
 
 if [[ $SnapshotMode -eq 0 ]]; then
     ## Tag for non Snapshot version
-    ReleaseNoteVersion=${Version%%-*}
 
-    if [[ $Version = $ReleaseNoteVersion ]]; then
-        ## Final version
-        ## Anchor in Read the doc. version 4.4.0 become 440
-        ReadTheDocAnchorVersion=$(sed -e 's/\.//g' <<<$ReleaseNoteVersion)
-        TagMessage="http://docs.zanata.org/en/release/release-notes/#$ReadTheDocAnchorVersion"
-        ## Tag before release, so the git description looks correct
+    if [[ -n $ReleaseNotesFile ]]; then
+        ## Only refer release-notes if Repo has one
+        ReleaseNoteVersion=${Version%%-*}
+
+        if [[ $Version = $ReleaseNoteVersion ]]; then
+            ## Final version
+            ## Anchor in Read the doc. version 4.4.0 become 440
+            ReadTheDocAnchorVersion=$(sed -e 's/\.//g' <<<$ReleaseNoteVersion)
+            TagMessage="http://docs.zanata.org/en/release/release-notes/#$ReadTheDocAnchorVersion"
+            ## Tag before release, so the git description looks correct
+        else
+            ## Alpha, Beta, RC
+            TagMessage="tag ${ScmTag}"
+        fi
     else
-        ## Alpha, Beta, RC
+        ## No release notes
         TagMessage="tag ${ScmTag}"
     fi
     run_command git tag -a -m "$TagMessage" $ScmTag

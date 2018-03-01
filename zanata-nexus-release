@@ -34,15 +34,28 @@ trap exit_print_error EXIT
 ##=== parsing Start ===
 print_status -t parsing -s "Start"
 
-RepoName=$(sed -nr -e 's|^.*/([A-Za-z0-9-]*)(.git)?$|\1|p' <<<$(git config --get remote.origin.url))
+RepoName=$(repo_name_get)
 ArtifactId=$(get_artifact_id $RepoName)
-NexusStagingRepositoryPrefix=$(get_artifact_var_name $ArtifactId staging_repository)
+Version=$(./mvnw -q -Dexec.executable="echo" -Dexec.args='${project.version}' --non-recursive org.codehaus.mojo:exec-maven-plugin:exec)
+
+MavenReleaseProfiles=$(get_artifact_var_value $ArtifactId maven_release_profiles)
+
+## List all artifacts to be released in sonatype nexus
+## e.g. !server/zanata-test-war,!server/functional-test
+NexusReleaseProjects=$(get_artifact_var_value $ArtifactId maven_nexus_release_project )
+
+## Staging repository prefix, e.g. orgzanata
+NexusStagingRepositoryPrefix=$(get_artifact_var_value $ArtifactId staging_repository)
+
+## default values
+Projects="$NexusReleaseProjects"
+PushBranch=$(branch_get_releasing)
 PushMode=0
-PushBranch=master
+PushRepository=origin
 
 ###
 ### OPTIONS
-while getopts "hb:ps:" opt;do
+while getopts "hb:pr:s:" opt;do
     case $opt in
 ###     -h: Show detail help
         h )
@@ -51,7 +64,7 @@ while getopts "hb:ps:" opt;do
             ;;
 ###
 ###     -b: Branch to push
-###         Default: master
+###         Default: The RELEASING branch of the repository.
         b )
             PushBranch=$OPTARG
             ;;
@@ -62,8 +75,17 @@ while getopts "hb:ps:" opt;do
             PushMode=1
             ;;
 ###
+###     -r: Git repository for push
+###         Can be either an URL or name as defined in git remote.
+###         This is required when you need to pass credential with URL.
+###         Default: origin
+        r )
+            PushRepository="$OPTARG"
+            ;;
+###
 ###     -s: Nexus Staging Repository Prefix
-###         Default: 'orgzanata'
+###         Normally you do not need to specify this, unless you are dealing with new
+###         repository whose Nexus Staging Repository prefix is not in zanata-env.sh
         s )
             NexusStagingRepositoryPrefix=$OPTARG
             ;;
@@ -86,16 +108,27 @@ case $ZANATA_RELEASE_MODE in
 esac
 export DryRunMode
 
-Projects="${1-}"
+[[ -n NexusStagingRepositoryPrefix ]] || failed $EXIT_FATAL_INVALID_OPTIONS "Nexus staging repository prefix is empty. Please specify with option '-s', like: '-s orgzanata'"
 
-
+[[ -n ${1:-} ]] && Projects="$1"
 if [[ -n $Projects && $Projects != 'null' ]]; then
     ProjectOpts="-pl $Projects"
 else
     ProjectOpts=""
 fi
 
+if [[ -n $MavenReleaseProfiles ]]; then
+    ReleaseProfileOpts=-P$MavenReleaseProfiles
+else
+    ReleaseProfileOpts=
+fi
 
+## Minimize duplication of maven options invokes
+run_maven(){
+    local goal=$1
+    shift
+    run_command ./mvnw $MAVEN_COMMON_OPTIONS ${MAVEN_NEXUS_STAGING_OPTIONS:-}  $ReleaseProfileOpts -DstagingDescription="$ArtifactId:$Version" ${MAVEN_NEXUS_STAGING_PLUGIN}:$goal "$@"
+}
 
 ## This function runs the staging plugin to fetch the repository id and state into these variables:
 ##     StagingRepositoryId
@@ -103,11 +136,13 @@ fi
 get_StagingRepository(){
     ## We only query the "root" project, which only takes 10 secs
     ## Querying on all projects takes 1:09 minutes.
-    local StagingRepositoryBuffer=$(run_command ./mvnw $MAVEN_NEXUS_STAGING_OPTIONS ${MAVEN_NEXUS_STAGING_PLUGIN}:rc-list -pl . | sed -r -n -e '/'$NexusStagingRepositoryPrefix'-.* / s/^\[INFO\] ('$NexusStagingRepositoryPrefix'-[0-9]+)\s*([A-Z]+)/\1 \2/ p'  )
+    local StagingRepositoryBuffer=$(run_maven rc-list -pl . | sed -r -n -e '/'$NexusStagingRepositoryPrefix'-.* / s/^\[INFO\] ('$NexusStagingRepositoryPrefix'-[0-9]+)\s*([A-Z]+)/\1 \2/ p'  )
     if [[ $DryRunMode -eq 0 ]]; then
         if [[ -n $StagingRepositoryBuffer ]]; then
-            StagingRepositoryId=$( awk '{print $1}' <<<"$StagingRepositoryBuffer" | tail -n 1 )
-            StagingRepositoryState=$( awk '{print $2}' <<<"$StagingRepositoryBuffer" | tail -n 1 )
+            ## Pick the latest Nexus staging
+            local stagingRepositoryLine=$( awk '{print $1,$2}' <<<"$StagingRepositoryBuffer" | sort -rV | head -n 1)
+            StagingRepositoryId=$( awk '{print $1}' <<<"$stagingRepositoryLine" )
+            StagingRepositoryState=$( awk '{print $2}' <<<"$stagingRepositoryLine" )
         elif [[ $ZANATA_RELEASE_MODE = testBuild ]]; then
             print_status " [testBuild] StagingRepositoryId is not necessary available"
             StagingRepositoryId=StagingRepositoryId
@@ -122,8 +157,10 @@ get_StagingRepository(){
         StagingRepositoryId=StagingRepositoryId
         StagingRepositoryState=OPEN
     fi
+    print_status " StagingRepositoryId=$StagingRepositoryId  StagingRepositoryState=$StagingRepositoryState"
 }
 
+##=== nexus-release Start ===
 print_status -t nexus-release -s "Start"
 get_StagingRepository
 
@@ -136,14 +173,14 @@ if [ "$StagingRepositoryState" = "OPEN" ];then
         export DryRunMode=1
     fi
     set +e
-    run_command ./mvnw $MAVEN_NEXUS_STAGING_OPTIONS ${MAVEN_NEXUS_STAGING_PLUGIN}:close \
-        -DstagingRepositoryId=${StagingRepositoryId} ${ProjectOpts}
+    run_maven close -DstagingRepositoryId=${StagingRepositoryId} $ProjectOpts
     set -e
 
     if [[ $ExitCode -eq 0 ]]; then
         if [[ $PushMode -eq 1 ]]; then
             ## Push when success
-            run_command git push --follow-tags origin $PushBranch
+            run_command git_detached_merge_branch $PushBranch
+            run_command git push --follow-tags "$PushRepository" $PushBranch
         fi
     fi
 
@@ -159,8 +196,7 @@ if [[ $ZANATA_RELEASE_MODE = testBuild ]]; then
 fi
 get_StagingRepository
 if [ "$StagingRepositoryState" = "CLOSED" ];then
-    run_command ./mvnw $MAVEN_NEXUS_STAGING_OPTIONS ${MAVEN_NEXUS_STAGING_PLUGIN}:release \
-        -DstagingRepositoryId=${StagingRepositoryId} ${ProjectOpts}
+    run_maven release -DstagingRepositoryId=${StagingRepositoryId} $ProjectOpts
 fi
 ## No need to restore DryRunMode in end of the script
 

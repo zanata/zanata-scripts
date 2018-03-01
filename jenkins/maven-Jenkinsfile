@@ -47,9 +47,6 @@ timestamps {
     //  e.g. orgzanata
     String nexusStagingRepositoryPrefix = 'orgzanata'
 
-    boolean hasReleaseNotes = false
-
-
     ansiColor('xterm') {
 
       def projectProperties = [
@@ -94,7 +91,7 @@ timestamps {
       checkout scm
 
       artifactId = sh(returnStdout: true,
-          script: "bash $WORKSPACE/zanata-functions run get_artifact_id ${REPO_NAME}"
+        script: "bash $WORKSPACE/zanata-functions run get_artifact_id ${REPO_NAME}"
       ).trim()
 
       envArray.addAll(
@@ -116,12 +113,7 @@ timestamps {
       withEnv(envArray) {
         // Different repo has different configuration
         if (REPO_NAME == 'zanata-platform') {
-          setPomVersionProjects = env.PLATFORM_MAVEN_VERSION_PROJECT
-          nexusStagingProjects = env.PLATFORM_MAVEN_NEXUS_RELEASE_PROJECTS
           versionPomXml = "${WORK_DIR}/parent/pom.xml"
-          hasReleaseNotes = true
-        } else if (REPO_NAME == 'openprops')  {
-          nexusStagingRepositoryPrefix = 'orgfedorahostedopenprops'
         }
 
         dir(WORK_DIR) {
@@ -166,10 +158,11 @@ timestamps {
     }
 
     withEnv(envArray) {
-      String tagName = null
-
       dir (WORK_DIR) {
-        if (hasReleaseNotes){
+        String releaseNotesFile=sh(returnStdout: true,
+          script: "bash $WORKSPACE/zanata-functions run get_artifact_var_value ${artifactId} release_notes_file"
+        ).trim()
+        if (releaseNotesFile){
           stage('ReleaseNotes') {
             String releaseNoteVersion = releaseVersion.replaceAll(/[-.]/, '')
             echo "releaseNoteVersion: $releaseNoteVersion"
@@ -193,26 +186,32 @@ timestamps {
 
         stage('SetReleaseVersion') {
           sh(returnStatus: true,
-            script: "bash $WORKSPACE/zanata-pom-set-version ${artifactId}- $releaseVersion $setPomVersionProjects",
+            script: "bash $WORKSPACE/zanata-pom-set-version $releaseVersion",
           )
         }
         // We cannot use org.sonatype.plugins:nexus-staging-maven-plugin:1.6.8:deploy here
         // It generate following error
         // [ERROR] Failed to execute goal org.sonatype.plugins:nexus-staging-maven-plugin:1.6.8:deploy (default-cli) on project build-tools: The packaging for this project did not assign a file to the build artifact
-        //stage('Nexus') {
-        //  sh "bash $WORKSPACE/zanata-nexus $PLATFORM_MAVEN_NEXUS_RELEASE_PROJECTS"
-        //}
         stage('NexusStaging') {
-          sh "bash $WORKSPACE/zanata-nexus-staging $nexusStagingProjects"
+          sh "bash $WORKSPACE/zanata-nexus-staging"
         }
         stage('NexusRelease') {
           // Release nexus staging repo and push the git tag
-          sh "bash $WORKSPACE/zanata-nexus-release -b $PROJ_BRANCH -s $nexusStagingRepositoryPrefix -p $nexusStagingProjects"
+          withCredentials([
+            [$class: 'UsernamePasswordMultiBinding',
+            credentialsId: 'zanata-jenkins',
+            usernameVariable: 'GIT_USERNAME', passwordVariable: 'GITHUB_OAUTH2_TOKEN'
+            ]
+          ]) {
+            sh "bash $WORKSPACE/zanata-nexus-release -p -r https://$GIT_USERNAME:$GITHUB_OAUTH2_TOKEN@${PROJ_BASE}"
+          }
         }
         stage('SetSnapshotVersion') {
           sh(returnStatus: true,
-            script: "bash $WORKSPACE/zanata-pom-set-version ${artifactId}- $developmentVersion $setPomVersionProjects"
+            script: "bash $WORKSPACE/zanata-pom-set-version $developmentVersion"
           )
+	  sh "bash $WORKSPACE/zanata-functions run git_detached_merge_branch ${PROJ_BRANCH}"
+
           withCredentials([
             [$class: 'UsernamePasswordMultiBinding',
               credentialsId: 'zanata-jenkins',
