@@ -73,7 +73,16 @@ create_feed(){
 publish_interface(){
     local interface=$1
     set -x
-    yes | $HOME_BIN_DIR/0publish --add-version=$version --archive-extract=$Package-$ArtifactVersion --archive-url=$DistUrl --archive-file=/tmp/$PackageFilename "--key=$GPG_SIGNING_KEY" --xmlsign --set-released=today --set-stability=$Stability  --set-main=bin/zanata-cli $interface.xml
+    yes | $HOME_BIN_DIR/0publish --add-version=$version \
+        --archive-extract=$Package-$ArtifactVersion --archive-url=$DistUrl \
+        --archive-file=/tmp/$PackageFilename "--key=$GPG_SIGNING_KEY" \
+        --xmlsign --set-released=today --set-stability=$Stability  \
+        --set-main=bin/zanata-cli $interface.xml
+    yes | $HOME_BIN_DIR/0publish --add-version=$version \
+        --archive-extract=$Package-$ArtifactVersion --archive-url=$DistUrlWin \
+        --archive-file=/tmp/$PackageFilenameWin "--key=$GPG_SIGNING_KEY" \
+        --xmlsign --set-released=today --set-stability=$Stability \
+        --set-main=bin/zanata-cli.bat $interface.xml
     set +x
 }
 
@@ -108,8 +117,10 @@ else
 fi
 
 DistUrlPrefix="https://repo1.maven.org/maven2/org/zanata/$Package"
-PackageFilename="$Package-$ArtifactVersion-dist.zip"
+PackageFilename="$Package-$ArtifactVersion-dist.tar.gz"
+PackageFilenameWin="$Package-$ArtifactVersion-dist.zip"
 DistUrl="$DistUrlPrefix/$ArtifactVersion/$PackageFilename"
+DistUrlWin="$DistUrlPrefix/$ArtifactVersion/$PackageFilenameWin"
 
 InterfaceUrlPrefix="https://raw.githubusercontent.com/zanata/zanata.github.io/master/files/0install"
 
@@ -120,6 +131,7 @@ install_zero_program 0publish  http://0install.net/2006/interfaces/0publish
 
 ## Download 
 curl -L -o /tmp/$PackageFilename $DistUrl
+curl -L -o /tmp/$PackageFilenameWin $DistUrlWin
 
 cd files/0install
 #create_feed zanata-cli zanata-cli.xml.template
