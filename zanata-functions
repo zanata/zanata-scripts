@@ -648,7 +648,7 @@ git_detached_merge_branch(){
         git branch $tmpBranch $commitSha
         git checkout $branch
         git merge $tmpBranch
-        git branch -D $tmpBranch  
+        git branch -D $tmpBranch
     fi
 }
 
@@ -727,8 +727,8 @@ function print_status(){
 ###     This function also set environment
 ###     Print: repo_name
 ###     Returns:
-###         EXIT_OK: Successfully gets RepoName 
-###         EXIT_FATAL_GIT_FAILED: Failed in git, usually indicated current directory 
+###         EXIT_OK: Successfully gets RepoName
+###         EXIT_FATAL_GIT_FAILED: Failed in git, usually indicated current directory
 repo_name_get(){
     ## url variable definition need to be separated with assignment,
     ## otherwise exitCode will be 0 even when failed.
@@ -803,7 +803,7 @@ if [[ -x ./mvnw ]]; then
     export MvnCmd=$PWD/mvnw
 else
     set +e
-    MvnCmd=$(which mvn 2>& /dev/null)
+    MvnCmd=$(which mvn 2>/dev/null)
     set -e
 fi
 
