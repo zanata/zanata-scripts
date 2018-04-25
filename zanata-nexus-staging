@@ -40,7 +40,7 @@ MavenReleaseProfiles=$(get_artifact_var_value $ArtifactId MAVEN_RELEASE_PROFILES
 
 ## List all artifacts to be released in sonatype nexus
 ## e.g. !server/zanata-test-war,!server/functional-test
-NexusReleaseProjects=$(get_artifact_var_value $ArtifactId MAVEN_NEXUS_RELEASE_PROJECT)
+NexusReleaseProjects=$(get_artifact_var_value $ArtifactId MAVEN_NEXUS_RELEASE_PROJECTS)
 
 ## default variables
 Projects=$NexusReleaseProjects
