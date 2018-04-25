@@ -31,10 +31,6 @@ timestamps {
     String developmentVersion = null
     String artifactId = null
 
-    //  chooses projects whose versions should be changed
-    //  To be passed as -pl <Projects> in maven
-    String setPomVersionProjects = null
-
     //  List all artifacts to be released in sonatype nexus
     //  To be passed as -pl <Projects> in maven
     String nexusStagingProjects = null

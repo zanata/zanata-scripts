@@ -38,14 +38,12 @@ RepoName=$(repo_name_get)
 ArtifactId=$(get_artifact_id $RepoName)
 Version=$(./mvnw -q -Dexec.executable="echo" -Dexec.args='${project.version}' --non-recursive org.codehaus.mojo:exec-maven-plugin:exec)
 
-MavenReleaseProfiles=$(get_artifact_var_value $ArtifactId maven_release_profiles)
-
 ## List all artifacts to be released in sonatype nexus
 ## e.g. !server/zanata-test-war,!server/functional-test
-NexusReleaseProjects=$(get_artifact_var_value $ArtifactId maven_nexus_release_project )
+NexusReleaseProjects=$(get_artifact_var_value $ArtifactId MAVEN_NEXUS_RELEASE_PROJECT )
 
 ## Staging repository prefix, e.g. orgzanata
-NexusStagingRepositoryPrefix=$(get_artifact_var_value $ArtifactId staging_repository)
+NexusStagingRepositoryPrefix=$(get_artifact_var_value $ArtifactId STAGING_REPOSITORY)
 
 ## default values
 Projects="$NexusReleaseProjects"

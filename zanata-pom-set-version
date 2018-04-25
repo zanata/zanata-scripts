@@ -34,13 +34,13 @@ ArtifactId=$(get_artifact_id $RepoName)
 
 ## chooses projects whose versions should be changed
 ## eg: -pl build-tools,parent
-MavenVersionProjects=$(get_artifact_var_value $ArtifactId maven_version_project )
+ParentProject=$(get_artifact_var_value $ArtifactId MAVEN_PARENT_PROJECT )
 
 ## Tag message refers to release notes if release-notes is not empty
-ReleaseNotesFile=$(get_artifact_var_value $ArtifactId release_notes_file )
+ReleaseNotesFile=$(get_artifact_var_value $ArtifactId RELEASE_NOTES_FILE )
 
 ## default variables
-Projects=$MavenVersionProjects
+Projects=$ParentProject
 
 ###
 ### OPTIONS
@@ -79,12 +79,14 @@ fi
 [[ -n ${1:-} ]] && Projects="$1"
 if [[ -n $Projects && $Projects != 'null' ]]; then
     ProjectOpts="-pl $Projects"
+elif [[ -n $ParentProject ]]; then
+    ProjectOpts="-pl $Projects"
 else
     ProjectOpts=""
 fi
 
 run_command sed -i -e 's|<tag>.*</tag>|<tag>'$ScmTag'</tag>|' $(find . -name pom.xml | xargs )
-run_command ./mvnw ${MAVEN_COMMON_OPTIONS:-} $ProjectOpts versions:set -DnewVersion=$Version
+run_command ./mvnw ${MAVEN_COMMON_OPTIONS:-} $ProjectOpts versions:set -DnewVersion=$Version -DprocessAllModules
 run_command git commit -a -m "$CommitMessage"
 
 if [[ $SnapshotMode -eq 0 ]]; then

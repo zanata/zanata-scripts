@@ -111,7 +111,7 @@ MAVEN_NEXUS_STAGING_PLUGIN="org.sonatype.plugins:nexus-staging-maven-plugin"
 MAVEN_NEXUS_STAGING_OPTIONS="-DnexusUrl=https://oss.sonatype.org/ -DserverId=sonatype-staging"
 
 ## zanata-platform
-PLATFORM_MAVEN_VERSION_PROJECT="build-tools,parent"
+PLATFORM_MAVEN_PARENT_PROJECT="parent"
 PLATFORM_MAVEN_NEXUS_RELEASE_PROJECTS="!server/zanata-test-war,!server/functional-test"
 PLATFORM_MAVEN_RELEASE_PROFILES="release"
 PLATFORM_STAGING_REPOSITORY="orgzanata"
