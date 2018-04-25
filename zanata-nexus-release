@@ -38,6 +38,8 @@ RepoName=$(repo_name_get)
 ArtifactId=$(get_artifact_id $RepoName)
 Version=$(./mvnw -q -Dexec.executable="echo" -Dexec.args='${project.version}' --non-recursive org.codehaus.mojo:exec-maven-plugin:exec)
 
+MavenReleaseProfiles=$(get_artifact_var_value $ArtifactId MAVEN_RELEASE_PROFILES)
+
 ## List all artifacts to be released in sonatype nexus
 ## e.g. !server/zanata-test-war,!server/functional-test
 NexusReleaseProjects=$(get_artifact_var_value $ArtifactId MAVEN_NEXUS_RELEASE_PROJECT )
