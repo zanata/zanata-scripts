@@ -112,7 +112,7 @@ MAVEN_NEXUS_STAGING_OPTIONS="-DnexusUrl=https://oss.sonatype.org/ -DserverId=son
 
 ## zanata-platform
 PLATFORM_MAVEN_PARENT_PROJECT="parent"
-PLATFORM_MAVEN_NEXUS_RELEASE_PROJECTS="!server/zanata-test-war,!server/functional-test"
+PLATFORM_MAVEN_NEXUS_RELEASE_PROJECTS="!gwt-editor,!gwt-shared,!gwt-test,!security-common,!server,!server/zanata-test-war,!server/functional-test,!services,!zanata-frontend,!zanata-liquibase,!zanata-model,!zanata-model-test,!zanata-war"
 PLATFORM_MAVEN_RELEASE_PROFILES="release"
 PLATFORM_STAGING_REPOSITORY="orgzanata"
 PLATFORM_RELEASE_NOTES_FILE="docs/release-notes.md"
