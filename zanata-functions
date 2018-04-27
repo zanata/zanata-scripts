@@ -753,10 +753,10 @@ run_command(){
         ExitCode=$EXIT_OK
     else
         [[ $- = *x* ]] && xtrace=1
-        [[ $xtrace -eq 0 ]] && set -x
+        [[ $xtrace -ne 0 ]] || set -x
         "$@"
         ExitCode=$?
-        [[ $xtrace -eq 0 ]] && set +x
+        [[ $xtrace -ne 0 ]] || set +x
     fi
 }
 

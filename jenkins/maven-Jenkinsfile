@@ -170,7 +170,10 @@ timestamps {
               case 0: // EXIT_OK
                 // ReleaseNotes updated. Git commit is done by zanata-release-notes-prepend
                 break
-              case 40: // EXIT_RETURN_FALSE
+	      case 21: // EXIT_ERROR_UNKNOWN_VERSION
+	        // Jira does not have this version
+		break
+	      case 40: // EXIT_RETURN_FALSE
                 // ReleaseNotes does not changed
                 break
               default:
