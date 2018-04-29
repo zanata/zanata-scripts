@@ -1,4 +1,4 @@
-#!/bin/bash -eu
+#!/bin/bash
 ### NAME
 ###     zanata-functions
 ###
@@ -23,6 +23,7 @@
 ###         curl -q https://raw.githubusercontent.com/zanata/zanata-scripts/master/zanata-functions | bash -s - [opt1...]
 ###
 ###
+set -eu
 ### FUNCTIONS
 function zanata_functions_get_path(){
     shopt -s extdebug
