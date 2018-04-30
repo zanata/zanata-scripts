@@ -1,0 +1,20 @@
+#!/bin/bash
+### NAME
+###     py-test-all - test all python files
+###
+
+set -eu
+PY_SOURCES=*.py
+
+## Pylint
+echo "====== pylint ======" > /dev/stderr
+python2 -m pylint $PY_SOURCES
+
+## flake8
+echo "====== flake8 =====" > /dev/stderr
+flake8 --benchmark $PY_SOURCES
+
+## pytest
+echo "====== pytest-2 ======" > /dev/stderr
+pytest-2  $PY_SOURCES
+
