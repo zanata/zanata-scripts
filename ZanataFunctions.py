@@ -147,6 +147,7 @@ class SshHost(object):
                     "rm -fr %s" % dest_path, sudo)
 
         cmd_list = ['scp', '-p'] + self.opt_list + [
+        cmd_list += [
                 source_path,
                 "%s:%s" % (self._get_user_host(), dest_path)]
 
@@ -155,20 +156,42 @@ class SshHost(object):
         subprocess.check_call(cmd_list)  # nosec
 
 
+class Response(object):  # pylint: disable=too-few-public-methods
+    """Response Object"""
+    def __init__(  # pylint: disable=too-many-arguments
+            self, code, content=None, info=None, reason=None):
+        self.code = code
+        self.content = content
+        self.info = info
+        self.reason = reason
+
+
 class UrlHelper(object):
     """URL helper functions"""
-    def __init__(self, base_url, user, token):
+    @staticmethod
+    def auth_field_basic_function(user, password):
+        # type (str, str) -> dict
+        """Generate Basic auth header field"""
+        token = base64.b64encode("%s:%s" % (user, password))
+        return {'Authorization': "Basic %s" % token}
+
+    def __init__(self, base_url, user, password, auth_field_func=None):
+        # type (str, str, str, callable) -> None
         """install the authentication handler."""
         self.base_url = base_url
-        auth_handler = HTTPBasicAuthHandler()
-        auth_handler.add_password(
-                realm=None,
-                uri=self.base_url,
-                user=user,
-                passwd=token)
-        opener = urllib2.build_opener(auth_handler)
-        # install it for all urllib2.urlopen calls
-        urllib2.install_opener(opener)
+        self.user = user
+        self.password = password
+        self.headers = {}
+        if user:
+            if auth_field_func:
+                for key, value in auth_field_func(user, password).iteritems():
+                    self.headers[key] = value
+            pass_mgr = urllib2.HTTPPasswordMgrWithDefaultRealm()
+            pass_mgr.add_password(None, base_url, user, password)
+            auth_handler = HTTPBasicAuthHandler(pass_mgr)
+            opener = urllib2.build_opener(auth_handler)
+            # install it for all urllib2.urlopen calls
+            urllib2.install_opener(opener)
 
     @staticmethod
     def read(url):
@@ -214,3 +237,60 @@ class UrlHelper(object):
                     sys.stderr.write('.')
                     sys.stderr.flush()
         return response
+
+    @staticmethod
+    def upload_file_curl(url, source_file, user, password):
+        # type (str, str) -> None
+        """Upload file with curl"""
+        header_opt_array = ['-H', 'Content-Type: application/octet-stream']
+        cmd_list = ['/usr/bin/curl', '-i', '-X', 'POST']
+        cmd_list += ['-u', "%s:%s" % (user, password)]
+        cmd_list += header_opt_array
+        cmd_list += ['--data-binary', '@' + source_file, url]
+        print cmd_list
+        return subprocess.check_call(cmd_list)
+
+    @staticmethod
+    def log_response(response, msg):
+        # type: (response, str) -> None
+        """Log the response"""
+        if not isinstance(response, Exception):
+            logging.info(
+                    "%sCode=%d Info=%s",
+                    'Msg=%s ' % (msg or ''),
+                    response.code,
+                    response.info)
+        else:
+            logging.warning(
+                    "%s%sReason=%s",
+                    'Msg=%s ' % msg if msg else '',
+                    "Code=%d " % response.code if hasattr(
+                            response, 'code') else '',
+                    response.reason)
+
+    def request(  # pylint: disable=too-many-arguments, unused-variable
+            self, path,
+            data=None, headers=None, msg='', base_url=''):
+        # type: (str, object, dict, str, str) -> object
+        """Return either response content or Exception after request"""
+        url = base_url if base_url else self.base_url
+        req = urllib2.Request(
+                "%s%s" % (url, path), data)
+        for key, value in self.headers.iteritems():
+            req.add_header(key, value)
+
+        if headers:
+            for key, value in headers.iteritems():
+                req.add_header(key, value)
+        try:
+            res = urllib2.urlopen(req)   # nosec
+            response = Response(
+                    res.getcode(), res.info(), res.read())
+            UrlHelper.log_response(response, msg)
+            return response
+        except urllib2.HTTPError, e:
+            UrlHelper.log_response(e, msg)
+            raise e
+        except urllib2.URLError, e:
+            UrlHelper.log_response(e, msg)
+            raise e
