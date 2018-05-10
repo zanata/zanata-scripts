@@ -11,8 +11,10 @@
 // echo "SELECT table_name FROM information_schema.tables WHERE table_schema='zanata';" | mysql --silent -u root zanata
 def tableNames = """\
 Activity
+AllowedApp
 DATABASECHANGELOG
 DATABASECHANGELOGLOCK
+Glossary
 HAccount
 HAccountActivationKey
 HAccountMembership
@@ -48,9 +50,12 @@ HProjectIteration_Locale
 HProjectIteration_LocaleAlias
 HProjectIteration_Validation
 HProject_AllowedRole
+HProject_Glossary
 HProject_Locale
 HProject_LocaleAlias
+HProject_LocaleMember
 HProject_Maintainer
+HProject_Member
 HProject_Validation
 HRawDocument
 HRoleAssignmentRule
@@ -65,11 +70,14 @@ HTextFlowTargetHistory
 HTextFlowTargetReviewComment
 IterationGroup_Locale
 LanguageRequest
+Request
+ReviewCriteria
 TransMemory
 TransMemoryUnit
 TransMemoryUnitVariant
 TransMemory_Metadata
 WebHook
+WebHook_WebHookType
 """
 
 def tables = tableNames.split('\n').collect { it.trim() }
