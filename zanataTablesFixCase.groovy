@@ -86,6 +86,7 @@ def lowerNames = new HashSet()
 
 // map from back-quoted lower case name to back-quoted original case name
 def quotedNames = [:]
+def lowerToCamelCaseMap = [:]
 
 // populate lowerNames, quotedNames
 tables.each {
@@ -95,7 +96,15 @@ tables.each {
         def lowerTable = table.toLowerCase()
         lowerNames.add(lowerTable)
         quotedNames.put("`"+lowerTable+"`", "`"+table+"`")
+        lowerToCamelCaseMap.put(lowerTable, table)
     }
+}
+
+if (args.length > 0 && args[0] == "--sql") {
+    lowerToCamelCaseMap.each { k, v ->
+        println "RENAME TABLE `$k` TO `${k}_`; RENAME TABLE `${k}_` TO `$v`;"
+    }
+    System.exit 0
 }
 
 def foundTables = new HashSet()
