@@ -52,7 +52,7 @@ while getopts "hBjlp" opt;do
             JustUseCurrentDirectoryMode=1
             ;;
 ###
-###     -l: Legacy branch will be overwritten by release branch
+###     -l: Legacy branch will NOT be overwritten by release branch
         l )
             OverwrittenLegacy=0
             ;;
