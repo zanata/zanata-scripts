@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Test whether the Zanata server is up.
 # Author: dchen@redhat.com
 
@@ -16,9 +16,9 @@ Options:
     -p: Grep-like patten to be captured.
     -v: VerboseLevel (Default is 1)
         0: Nothing is output
-	1: Only the final results
-	2: Print result for each check.
-	3: wget message as well.
+        1: Only the final results
+        2: Print result for each check.
+        3: curl message as well.
 
 Return value:
     0: Zanata server is up eventually.
@@ -26,61 +26,59 @@ Return value:
 END
 }
 
-function check_connection(){
-    DOWNLOAD_FILE=$(mktemp)
-    if [ $VERBOSE -lt 3 ]; then
-	QUIET="-q"
-    else
-	QUIET=""
-    fi
-    wget --no-check-certificate ${QUIET} -O $DOWNLOAD_FILE $ZANATA_SERVER_URL
-    if grep -q -e "$UP_PATTERN" $DOWNLOAD_FILE; then
-	UP=1
-	if [ $VERBOSE -ge 1 ]; then
-	    echo "Zanata server on $ZANATA_SERVER_URL is [UP]"
-	fi
-    else
-	UP=0
-	if [ $VERBOSE -ge 2 ]; then
-	    echo "Zanata server on $ZANATA_SERVER_URL is [DOWN]"
-	fi
-    fi
-
-    rm -f $DOWNLOAD_FILE
-
-    if [ "$UP" = "0" ];then
-	return 1
-    fi
-    return 0;
-}
-
-UP_PATTERN="Projects"
+# platform >= 4 has /account/.*login
+# server <= 3 has /account/sign_in
+UP_PATTERN="/account/(.*login|sign_in)"
 
 # Retry interval: Default: 30 sec
 INTERVAL=30
 RETRIES=5
 VERBOSE=1
 
+check_connection(){
+    if [ $VERBOSE -lt 3 ]; then
+        QUIET="--silent"
+    else
+        QUIET=""
+    fi
+    if curl ${QUIET} --insecure --location $ZANATA_SERVER_URL | grep -q -E -e "$UP_PATTERN" ; then
+        UP=1
+        if [ $VERBOSE -ge 1 ]; then
+            echo "Zanata server on $ZANATA_SERVER_URL is [UP]"
+        fi
+    else
+        UP=0
+        if [ $VERBOSE -ge 2 ]; then
+            echo "Zanata server on $ZANATA_SERVER_URL is [DOWN]"
+        fi
+    fi
+
+    if [ "$UP" = "0" ];then
+        return 1
+    fi
+    return 0;
+}
+
 while getopts "hi:r:p:v:" opt; do
     case $opt in
-	h)
-	    print_usage
-	    exit 0
-	    ;;
-	i)
-	    INTERVAL=$OPTARG
-	    ;;
-	r)
-	    RETRIES=$OPTARG
-	    ;;
-	p)
-	    UP_PATTERN=$OPTARG
-	    ;;
-	v)
-	    VERBOSE=$OPTARG
-	    ;;
-	*)
-	    ;;
+        h)
+            print_usage
+            exit 0
+            ;;
+        i)
+            INTERVAL=$OPTARG
+            ;;
+        r)
+            RETRIES=$OPTARG
+            ;;
+        p)
+            UP_PATTERN=$OPTARG
+            ;;
+        v)
+            VERBOSE=$OPTARG
+            ;;
+        *)
+            ;;
     esac
 done
 shift $((OPTIND-1));
@@ -104,11 +102,11 @@ until [ "$retries" = "$RETRIES" ]; do
     echo "Checking pattern: $UP_PATTERN, retries $retries in $INTERVAL seconds"
     sleep $INTERVAL
     if check_connection; then
-	exit 0;
+        exit 0
     fi
 done
 if [ $VERBOSE -ge 1 ]; then
     echo "Zanata server on $ZANATA_SERVER_URL is still [DOWN] after $retries retries"
 fi
-exit 1;
+exit 1
 
