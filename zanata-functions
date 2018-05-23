@@ -654,6 +654,14 @@ git_detached_merge_branch(){
 }
 
 ###
+###     maven_project_version
+###         Return the project_version in maven
+###         Note that this function assume you are already in directory that contains pom.xml
+maven_project_version(){
+    $MvnCmd -q -Dexec.executable="echo" -Dexec.args='${project.version}' --non-recursive org.codehaus.mojo:exec-maven-plugin:exec
+}
+
+###
 ###     print_status [-n] [-q] [-s] [-t <Stage>] [message]
 ###         Print the status message.
 ###         Options:
@@ -774,28 +782,32 @@ function time_stamp(){
 }
 
 ###
-###     version_next <version>
-###         Add one to last number
+###     version_next <version> [index]
+###         Returns next version of version.
+###         If index is not given, this function adding one to last number.
+###         Index, starting from 0, indicate the part of version you want to change.
+###
+###         For example:
+###             "version_next 4.5.0" returns 4.5.1
+###             "version_next 4.5.0 1" returns 4.6.0
+###
 ###         Version delimiter are: . _ -
-function version_next(){
+version_next(){
     local thisVersion=$1
-    local prefix=${thisVersion%[._-]*}
-    local delimiter=$(sed -n -E -e 's/^.*([._-])([0-9]+)?$/\1/p'<<<$thisVersion)
-    local last
-    if [[ -z $delimiter ]];then
-        ## See if it just contains single number, like 27
-        local prefixNum=$(sed -n -E -e 's/([0-9]+)/\1/p'<<<$prefix)
-        if [[ -z $prefixNum ]];then
-            failed $EXIT_FATAL_INVALID_ARGUMENTS "version $thisVersion is invalid"
-        else
-            last=$((prefixNum+1))
-            echo "$last"
-            return
-        fi
-    else
-        last=$(($(sed -n -E -e 's/^.*([._-])([0-9]+)$/\2/p'<<<$thisVersion)+1))
+    local index=${2-}
+    local versionArray=( ${thisVersion//[._-]/ } )
+    local delimiterArray=( ${thisVersion//[0-9a-zA-Z]/ } )
+    local lastIndex=${#versionArray[@]}-1
+    local result=
+    if [[ -z $index ]] ;then
+        index=lastIndex
     fi
-    echo "$prefix$delimiter$last"
+    let versionArray[$index]=${versionArray[$index]}+1
+    for((i=0;i<lastIndex;i++)); do
+        result+=${versionArray[$i]}${delimiterArray[$i]}
+    done
+    result+=${versionArray[$lastIndex]}
+    echo "$result"
 }
 
 
