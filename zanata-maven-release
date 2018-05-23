@@ -285,5 +285,12 @@ $ScriptDir/zanata-pom-set-version "$DevelopmentVersion"
 if [[ -z $ZANATA_RELEASE_MODE ]]; then
     ## Push the SNAPSHOT commit
     run_command git push --follow-tags origin $WorkingBranch
+    if [[ $WorkingBranch != 'master' ]] ;then
+        ## Merge to master
+        run_command git checkout master
+        run_commnad branch_forced_pull
+        run_command git merge $WorkingBranch -Xours
+        run_command git push
+    fi
 fi
 

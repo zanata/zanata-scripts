@@ -69,7 +69,9 @@ else
 fi
 
 if [[ $ZANATA_RELEASE_MODE == testBuild ]]; then
-    Goal=verify
+    ## Use install
+    ## so following steps will not looking for undeployed artifacts.
+    Goal=install
 else
     Goal=deploy
 fi

@@ -152,7 +152,9 @@ echo_stderr(){
 ###
 ###     branch_checkout <repoName> <branch> [parentDir]
 ###         checkout <branch> for <repoName>.
-###         Note that this won't change to the repoName directory.
+###         Note that:
+###             1. this won't cd to the repoName directory.
+###             2. If local branch will be override by remote branch
 branch_checkout(){
     local repoName=$1
     local branch=$2
@@ -161,8 +163,7 @@ branch_checkout(){
     cd ${parentDir}/${repoName}
     git remote update origin > /dev/stderr
     git checkout ${branch} > /dev/stderr
-    git pull > /dev/stderr
-    git reset --hard origin/$branch > /dev/stderr
+    branch_forced_pull
     cd - > /dev/stderr
 }
 
@@ -189,6 +190,21 @@ branch_does_exist(){
     fi
     echo "no"
     return $EXIT_RETURN_FALSE
+}
+
+###
+###     branch_forced_pull [remote]
+###         Withdraw local changes and pull the remote,
+###         which, by default, is 'origin'
+###         Note that function does nothing to a detached HEAD
+branch_forced_pull(){
+    local branch=$(branch_get_current)
+    local remote=${1:-origin}
+    if [[ $branch = 'HEAD' ]] ;then
+        return
+    fi
+    git fetch $remote $branch > /dev/stderr
+    git reset --hard "$remote/$branch" > /dev/stderr
 }
 
 ###
@@ -648,6 +664,7 @@ git_detached_merge_branch(){
     if [[ $(branch_get_current) = HEAD ]]; then
         git branch $tmpBranch $commitSha
         git checkout $branch
+        branch_forced_pull
         git merge $tmpBranch
         git branch -D $tmpBranch
     fi

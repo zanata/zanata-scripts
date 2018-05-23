@@ -170,10 +170,10 @@ timestamps {
               case 0: // EXIT_OK
                 // ReleaseNotes updated. Git commit is done by zanata-release-notes-prepend
                 break
-	      case 21: // EXIT_ERROR_UNKNOWN_VERSION
-	        // Jira does not have this version
-		break
-	      case 40: // EXIT_RETURN_FALSE
+      	      case 21: // EXIT_ERROR_UNKNOWN_VERSION
+	              // Jira does not have this version
+            		break
+      	      case 40: // EXIT_RETURN_FALSE
                 // ReleaseNotes does not changed
                 break
               default:
@@ -207,9 +207,9 @@ timestamps {
         }
         stage('SetSnapshotVersion') {
           sh(returnStatus: true,
-            script: "bash $WORKSPACE/zanata-pom-set-version $developmentVersion"
+            script: "bash $WORKSPACE/zanata-pom-set-version $developmentVersion",
           )
-	  sh "bash $WORKSPACE/zanata-functions run git_detached_merge_branch ${PROJ_BRANCH}"
+      	  sh "bash $WORKSPACE/zanata-functions run git_detached_merge_branch ${PROJ_BRANCH}"
 
           withCredentials([
             [$class: 'UsernamePasswordMultiBinding',
@@ -219,6 +219,13 @@ timestamps {
           ]) {
             if ( params.ZANATA_RELEASE_MODE == '') {
               sh "git push --follow-tags https://$GIT_USERNAME:$GITHUB_OAUTH2_TOKEN@${PROJ_BASE} ${PROJ_BRANCH}"
+              // Merge master
+              if (PROJ_BRANCH != 'master') {
+                sh "git checkout master"
+                sh "bash $WORKSPACE/zanata-functions run branch_forced_pull"
+                sh "git merge ${PROJ_BRANCH} -Xours"
+                sh "git push"
+              }
             }
           }
         }
