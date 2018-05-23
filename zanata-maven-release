@@ -239,7 +239,7 @@ if [[ -n $ReleaseNotesFile && $UpdateReleaseNotes -eq 1 ]]; then
     ## Remove -alpha-???
     ReleaseNoteVersion=${ReleaseVersion%%-*}
     set +e
-    run_command zanata-release-notes-prepend -j $ArtifactId $ReleaseNoteVersion
+    run_command $ScriptDir/zanata-release-notes-prepend -j $ArtifactId $ReleaseNoteVersion
     set -e
     case $ExitCode in
         $EXIT_OK )
