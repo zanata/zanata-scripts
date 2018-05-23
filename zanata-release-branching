@@ -88,6 +88,7 @@ if [[ $JustUseCurrentDirectoryMode -eq 0 ]];then
 fi
 ArtifactId=$(get_artifact_id $Module)
 
+
 ##=== prepare Start ===
 print_status -t prepare -s "Start"
 
@@ -149,7 +150,13 @@ print_status -t "Final" -s "Start"
 print_status " Update master version"
 git checkout master
 
-mvn versions:set -pl build-tools,parent -DnewVersion=$DevelopmentVersion
+if [[ $DevelopmentVersion = 'auto' ]]; then
+    MasterProjectVersion=$(maven_project_version)
+    print_status " auto mode: Current project_version in master"
+    DevelopmentVersion=$(version_next $MasterProjectVersion 1)
+    print_status " New project_version in master is $DevelopmentVersion"
+fi
+$ScriptDir/zanata-pom-set-version $DevelopmentVersion build-tools,parent
 
 if ! git diff --exit-code ;then
     if [ $BatchMode -eq 0 ];then
