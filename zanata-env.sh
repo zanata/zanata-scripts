@@ -99,7 +99,7 @@ export ZANATA_GIT_URL_PREFIX
 
 MAVEN_COMMON_OPTIONS="-e -T 1 --builder singlethreaded"
 
-MAVEN_RELEASE_OPTIONS="-Dallow.deploy.skip=false -Dcheckstyle.skip=true -Denforcer.skip=true -Dfindbugs.skip=true -Dgpg.executable=gpg2 -Dgpg.useagent=true -Doptimise -DskipArqTests=true -DskipFuncTests=true -DskipTests=true -DupdateReleaseInfo=true"
+MAVEN_RELEASE_OPTIONS="-Dcheckstyle.skip=true -Denforcer.skip=true -Dfindbugs.skip=true -Dgpg.executable=gpg2 -Dgpg.useagent=true -Doptimise -DskipArqTests=true -DskipFuncTests=true -DskipTests=true -DupdateReleaseInfo=true"
 
 ###
 ###     MAVEN_NEXUS_STAGING_PLUGIN
