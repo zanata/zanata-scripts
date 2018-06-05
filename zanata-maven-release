@@ -268,6 +268,10 @@ print_status -t release -s "Start"
 print_status " Set pom.xml version to release version $ReleaseVersion"
 $ScriptDir/zanata-pom-set-version "$ReleaseVersion"
 
+## Build with mvn install to get war and frontend
+print_status " Build with mvn install"
+run_command ./build --optimise --quick --all --install
+
 ## Build & Deploy to Nexus Staging
 print_status " deploy to nexus staging"
 $ScriptDir/zanata-nexus-staging

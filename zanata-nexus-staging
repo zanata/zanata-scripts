@@ -68,18 +68,10 @@ else
     ProjectOpts=""
 fi
 
-if [[ $ZANATA_RELEASE_MODE == testBuild ]]; then
-    ## Use install
-    ## so following steps will not looking for undeployed artifacts.
-    Goal=install
-else
-    Goal=deploy
-fi
-
 if [[ -n $MavenReleaseProfiles ]]; then
     ReleaseProfileOpts=-P$MavenReleaseProfiles
 else
     ReleaseProfileOpts=
 fi
 
-run_command $MvnCmd ${MAVEN_COMMON_OPTIONS:-} ${MAVEN_RELEASE_OPTIONS:-} $ReleaseProfileOpts $ProjectOpts $Goal -DstagingDescription="$ArtifactId:$Version"
+run_command $MvnCmd ${MAVEN_COMMON_OPTIONS:-} ${MAVEN_RELEASE_OPTIONS:-} $ReleaseProfileOpts $ProjectOpts deploy -DstagingDescription="$ArtifactId:$Version"
