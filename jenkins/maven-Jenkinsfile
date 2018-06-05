@@ -240,7 +240,7 @@ timestamps {
       }
       stage('ArtifactList') {
         sh("bash $WORKSPACE/zanata-artifact-m2repo -l | sort -u > artifact-list.txt")
-        archiveArtifacts(artifacts: 'artifact-list.txt,server/zanata-war/target/zanata-*.war, server/zanata-frontend/target/zanata-frontend-*.jar' )
+        archiveArtifacts(artifacts: 'artifact-list.txt,**/zanata-war/target/zanata-*.war, **/zanata-frontend/target/zanata-frontend-*.jar' )
       }
     }
   }
