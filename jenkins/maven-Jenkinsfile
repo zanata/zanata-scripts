@@ -232,7 +232,7 @@ timestamps {
                 sh "git checkout master"
                 sh "bash $WORKSPACE/zanata-functions run branch_forced_pull"
                 sh "git merge ${PROJ_BRANCH} -Xours"
-                sh "git push"
+                sh "git push https://$GIT_USERNAME:$GITHUB_OAUTH2_TOKEN@${PROJ_BASE} master"
               }
             }
           }
