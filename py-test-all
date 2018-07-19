@@ -6,6 +6,10 @@
 set -eu
 PY_SOURCES=*.py
 
+## pytest
+echo "====== pytest-2 ======" > /dev/stderr
+pytest-2  *.py
+
 ## Pylint
 echo "====== pylint ======" > /dev/stderr
 python2 -m pylint $PY_SOURCES
@@ -14,7 +18,4 @@ python2 -m pylint $PY_SOURCES
 echo "====== flake8 =====" > /dev/stderr
 flake8 --benchmark $PY_SOURCES
 
-## pytest
-echo "====== pytest-2 ======" > /dev/stderr
-pytest-2  $PY_SOURCES
 
