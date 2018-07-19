@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 """Test the ZanataArgParser.py"""
 
-from __future__ import (
-        absolute_import, division, print_function)
+from __future__ import (absolute_import, division, print_function)
 
 import StringIO  # pylint: disable=E0401
 import os
@@ -42,7 +41,6 @@ class ZanataArgParserTestCase(unittest.TestCase):
         captured_output = StringIO.StringIO()
         sys.stdout = captured_output
         args = getattr(self.parser, method)(param_list)
-        sys.stdout = sys.__stdout__
         if stdout_pattern:
             self.assertRegexpMatches(  # pylint: disable=W1505
                     captured_output.getvalue(), stdout_pattern)

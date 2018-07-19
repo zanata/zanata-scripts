@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 """Test the ZanataFunctions"""
 
-from __future__ import (
-        absolute_import, division, print_function, unicode_literals)
+from __future__ import (absolute_import, division, print_function)
 
 import subprocess  # nosec
 import unittest

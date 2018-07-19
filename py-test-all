@@ -5,10 +5,18 @@
 
 set -eu
 PY_SOURCES=*.py
+if which pytest-2 &>/dev/null; then
+    PYTEST=pytest-2
+elif which py.test-2.7 &>/dev/null; then
+    PYTEST=py.test-2.7
+else
+    echo "pytest-2 is not installed" > /dev/stderr
+    exit 1
+fi
 
 ## pytest
 echo "====== pytest-2 ======" > /dev/stderr
-pytest-2  *.py
+$PYTEST  *.py
 
 ## Pylint
 echo "====== pylint ======" > /dev/stderr
@@ -16,6 +24,8 @@ python2 -m pylint $PY_SOURCES
 
 ## flake8
 echo "====== flake8 =====" > /dev/stderr
-flake8 --benchmark $PY_SOURCES
+## E126(continuation line over-indented for hanging indent) seems to
+## clash with pylint indent rules
+flake8 --ignore E126 --benchmark $PY_SOURCES
 
 

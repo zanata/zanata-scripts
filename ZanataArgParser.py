@@ -2,8 +2,7 @@
 """ZanataArgParser is an sub-class of ArgumentParser
 that handles sub-parser, environments more easily."""
 
-from __future__ import (
-        absolute_import, division, print_function)
+from __future__ import (absolute_import, division, print_function)
 
 from argparse import ArgumentParser, ArgumentError
 import logging
