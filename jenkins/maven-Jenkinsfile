@@ -160,10 +160,10 @@ timestamps {
         ).trim()
         if (releaseNotesFile){
           stage('ReleaseNotes') {
-            String releaseNoteVersion = releaseVersion.replaceAll(/[-.]/, '')
+            String releaseNoteVersion = releaseVersion.replaceAll(/-.*/, '')
             echo "releaseNoteVersion: $releaseNoteVersion"
             def releaseNoteStatus = sh(returnStatus: true,
-              script: "bash $WORKSPACE/zanata-release-notes-prepend -j $artifactId $releaseVersion",
+              script: "bash $WORKSPACE/zanata-release-notes-prepend -j $artifactId $releaseNoteVersion",
             )
             echo "releaseNoteStatus: $releaseNoteStatus"
             switch(releaseNoteStatus) {
