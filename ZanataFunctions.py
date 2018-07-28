@@ -147,7 +147,6 @@ class SshHost(object):
                     "rm -fr %s" % dest_path, sudo)
 
         cmd_list = ['scp', '-p'] + self.opt_list + [
-        cmd_list += [
                 source_path,
                 "%s:%s" % (self._get_user_host(), dest_path)]
 
@@ -168,30 +167,26 @@ class Response(object):  # pylint: disable=too-few-public-methods
 
 class UrlHelper(object):
     """URL helper functions"""
-    @staticmethod
-    def auth_field_basic_function(user, password):
-        # type (str, str) -> dict
-        """Generate Basic auth header field"""
-        token = base64.b64encode("%s:%s" % (user, password))
-        return {'Authorization': "Basic %s" % token}
-
-    def __init__(self, base_url, user, password, auth_field_func=None):
+    def __init__(self, base_url, user, token, auth_field_func=None):
         # type (str, str, str, callable) -> None
         """install the authentication handler."""
         self.base_url = base_url
         self.user = user
-        self.password = password
+        self.token = token
         self.headers = {}
         if user:
             if auth_field_func:
-                for key, value in auth_field_func(user, password).iteritems():
+                for key, value in auth_field_func(user, token).iteritems():
                     self.headers[key] = value
-            pass_mgr = urllib2.HTTPPasswordMgrWithDefaultRealm()
-            pass_mgr.add_password(None, base_url, user, password)
-            auth_handler = HTTPBasicAuthHandler(pass_mgr)
-            opener = urllib2.build_opener(auth_handler)
-            # install it for all urllib2.urlopen calls
-            urllib2.install_opener(opener)
+        auth_handler = HTTPBasicAuthHandler()
+        auth_handler.add_password(
+                realm=None,
+                uri=self.base_url,
+                user=user,
+                passwd=token)
+        opener = urllib2.build_opener(auth_handler)
+        # install it for all urllib2.urlopen calls
+        urllib2.install_opener(opener)
 
     @staticmethod
     def read(url):
@@ -247,7 +242,7 @@ class UrlHelper(object):
         cmd_list += ['-u', "%s:%s" % (user, password)]
         cmd_list += header_opt_array
         cmd_list += ['--data-binary', '@' + source_file, url]
-        print cmd_list
+        print(cmd_list)
         return subprocess.check_call(cmd_list)
 
     @staticmethod
@@ -288,9 +283,9 @@ class UrlHelper(object):
                     res.getcode(), res.info(), res.read())
             UrlHelper.log_response(response, msg)
             return response
-        except urllib2.HTTPError, e:
+        except urllib2.HTTPError as e:
             UrlHelper.log_response(e, msg)
             raise e
-        except urllib2.URLError, e:
+        except urllib2.URLError as e:
             UrlHelper.log_response(e, msg)
             raise e

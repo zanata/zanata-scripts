@@ -3,16 +3,19 @@
 Run GitHubHelper.py --help or JenkinsHelper.py --help <command> for
 detail help."""
 
-import argparse
+from __future__ import (
+        absolute_import, division, print_function, unicode_literals)
 import json
 import logging
 import os
 import re
 import sys
-import urllib2  # noqa: F401 # pylint: disable=import-error,unused-import
+import urllib2
 
 from urllib import quote_plus
-from ZanataFunctions import UrlHelper, logging_init
+from ZanataFunctions import UrlHelper
+from ZanataArgParser import ZanataArgParser  # pylint: disable=E0401
+
 
 try:
     # We need to import 'List' and 'Any' for mypy to work
@@ -24,27 +27,21 @@ except ImportError:
 class GitHubHelper(UrlHelper):
     """GitHub Helper functions"""
     @staticmethod
-    def auth_field_token_function(user, password):
+    def auth_field_token_function(user, token):
         # type (str, str) -> dict
         """Generate Basic auth header field"""
-        return {'Authorization': "token %s:%s" % (user, password)}
+        return {'Authorization': "token %s:%s" % (user, token)}
 
-    def __init__(self, user, password):
+    def __init__(self, user, token):
         # type: (str, str) -> None
         self.api_server = 'api.github.com'
         super(GitHubHelper, self).__init__(
-                'https://' + self.api_server, user, password,
-                GitHubHelper.auth_field_token_function,
-                )
+                'https://' + self.api_server, user, token,
+                GitHubHelper.auth_field_token_function)
 
-    def __getitem__(self, key):
-        # type: (str) -> str
-        return self[key]
-
-    @staticmethod
-    def init_default():
-        # type: () -> None
-        """Init GitHub connection with default environment."""
+    @classmethod
+    def init_default(cls):
+        """New an instance from parsed args"""
         user = os.environ.get('ZANATA_GITHUB_USER')
         token = os.environ.get('ZANATA_GITHUB_TOKEN')
 
@@ -53,17 +50,42 @@ class GitHubHelper(UrlHelper):
         if not token:
             raise AssertionError("Missing environment 'ZANATA_GITHUB_TOKEN'")
 
-        return GitHubHelper(user, token)
+        return cls(user, token)
 
-    @staticmethod
-    def create_parent_parser():
-        # type () -> argparse.ArgumentParser
-        """Create a parser as parent of argument parser"""
-        parent_parser = argparse.ArgumentParser(add_help=False)
-        parent_parser.add_argument(
+    @classmethod
+    def add_parser(
+            cls, arg_parser=None):
+        # type: (ZanataArgParser, bool) -> ZanataArgParser
+        """Add GitHubHelper parameters to parser"""
+        if not arg_parser:
+            arg_parser = ZanataArgParser(description=__doc__)
+
+        arg_parser.add_common_argument(
                 'repo_name', type=str, help='repository name')
-        parent_parser.add_argument('tag', type=str, help='git tag')
-        return parent_parser
+
+        arg_parser.add_common_argument(
+                'tag', type=str, help='tag in GitHub')
+
+        # Add sub commands
+        arg_parser.add_sub_command(
+                'has-tag', None,
+                help=cls.has_tag.__doc__)
+        arg_parser.add_sub_command(
+                'upload',
+                {
+                        '-d --draft': {
+                                'action': 'store_true',
+                                'default': False,
+                                'help': 'Create draft release'},
+                        '-p --prerelease': {
+                                'action': 'store_true',
+                                'default': False,
+                                'help': 'Create pre-release'},
+                        'source_file': {
+                                'type': str,
+                                'help': 'File to be upload'}},
+                help=cls.upload.__doc__)
+        return arg_parser
 
     def has_tag(self, repo_name, tag):
         # type: (str, str) -> bool
@@ -72,11 +94,11 @@ class GitHubHelper(UrlHelper):
             self.request(
                     "/repos/zanata/%s/git/refs/tags/%s" % (repo_name, tag))
             return True
-        except urllib2.HTTPError, e:
+        except urllib2.HTTPError as e:
             if e.code == 404:
                 return False
             raise e
-        except urllib2.URLError, e:
+        except urllib2.URLError as e:
             raise e
 
     def create_release(  # pylint: disable=too-many-arguments
@@ -114,7 +136,7 @@ class GitHubHelper(UrlHelper):
         try:
             response = self.request(
                     "/repos/zanata/%s/releases/tags/%s" % (repo_name, tag))
-        except urllib2.HTTPError, e:
+        except urllib2.HTTPError as e:
             if e.code == 404:
                 logging.info("No release under tag %s", tag)
                 response = self.create_release(
@@ -122,7 +144,7 @@ class GitHubHelper(UrlHelper):
                         draft=draft, prerelease=prerelease, body=body)
             else:
                 raise e
-        except urllib2.URLError, e:
+        except urllib2.URLError as e:
             raise e
         parsed_res = json.loads(response.info)
         return parsed_res['upload_url']
@@ -143,69 +165,23 @@ class GitHubHelper(UrlHelper):
                 quote_plus(os.path.basename(source_file)))
         if label:
             url += "&label=%s" % quote_plus(label)
-        UrlHelper.upload_file_curl(url, source_file, self.user, self.password)
+        UrlHelper.upload_file_curl(url, source_file, self.user, self.token)
 
 
-def has_tag():
-    # type () -> None
-    """Whether repo_name has tag """
+def run_sub_command(args):
+    # type (ZanataArgParser.Namespace) -> None
+    """Run the sub command"""
     gh = GitHubHelper.init_default()
-    if gh.has_tag(args.repo_name, args.tag):
-        print "yes"
-    else:
-        print "no"
-
-
-def upload():
-    # type () -> None
-    """Upload file to a release.
-    Will create a new release if the release does not exist yet."""
-    gh = GitHubHelper.init_default()
-    gh.upload(
-            args.repo_name, args.tag, args.source_file,
-            draft=args.draft, prerelease=args.prerelease)
-
-
-def parse():
-    # type () -> None
-    """Parse options and arguments"""
-
-    parser = argparse.ArgumentParser(description=GitHubHelper.__doc__)
-    parent_parser = GitHubHelper.create_parent_parser()
-
-    subparsers = parser.add_subparsers(
-            title='Command', description='Valid commands',
-            help='Command help')
-
-    has_tag_parser = subparsers.add_parser(
-            'has-tag',
-            help=has_tag.__doc__,
-            parents=[parent_parser],
-            )
-    has_tag_parser.set_defaults(func=has_tag)
-
-    upload_parser = subparsers.add_parser(
-            'upload',
-            help=upload.__doc__,
-            parents=[parent_parser],
-            )
-    upload_parser.add_argument(
-            '-d', '--draft', action='store_true',
-            default=False, help='Create draft release')
-
-    upload_parser.add_argument(
-            '-p', '--prerelease', action='store_true',
-            default=False, help='Create pre-release')
-
-    upload_parser.add_argument(
-            'source_file', type=str, help='File to be upload')
-    upload_parser.set_defaults(
-            func=upload)
-    return parser.parse_args()
+    if args.sub_command == 'has-tag':
+        if gh.has_tag(args.repo_name, args.tag):
+            print("yes")
+        else:
+            print("no")
+    elif args.sub_command == 'upload':
+        gh.upload(
+                args.repo_name, args.tag, args.source_file,
+                draft=args.draft, prerelease=args.prerelease)
 
 
 if __name__ == '__main__':
-    logging_init()
-
-    args = parse()  # pylint: disable=invalid-name
-    args.func()
+    run_sub_command(GitHubHelper.add_parser().parse_all())
