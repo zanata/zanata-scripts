@@ -2,7 +2,9 @@
 ### NAME
 ###     py-test-all - test all python files
 ###
-
+### SINOPSIS
+###     py-test-all [test-to-run1 [test-to-run2]]
+###
 set -eu
 PY_SOURCES=*.py
 if which pytest-2 &>/dev/null; then
@@ -14,18 +16,43 @@ else
     exit 1
 fi
 
-## pytest
-echo "====== pytest-2 ======" > /dev/stderr
-$PYTEST  *.py
+declare -A RunTests
+if [[ $# -gt 0 ]]; then
+    for arg in "$@"; do
+        RunTests[$arg]=$arg
+    done
+fi
 
-## Pylint
-echo "====== pylint ======" > /dev/stderr
-python2 -m pylint $PY_SOURCES
+run_test(){
+    local testName=$1
+    if [[ ${RunTests[@]:-} != ''  && -z ${RunTests[$testName]:-} ]]; then
+        return 1
+    fi
+    echo
+    echo "====== $testName ======" > /dev/stderr
+    return 0
+}
+
+## pytest
+if run_test pytest-2; then
+    $PYTEST  $PY_SOURCES
+fi
+
+## pylint
+if run_test pylint; then
+    python2 -m pylint $PY_SOURCES
+fi
+
 
 ## flake8
-echo "====== flake8 =====" > /dev/stderr
-## E126(continuation line over-indented for hanging indent) seems to
-## clash with pylint indent rules
-flake8 --ignore E126 --benchmark $PY_SOURCES
+if run_test flake8; then
+    ## E126(continuation line over-indented for hanging indent) seems to
+    ## clash with pylint indent rules
+    flake8 --ignore E126 --benchmark $PY_SOURCES
+fi
 
+## mypy
+if run_test mypy; then
+    mypy --py2 $PY_SOURCES
+fi
 
