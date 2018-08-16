@@ -9,15 +9,17 @@ https://gist.github.com/KurtJacobson/c87425ad8db411c73c6359933e5db9f9"""
 
 from __future__ import (absolute_import, division, print_function)
 
+import inspect
+import logging
+import os
+import re
+import sys
+
 from argparse import ArgumentParser, ArgumentError
 # Following are for mypy
 from argparse import Action  # noqa: F401 # pylint: disable=W0611
 from argparse import Namespace  # noqa: F401 # pylint: disable=W0611
 from argparse import _SubParsersAction  # noqa: F401 # pylint: disable=W0611
-from logging import Formatter
-import logging
-import os
-import sys
 
 try:
     from typing import List, Any  # noqa: F401 # pylint: disable=W0611
@@ -28,7 +30,7 @@ except ImportError:
     sys.stderr.write("python typing module is not installed" + os.linesep)
 
 
-class ColoredFormatter(Formatter):
+class ColoredFormatter(logging.Formatter):
     """Log colored formated
     Inspired from KurtJacobson's colored_log.py"""
     DEFAULT_COLOR = 37  # white
@@ -43,7 +45,7 @@ class ColoredFormatter(Formatter):
     SUFFIX = '\033[0m'
 
     def __init__(self, patern):
-        Formatter.__init__(self, patern)
+        logging.Formatter.__init__(self, patern)
 
     @staticmethod
     def _color(color_id, content):
@@ -92,11 +94,9 @@ class ColoredFormatter(Formatter):
 
 class ZanataArgParser(ArgumentParser):
     """Zanata Argument Parser"""
-
     def __init__(self, *args, **kwargs):
         # type: (Any, Any) -> None
         super(ZanataArgParser, self).__init__(*args, **kwargs)
-        self.sub_parsers = None  # type: Optional[_SubParsersAction]
         self.env_def = {}  # type: Dict[str, dict]
         self.parent_parser = ArgumentParser(add_help=False)
         self.add_argument(
@@ -105,21 +105,37 @@ class ZanataArgParser(ArgumentParser):
                 help='Valid values: %s'
                 % 'DEBUG, INFO, WARNING, ERROR, CRITICAL, NONE')
 
+        self.sub_parsers = None
+        self.sub_command_obj_dict = {}  # type: Dict[str, Any]
+
     def add_common_argument(self, *args, **kwargs):
         # type:  (Any, Any) -> None
         """Add a common argument that will be used in all sub commands
-        In other words, common argument wil be put in common parser.
+        In other words, common argument will be put in common parser.
         Note that add_common_argument must be put in then front of
         add_sub_command that uses common arguments."""
         self.parent_parser.add_argument(*args, **kwargs)
 
-    def add_sub_command(self, name, arguments, **kwargs):
-        # type:  (str, dict, Any) -> ArgumentParser
-        """Add a sub command"""
+    def add_sub_command(self, name, arguments, obj=None, **kwargs):
+        # type:  (str, List, Any, Any) -> ArgumentParser
+        """Add a sub command
+
+        Args:
+            name (str): name of the sub-command
+            arguments (dict): argments to be passed to argparse.add_argument()
+            obj (Any, optional): Defaults to None. The sub_command is
+                a method of the obj.
+
+        Returns:
+            [type]: [description]
+        """
         if not self.sub_parsers:
             self.sub_parsers = self.add_subparsers(
                     title='Command', description='Valid commands',
                     help='Command help')
+
+        if obj:
+            self.sub_command_obj_dict[name] = obj
 
         if 'parents' in kwargs:
             kwargs['parents'] += [self.parent_parser]
@@ -129,8 +145,13 @@ class ZanataArgParser(ArgumentParser):
         anonymous_parser = self.sub_parsers.add_parser(
                 name, **kwargs)
         if arguments:
-            for k, v in arguments.iteritems():
-                anonymous_parser.add_argument(*k.split(), **v)
+            for arg in arguments:
+                k = arg[0]
+                v = arg[1]
+                if v:
+                    anonymous_parser.add_argument(*k.split(), **v)
+                else:
+                    anonymous_parser.add_argument(*k.split())
         anonymous_parser.set_defaults(sub_command=name)
         return anonymous_parser
 
@@ -159,6 +180,56 @@ class ZanataArgParser(ArgumentParser):
                 'value_type': value_type,
                 'dest': dest,
                 'sub_commands': sub_commands}
+
+    def add_methods_as_subcommands(self, obj, name_pattern='.*'):
+        # type (Any, str) -> None
+        """Add public methods as sub-commands
+
+        Args:
+            obj ([type]): Public methods of obj will be used
+            name_pattern (str, optional): Defaults to '.*'.
+                    Method name should match the pattern.
+        """
+        method_list = inspect.getmembers(obj)
+        for m in method_list:
+            if not re.match(name_pattern, m[0]):
+                continue
+
+            name = m[0]
+            m_obj = m[1]
+
+            if name[0] == '_':
+                # No private functions (which start with _)
+                continue
+
+            if not inspect.ismethod(m_obj) and not inspect.isfunction(m_obj):
+                continue
+
+            argspec = inspect.getargspec(m_obj)
+            sub_args = None
+            try:
+                start_idx = len(argspec.args) - len(argspec.defaults)
+            except TypeError:
+                start_idx = len(argspec.args) + 1
+            for idx, a in enumerate(argspec.args):
+                if a == 'self' or a == 'cls':
+                    continue
+                if argspec.defaults and idx >= start_idx:
+                    arg_def = {
+                            'nargs': '?',
+                            'default': argspec.defaults[idx - start_idx]}
+                else:
+                    arg_def = None
+                if sub_args:
+                    sub_args.append(tuple([a, arg_def]))
+                else:
+                    sub_args = [tuple([a, arg_def])]
+
+            self.add_sub_command(
+                    name,
+                    sub_args,
+                    obj,
+                    help=obj.__doc__)
 
     def has_common_argument(self, option_string=None, dest=None):
         # type: (str, str) -> bool
@@ -268,6 +339,34 @@ class ZanataArgParser(ArgumentParser):
         for k, v in env_dict.iteritems():  # pylint: disable=no-member
             setattr(result, k, v)
         return result
+
+    def run_sub_command(self, args=None):
+        """Run the sub ccommand with parsed arguments
+
+        Args:
+            instance ([type]): [description]
+            args ([type], optional): Defaults to None. Arguments
+
+        Raises:
+            ArgumentError: When sub_command is missing
+        """
+        if not args.sub_command:
+            raise ArgumentError(args, "Missing sub-command")
+
+        if args.sub_command not in self.sub_command_obj_dict:
+            raise ArgumentError(
+                    args,
+                    "sub-command %s is not associated with any object" %
+                    args.sub_command)
+        obj = self.sub_command_obj_dict[args.sub_command]
+        sub_cmd_obj = getattr(obj, args.sub_command)
+        argspec = inspect.getargspec(sub_cmd_obj)
+        arg_values = []
+        for a in argspec.args:
+            if a == 'self' or a == 'cls':
+                continue
+            arg_values.append(getattr(args, a))
+        return sub_cmd_obj(*arg_values)
 
 
 if __name__ == '__main__':

@@ -7,10 +7,14 @@ import codecs
 import errno
 import logging
 import os
+import re
 import subprocess  # nosec
 import sys
 import urllib2  # noqa: F401 # pylint: disable=import-error
 import urlparse  # noqa: F401 # pylint: disable=import-error
+
+from contextlib import contextmanager
+from distutils.version import LooseVersion
 from ZanataArgParser import ZanataArgParser  # pylint: disable=import-error
 
 try:
@@ -38,10 +42,126 @@ def read_env(filename):
 
 
 ZANATA_ENV = read_env(ZANATA_ENV_FILE)
+if 'WORK_ROOT' in os.environ:
+    WORK_ROOT = os.getenv('WORK_ROOT')
+elif ZANATA_ENV['WORK_ROOT']:
+    WORK_ROOT = ZANATA_ENV['WORK_ROOT']
+else:
+    WORK_ROOT = os.getcwd
+
+
+class CLIException(Exception):
+    """Exception from command line"""
+
+    def __init__(self, msg, level='ERROR'):
+        super(CLIException).__init__(type(self))
+        self.msg = "[%s] %s" % (level, msg)
+
+    def __str__(self):
+        return self.msg
+
+    def __unicode__(self):
+        return self.msg
+
+
+class GitHelper(object):
+    """Git Helper functions"""
+    GIT_CMD = '/usr/bin/git'
+
+    def __init__(
+            self, user=None, token=None,
+            url='https://github.com/zanata/zanata-platform.git',
+            remote='origin'):
+        # type: (str, str, str, str) -> None
+        self.user = user
+        self.token = token
+        url_parsed = urlparse.urlparse(url)
+        if user:
+            url_parsed.username = user
+        if token:
+            url_parsed.password = token
+
+        self.url = url
+        self.auth_url = urlparse.urlunparse(url_parsed)
+        self.remote = remote
+
+    @staticmethod
+    def git_check_output(arg_list, **kwargs):
+        """Run git command and return stdout as string
+
+        This is just a wrapper of subprocess.check_output()
+
+        Arguments:
+            arg_list {LIST[str]} -- git argument lists.
+
+        Keyword Arguments:
+            kwarg {Namespace} -- keyword args for subprocess.check_output
+
+        Returns:
+            str -- stdout output
+        """
+        cmd_list = [GitHelper.GIT_CMD] + arg_list
+        logging.debug("Running command: %s", " ".join(cmd_list))
+        return subprocess.check_output(cmd_list, **kwargs)
+
+    @staticmethod
+    def branch_get_current():
+        # type () -> str
+        """Return current branch name, or HEAD when detach."""
+        return GitHelper.git_check_output([
+                'rev-parse', '--abbrev-ref', 'HEAD'])
+
+    def branch_forced_pull(self, branch=None, remote=None):
+        # type (str, str, str) -> None
+        """Withdraw local changes and pull the remote,
+        which, by default, is self.remote or 'origin'
+        Note that function does nothing to a detached HEAD"""
+        if not branch:
+            branch = self.branch_get_current()
+        if branch == 'HEAD':
+            return None
+        if not remote:
+            remote = self.remote if self.remote else 'origin'
+        msg = self.git_check_output(
+                ['fetch', remote, branch])
+        logging.info(msg)
+        msg = self.git_check_output([
+                'reset', '--hard',
+                "{}/{}".format(remote, branch)])
+        logging.info(msg)
+
+    @staticmethod
+    def detect_remote_repo_latest_version(
+            tag_prefix='', remote_repo='.'):
+        # type (str, str) -> str
+        """Get the latest version from remote repo without clone the whole repo
+
+        Known Bug: "latest version" does not mean version of latest tag,
+        but just the biggest version.
+
+        For example, if you tag v2.0, then tag v1.8.
+        The returned verion will be v2.0
+
+        Keyword Arguments:
+            tag_prefix {str} -- prefix of a tag to be strip (default: {''})
+            remote_repo {str} -- the remote git repo, can be URL, repo name,
+                    '.' for local repository,
+                    or None to use the self.url (default: {None})
+
+        Returns:
+            str -- the latest version
+        """
+        lines = GitHelper.git_check_output([
+                'ls-remote', '--tags', remote_repo,
+                'refs/tags/%s*[^^{{}}]' % tag_prefix]).strip().split('\n')
+        index = len('refs/tags/%s' % tag_prefix)
+        versions = version_sort([l.split()[1][index:] for l in lines], True)
+        return versions[0]
 
 
 class HTTPBasicAuthHandler(urllib2.HTTPBasicAuthHandler):
     """Handle Basic Authentication"""
+
     def http_error_401(  # pylint: disable=too-many-arguments,unused-argument
             self, req, fp, code, msg, headers):
         """retry with basic auth when facing a 401"""
@@ -73,6 +193,10 @@ class SshHost(object):
         else:
             self.opt_list = []
 
+        # Produce [user@]hostname
+        self.user_host = "%s%s" % (
+                '' if not self.ssh_user else self.ssh_user + '@', self.host)
+
     @classmethod
     def add_parser(cls, arg_parser=None):
         # type (ZanataArgParser) -> ZanataArgParser
@@ -100,18 +224,12 @@ class SshHost(object):
                 kwargs[k] = getattr(args, k)
         return cls(**kwargs)
 
-    def _get_user_host(self):
-        # type () -> str
-        """Produce [user@]host"""
-        return "%s%s" % (
-                '' if not self.ssh_user else self.ssh_user + '@', self.host)
-
     def _run_check(self, command, sudo):
         # type (str, bool) -> List[str]
         """Return cmd_list"""
         cmd_list = [SshHost.SSH_CMD]
         cmd_list += self.opt_list
-        cmd_list += [self._get_user_host()]
+        cmd_list += [self.user_host]
         cmd_list += [('sudo ' if sudo else '') + command]
         logging.debug(' '.join(cmd_list))
         return cmd_list
@@ -148,7 +266,7 @@ class SshHost(object):
 
         cmd_list = ['scp', '-p'] + self.opt_list + [
                 source_path,
-                "%s:%s" % (self._get_user_host(), dest_path)]
+                "%s:%s" % (self.user_host, dest_path)]
 
         logging.debug(' '.join(cmd_list))
 
@@ -157,6 +275,7 @@ class SshHost(object):
 
 class UrlHelper(object):
     """URL helper functions"""
+
     def __init__(self, base_url, user, token):
         """install the authentication handler."""
         self.base_url = base_url
@@ -214,3 +333,98 @@ class UrlHelper(object):
                     sys.stderr.write('.')
                     sys.stderr.flush()
         return response
+
+
+def mkdir_p(directory, mode=0o755):
+    # type(str) -> None
+    """Ensure the directory and intermediate directories exists,
+    just like mkdir -p"""
+    try:
+        os.makedirs(directory, mode)
+        logging.info("Directory %s created", directory)
+    except OSError as e:
+        if e.errno != errno.EEXIST or not os.path.isdir(directory):
+            raise
+
+
+def version_sort(version_list, reverse=False):
+    """Sort the version
+
+    Arguments:
+        version_list {List[str]} -- List of versions
+
+    Keyword Arguments:
+        reverse {bool} -- Whether to reverse sort (default: {False})
+
+    Returns:
+        List[str] -- Sorted list of versions
+    """
+    # Add -zfinal to final releases, so it can be sorted after rc
+    sorted_dirty_version = sorted(
+            [re.sub(
+                    '^([.0-9]+)$', r'\1-zfinal', v) for v in version_list],
+            key=LooseVersion, reverse=reverse)
+
+    return [re.sub('-zfinal', '', v) for v in sorted_dirty_version]
+
+
+@contextmanager
+def working_directory(directory):
+    # type(str) -> None
+    """Context manager for change directory
+    Usage: with working_directory('~'):
+           ..."""
+    curr_directory = os.getcwd()
+    try:
+        logging.debug("cd to %s", directory)
+        mkdir_p(directory)
+        os.chdir(directory)
+        yield directory
+    finally:
+        os.chdir(curr_directory)
+
+
+def _parse():
+    parser = ZanataArgParser(__file__)
+    parser.add_sub_command(
+            'list-run', None,
+            help='list runable functions')
+    parser.add_sub_command(
+            'run',
+            [
+                    ('func_name', {
+                            'type': str, 'default': '',
+                            'help': 'Function name'}),
+                    ('func_args', {
+                            'type': str,
+                            'nargs': '*',
+                            'help': 'Function arguments'})],
+            help='Run function')
+    parser.add_sub_command(
+            'module-help', None,
+            help='Show Python Module help')
+    return parser.parse_all()
+
+
+def _run_as_cli():
+    import inspect
+    args = _parse()
+    if args.sub_command == 'module-help':
+        help(sys.modules[__name__])
+    elif args.sub_command == 'list-run':
+        cmd_list = inspect.getmembers(GitHelper, predicate=inspect.ismethod)
+        for cmd in cmd_list:
+            if cmd[0][0] == '_':
+                continue
+            print("%s:\n       %s\n" % (cmd[0], cmd[1].__doc__))
+            print(inspect.getargspec(cmd[1]))
+    elif args.sub_command == 'run':
+        if hasattr(GitHelper, args.func_name):
+            g_helper = GitHelper()
+            print(getattr(g_helper, args.func_name)(*args.func_args))
+        else:
+            raise CLIException("No known func name %s" % args.func_name)
+
+
+if __name__ == '__main__':
+    _run_as_cli()

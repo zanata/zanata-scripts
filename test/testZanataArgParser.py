@@ -23,6 +23,7 @@ def _convert_unicode_str(dictionary):
 
 class ZanataArgParserTestCase(unittest.TestCase):
     """Test Case for ZanataArgParser.py"""
+
     def setUp(self):
         self.parser = ZanataArgParser.ZanataArgParser('parser-test')
         self.parser.add_common_argument(
@@ -52,9 +53,11 @@ class ZanataArgParserTestCase(unittest.TestCase):
         """Test add_sub_command"""
         self.parser.add_sub_command(
                 'show-last-successful-build',
-                {'-F --folder': {
-                        'type': str, 'default': '',
-                        'help': 'folder name'}},
+                [
+                        ('-F --folder', {
+                                'type': str, 'default': '',
+                                'help': 'folder name'}),
+                ],
                 help='Get build objects')
 
         # Test Run

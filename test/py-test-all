@@ -6,7 +6,12 @@
 ###     py-test-all [test-to-run1 [test-to-run2]]
 ###
 set -eu
+ScriptDir=$(dirname $(realpath ${BASH_SOURCE[0]}))
+ZanataScriptsDir=$(cd $ScriptDir; git rev-parse --show-toplevel; cd - > /dev/null)
+cd $ZanataScriptsDir
+
 PY_SOURCES=*.py
+PY_TEST_SOURCES=test/*.py
 if which pytest-2 &>/dev/null; then
     PYTEST=pytest-2
 elif which py.test-2.7 &>/dev/null; then
@@ -35,7 +40,15 @@ run_test(){
 
 ## pytest
 if run_test pytest-2; then
-    $PYTEST  $PY_SOURCES
+    $PYTEST $PY_TEST_SOURCES
+fi
+
+## doctest
+if run_test doctest; then
+    export PY_DOCTEST=1
+    for script in $(grep -l "import doctest" $PY_SOURCES); do
+        python2 $script
+    done
 fi
 
 ## pylint
