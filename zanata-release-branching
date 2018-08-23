@@ -25,7 +25,6 @@ print_status -t parsing -s "Start"
 
 BatchMode=0
 JustUseCurrentDirectoryMode=0
-OverwrittenLegacy=1
 PushMode=0
 
 ###
@@ -52,11 +51,6 @@ while getopts "hBjlp" opt;do
             JustUseCurrentDirectoryMode=1
             ;;
 ###
-###     -l: Legacy branch will NOT be overwritten by release branch
-        l )
-            OverwrittenLegacy=0
-            ;;
-###
 ###     -p: Push after commit
 ###         Git push when it has commit.
         p )
@@ -72,10 +66,10 @@ shift $((OPTIND-1))
 
 export JustUseCurrentDirectoryMode
 
-## Get Module
-branch_prepare master "$@"
-print_status " Module=$Module"
+## Get RepoName
+branch_prepare RELEASING "$@"
 shift $ShiftOffset
+print_status " RepoName=$RepoName"
 
 ## Get DevelopmentVersion
 if [[ -z ${1-} ]];then
@@ -84,25 +78,22 @@ fi
 DevelopmentVersion=$1
 
 if [[ $JustUseCurrentDirectoryMode -eq 0 ]];then
-    cd ${WORK_ROOT}/${Module}
+    cd ${WORK_ROOT}/${RepoName}
 fi
-ArtifactId=$(get_artifact_id $Module)
+ArtifactId=$(get_artifact_id $RepoName)
 
 
 ##=== prepare Start ===
 print_status -t prepare -s "Start"
 
 print_status " Match master to remote"
-git pull
-git reset --hard "origin/master"
+git checkout master
+branch_forced_pull
 
 declare -A hasBranch
 
 print_status " Determine branches to process"
-for b in legacy release ;do
-    if [[ OverwrittenLegacy -eq 0 && $b = 'legacy' ]]; then
-        continue
-    fi
+for b in release ;do
     case $(branch_does_exist $b) in
         yes )
             git checkout $b
@@ -114,9 +105,8 @@ for b in legacy release ;do
             continue
             ;;
     esac
-    print_status "  match branch $b with origin for ${Module}"
-    git pull
-    git reset --hard origin/$b
+    print_status "  match branch $b with origin for ${RepoName}"
+    branch_forced_pull
     hasBranch[$b]=$b
 done
 
@@ -125,19 +115,6 @@ if [ "${hasBranch[release]-}" = "" ];then
 fi
 
 ##=== branching Start ===
-if [[ OverwrittenLegacy -eq 1 && ! "${hasBranch[legacy]-}" = "" ]];then
-    print_status -t "release->legacy" -s "Start"
-    git checkout "${hasBranch[legacy]}"
-    print_status " Point 'legacy' at previous 'release'"
-
-    if ! git merge "origin/${hasBranch[release]}" --ff-only; then
-        print_status " [FATAL] please check for cherry-picked commits in legacy which were never merged into release"
-        exit ${EXIT_FATAL_FAIL}
-    fi
-
-    print_status " Done"
-fi
-
 print_status -t "master->release" -s "Start"
 git checkout "${hasBranch[release]}"
 print_status " Point 'release' at local master"

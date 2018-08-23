@@ -1,0 +1,157 @@
+#!/usr/bin/env groovy
+/**
+ * Jenkinsfile for release branching
+ */
+
+@Field
+public static final String ORG_BASE = 'github.com/zanata'
+
+@Library('github.com/zanata/zanata-pipeline-library@v0.3.1')
+import static org.zanata.jenkins.StackTraces.getStackTrace
+
+import groovy.transform.Field
+
+timestamps {
+// We need a node with release label
+  node('release') {
+    currentBuild.displayName = currentBuild.displayName + " {${env.NODE_NAME}}"
+
+    // To override the following variables, configure the pipeline job configuration in Jenkins,
+    // enable "Prepare an environment for the run", then fill in KEY=VALUE in "Properties Content"
+    String REPO_NAME = (env.REPO_NAME) ?: 'zanata-platform'
+    String PROJ_BASE = (env.PROJ_BASE) ?: "${ORG_BASE}/${REPO_NAME}"
+    String ZANATA_SCRIPTS_BRANCH = (env.ZANATA_SCRIPTS_BRANCH) ?: 'master'
+    String WORK_ROOT = (env.WORK_ROOT) ?: "${env.WORKSPACE}/zanata-work-root"
+    String WORK_DIR = "${WORK_ROOT}/${REPO_NAME}"
+    String MAVEN_VERSION_PROJ_OPTS = (env.MAVEN_VERSION_PROJ_OPTS) ?: (REPO_NAME == 'zanata-platform') ? '-pl build-tools,parent' : ''
+
+    def envArray = new ArrayList()
+
+    String developmentVersion = null
+    String artifactId = null
+
+    //  pom.xml that has valid version
+    //  e.g. parent/pom.xml in zanata-platform
+    String versionPomXml = "${WORK_DIR}/pom.xml"
+
+    ansiColor('xterm') {
+
+      def projectProperties = [
+        [
+          $class: 'BuildDiscarderProperty',
+          strategy: [$class: 'LogRotator',
+            daysToKeepStr: '731', // keep records no more than X days
+            numToKeepStr: '',        // keep records for at most X builds
+            artifactDaysToKeepStr: '180', // keep artifacts no more than X days
+            artifactNumToKeepStr: '', // keep artifacts for at most X builds
+          ]
+        ],
+        [$class: 'GithubProjectProperty',
+          projectUrlStr: "https://${PROJ_BASE}"
+        ],
+        [$class: 'ParametersDefinitionProperty',
+          parameterDefinitions: [
+            [$class: 'StringParameterDefinition',
+              defaultValue: 'auto',
+              description: 'New development version like "4.7.0-SNAPSHOT", or "auto" to add 1 to minor version',
+              name: 'DEVELOPMENT_VERSION'
+            ],
+            [$class: 'BooleanParameterDefinition',
+              defaultValue: false,
+              description: 'Push to GitHub',
+              name: 'PUSH_MODE'
+            ],
+          ]
+        ],
+      ]
+
+      properties(projectProperties)
+    }
+
+
+    if (params.PUSH_MODE == false ){
+      currentBuild.displayName = currentBuild.displayName + " [no push]"
+    }
+
+    stage('Checkout') {
+      // This checkout zanata-scripts
+      checkout scm
+
+      envArray.addAll(
+        sh( returnStdout: true,
+        script: "sed -rn -e '/[A-Z_]*=/ s/^[^A-Z_]*([A-Z_]*=[^}]*)/\\1/p' $WORKSPACE/zanata-env.sh",
+        )?.split("\n")
+      )
+
+      envArray.addAll([
+        "WORK_ROOT=${WORK_ROOT}",
+        "ZANATA_GIT_URL_PREFIX=https://${ORG_BASE}",
+        ])
+
+      withEnv(envArray) {
+        // Different repo has different configuration
+        if (REPO_NAME == 'zanata-platform') {
+          versionPomXml = "${WORK_DIR}/parent/pom.xml"
+        }
+
+        dir(WORK_DIR) {
+          checkout changelog: false, poll: false, scm:
+            [$class: 'GitSCM', 
+              branches: [ 
+                [name: "*/master"],
+                [name: "*/release"],
+                ],
+              doGenerateSubmoduleConfigurations: false,
+              extensions: [], submoduleCfg: [],
+              userRemoteConfigs: [[credentialsId: 'zanata-jenkins', url: "https://${ORG_BASE}/${REPO_NAME}"]]
+            ]
+          if (params.DEVELOPMENT_VERSION == 'auto') {
+            sh "git checkout master; git fetch; git reset --hard origin/master"
+            String oldVersion = readMavenPom(file: versionPomXml).getVersion()
+            developmentVersion = sh(returnStdout: true,
+              script: "$WORKSPACE/zanata-functions run version_next $oldVersion 1",
+            ).trim()
+          } else {
+            developmentVersion = params.DEVELOPMENT_VERSION
+          }
+
+          currentBuild.displayName = currentBuild.displayName + " $developmentVersion"
+        }
+      }
+    }
+
+    withEnv(envArray) {
+      dir (WORK_DIR) {
+        merge_branches('master', 'release')
+
+        stage('SetMasterVersion') {
+          sh "git checkout master"
+          sh "./mvnw -B -e ${MAVEN_VERSION_PROJ_OPTS} versions:set -DnewVersion=$developmentVersion -DprocessAllModules"
+          sh "git commit -a -m 'chore(version): development version is now ${developmentVersion}'"
+
+          if ( params.PUSH_MODE ) {
+            withCredentials([
+              [$class: 'UsernamePasswordMultiBinding',
+                credentialsId: 'zanata-jenkins',
+                usernameVariable: 'GIT_USERNAME', passwordVariable: 'GITHUB_OAUTH2_TOKEN'
+              ]
+            ]) {
+              sh "git push https://$GIT_USERNAME:$GITHUB_OAUTH2_TOKEN@${PROJ_BASE} master release"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+void merge_branches(source, target){
+  stage("$source->$target") {
+    sh(returnStatus: true,
+      script: "git checkout $target",
+    )
+    sh(returnStatus: true,
+      script: "git merge origin/$source --ff-only",
+    )
+  }
+}

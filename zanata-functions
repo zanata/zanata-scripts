@@ -240,7 +240,7 @@ branch_get_releasing(){
 ###         This assumes the module can be determine by either
 ###              1. part of $0, e.g. zanata-maven-release-platform
 ###              2. First non-optional argument ($1)
-###              3. JenkinMode=1 (which branch is ready already)
+###              3. JustUseCurrentDirectoryMode=1 (correct branch is already checked out)
 ###
 ###         Assigned Variables:
 ###            RepoName: Repository name
@@ -599,14 +599,14 @@ function parse_gav(){
 
 ###
 ###     ga_to_rpm_name <GroupId> <artifactId>
-###        GroupId-ArtifactId to RPM name.
+###         GroupId-ArtifactId to RPM name.
 function ga_to_rpm_name(){
     echo "$1-$2"
 }
 
 ###
 ###     gav_to_nv <GroupId> <artifactId> <Version>
-###        GroupId-ArtifactId-Version to RPM name-version
+###         GroupId-ArtifactId-Version to RPM name-version
 function gav_to_nv(){
     local version=$(sed -e 's/-/_/g' <<<$3)
     echo "$(ga_to_rpm_name $1 $2)-$version"
@@ -614,9 +614,9 @@ function gav_to_nv(){
 
 ###
 ###     gav_to_nvr <GroupId> <artifactId> <Version> [SpecRelease]
-###        GroupId-ArtifactId-Version to RPM name-version-release
-###        release default is 1
-###        Note the release does not include dist tag (.el7)
+###         GroupId-ArtifactId-Version to RPM name-version-release
+###         release default is 1
+###         Note the release does not include dist tag (.el7)
 function gav_to_nvr(){
     local groupId=$1
     local artifactId=$2
@@ -639,7 +639,7 @@ function gav_to_maven_artifact_dir(){
 
 ###
 ###     gav_to_maven_artifact_file <GroupId> <artifactId> <Version> [Packaging] [Classifier]
-###        Return the artifact filename when given Gav.
+###         Return the artifact filename when given Gav.
 function gav_to_maven_artifact_file(){
     local groupId=$1
     local artifactId=$2
@@ -747,14 +747,15 @@ function print_status(){
 }
 
 ###
-### repo_name_get
-###     In current directory, get the GitHub RepoName.
-###     e.g. 'zanata-platform', 'openprops'
-###     This function also set environment
-###     Print: repo_name
-###     Returns:
-###         EXIT_OK: Successfully gets RepoName
-###         EXIT_FATAL_GIT_FAILED: Failed in git, usually indicated current directory
+###     repo_name_get
+###         In current directory, get the GitHub RepoName.
+###         e.g. 'zanata-platform', 'openprops'
+###         This function also set environment.
+###
+###         Print: repo_name
+###         Returns:
+###             EXIT_OK: Successfully gets RepoName
+###             EXIT_FATAL_GIT_FAILED: Failed in git, usually indicated current directory
 repo_name_get(){
     ## url variable definition need to be separated with assignment,
     ## otherwise exitCode will be 0 even when failed.
@@ -768,10 +769,10 @@ repo_name_get(){
     sed -nr -e 's|^.*/([A-Za-z0-9-]*)(.git)?$|\1|p' <<<"$url"
 }
 
-##
-## run_command <command> [args ... ]
-##     On Dry-run mode, just show the command,
-##     otherwise run the command.
+###
+###     run_command <command> [args ... ]
+###         On Dry-run mode, just show the command,
+###         otherwise run the command.
 run_command(){
     local xtrace=0
     if [[ ${DryRunMode:-} -eq 1 ]];then
