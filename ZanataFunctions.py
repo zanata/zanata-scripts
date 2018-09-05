@@ -30,7 +30,19 @@ BASH_CMD = '/bin/bash'
 
 def read_env(filename):
     # type (str) -> dict
-    """Read environment variables by sourcing a bash file"""
+    """Read environment variables by sourcing a bash file
+
+    Args:
+        filename (str): Bash file to be read
+
+    Returns:
+        [dict]: Dict whose key is environment variable name,
+            and value is variable value.
+
+    Examples:
+    >>> read_env('zanata-env.sh')['EXIT_OK']
+    u'0'
+    """
     proc = subprocess.Popen(  # nosec
             [BASH_CMD, '-c',
              "source %s && set -o posix && set" % (filename)],
@@ -43,18 +55,91 @@ def read_env(filename):
 
 ZANATA_ENV = read_env(ZANATA_ENV_FILE)
 if 'WORK_ROOT' in os.environ:
-    WORK_ROOT = os.getenv('WORK_ROOT')
+    WORK_ROOT = str(os.environ.get('WORK_ROOT'))
 elif ZANATA_ENV['WORK_ROOT']:
-    WORK_ROOT = ZANATA_ENV['WORK_ROOT']
+    WORK_ROOT = str(ZANATA_ENV['WORK_ROOT'])
 else:
-    WORK_ROOT = os.getcwd
+    WORK_ROOT = os.getcwd()
+
+
+def exec_call(cmd_list, **kwargs):
+    # type (List[str], Any) -> int
+    """Run command and return exit status
+
+    This function runs, the command described by cmd_list,
+    wait for command to complete, then return the exit status.
+
+    Args:
+        cmd_list (List[str]): Command and arguments to be run.
+        **kwargs: subprocess.Popen() keyword arguments
+
+    Returns:
+        int: exit status of command.
+    """
+    logging.debug("Running command: %s", " ".join(cmd_list))
+    return subprocess.call(cmd_list, **kwargs)  # nosec
+
+
+def exec_check_call(cmd_list, **kwargs):
+    # type (List[str], Any) -> int
+    """Run command and check exit status
+
+    This function runs the command described by cmd_list,
+    wait for command to complete, then check the exit status.
+
+    If success (exit status is 0), returns stdout of command;
+    otherwise raise subprocess.CalledProcessError()
+
+    Args:
+        cmd_list (List[str]): Command and arguments to be run.
+        **kwargs: subprocess.Popen() keyword arguments
+
+    Returns:
+        int: exit status of command.
+
+    Raises:
+        CalledProcessError: When command exit status is not 0
+    """
+    logging.debug("Running command: %s", " ".join(cmd_list))
+    try:
+        return subprocess.check_call(cmd_list, **kwargs)  # nosec
+    except subprocess.CalledProcessError as e:
+        raise e
+
+
+def exec_check_output(cmd_list, **kwargs):
+    # type (List[str], Any) -> str
+    """Run command, check exit status then returns stdout as string
+
+    This function runs the command described by cmd_list,
+    wait for command to complete, then check the exit status.
+
+    If success (exit status is 0), returns stdout of command,right white spaces
+    stripped;
+    otherwise raise subprocess.CalledProcessError()
+
+    Args:
+        cmd_list (List[str]): Command and arguments to be run.
+        **kwargs: subprocess.Popen() keyword arguments
+
+    Returns:
+        str: right stripped stdout of command.
+
+    Raises:
+        CalledProcessError: When command exit status is not 0
+    """
+    logging.debug("Running command: %s", " ".join(cmd_list))
+    try:
+        return subprocess.check_output(cmd_list, **kwargs).rstrip()  # nosec
+    except subprocess.CalledProcessError as e:
+        raise e
 
 
 class CLIException(Exception):
     """Exception from command line"""
 
     def __init__(self, msg, level='ERROR'):
-        super(CLIException).__init__(type(self))
+        super(CLIException, self).__init__(type(self))
         self.msg = "[%s] %s" % (level, msg)
 
     def __str__(self):
@@ -75,21 +160,36 @@ class GitHelper(object):
         # type: (str, str, str, str) -> None
         self.user = user
         self.token = token
-        url_parsed = urlparse.urlparse(url)
+
+        parsed = urlparse.urlsplit(url)
+        data = list(parsed)
+
+        # replace if user is specify
         if user:
-            url_parsed.username = user
-        if token:
-            url_parsed.password = token
+            userrec = user
+            if token:
+                userrec += ":" + token
+            netloc = "%s@%s" % (userrec, parsed.hostname)
+            data[1] = netloc
 
         self.url = url
-        self.auth_url = urlparse.urlunparse(url_parsed)
+        self.auth_url = urlparse.urlunparse(data)
         self.remote = remote
+
+    @classmethod
+    def init_from_parsed_args(cls, args):
+        """Init from command line arguments"""
+        kwargs = {}
+        for k in ['user', 'token', 'url', 'remote']:
+            if hasattr(args, k):
+                kwargs[k] = getattr(args, k)
+        return cls(**kwargs)
 
     @staticmethod
     def git_check_output(arg_list, **kwargs):
         """Run git command and return stdout as string
 
-        This is just a wrapper of subprocess.check_output()
+        This is just a wrapper of run_check_output()
 
         Arguments:
             arg_list {LIST[str]} -- git argument lists.
@@ -101,8 +201,7 @@ class GitHelper(object):
             str -- stdout output
         """
         cmd_list = [GitHelper.GIT_CMD] + arg_list
-        logging.debug("Running command: %s", " ".join(cmd_list))
-        return subprocess.check_output(cmd_list, **kwargs)
+        return exec_check_output(cmd_list, **kwargs)
 
     @staticmethod
     def branch_get_current():
@@ -182,6 +281,11 @@ class SshHost(object):
 
     SCP_CMD = '/usr/bin/scp'
     SSH_CMD = '/usr/bin/ssh'
+    RSYNC_CMD = '/usr/bin/rsync'
+    RSYNC_OPTIONS = [
+            '--cvs-exclude', '--recursive', '--verbose', '--links',
+            '--update', '--compress', '--exclude', '*.core', '--stats',
+            '--progress', '--archive', '--keep-dirlinks']
 
     def __init__(self, host, ssh_user=None, identity_file=None):
         # type (str, str, str) -> None
@@ -219,36 +323,59 @@ class SshHost(object):
     def init_from_parsed_args(cls, args):
         """Init from command line arguments"""
         kwargs = {'host': args.host}
-        for k in ['ssh_user', 'identitity_file']:
+        for k in ['ssh_user', 'identity_file']:
             if hasattr(args, k):
                 kwargs[k] = getattr(args, k)
         return cls(**kwargs)
 
-    def _run_check(self, command, sudo):
+    def _obtain_cmd_list(self, command, sudo):
         # type (str, bool) -> List[str]
         """Return cmd_list"""
         cmd_list = [SshHost.SSH_CMD]
         cmd_list += self.opt_list
         cmd_list += [self.user_host]
         cmd_list += [('sudo ' if sudo else '') + command]
-        logging.debug(' '.join(cmd_list))
         return cmd_list
 
     def run_check_call(self, command, sudo=False):
         # type (str, bool) -> None
-        """Run command though ssh"""
-        cmd_list = self._run_check(command, sudo)
-        subprocess.check_call(cmd_list)  # nosec
+        """Check the command run through ssh
+
+        Args:
+            command (str): Command to be run through ssh
+            sudo (bool, optional): Defaults to False. Whether to use 'sudo'
+
+        Returns:
+            int: command exit status
+        """
+        return exec_check_call(self._obtain_cmd_list(command, sudo))
 
     def run_check_output(self, command, sudo=False):
         # type (str, bool) -> str
-        """Run command though ssh, return stdout"""
-        cmd_list = self._run_check(command, sudo)
-        return subprocess.check_output(cmd_list)  # nosec
+        """Check the command run through ssh, and return stdout as string
+
+        Args:
+            command (str): Command to be run through ssh
+            sudo (bool, optional): Defaults to False. Whether to use 'sudo'
+
+        Returns:
+            str: stdout of command
+        """
+        return exec_check_output(self._obtain_cmd_list(command, sudo))
 
     def run_chown(self, user, group, filename, options=None):
-        # type (str, bool) -> None
-        """Run command though ssh"""
+        # type (str, str, str, List[str]) -> int
+        """Run and check chown through ssh
+
+        Args:
+            user (str): user of new owner
+            group (str): group of new owner
+            filename (str): file to be chown
+            options (List[str], optional): Defaults to None. chown option list
+
+        Returns:
+            int: command exit status
+        """
         self.run_check_call(
                 "chown %s %s:%s %s" % (
                         '' if not options else ' '.join(options),
@@ -264,13 +391,32 @@ class SshHost(object):
             self.run_check_call(
                     "rm -fr %s" % dest_path, sudo)
 
-        cmd_list = ['scp', '-p'] + self.opt_list + [
+        cmd_list = ["/usr/bin/scp", "-p"] + self.opt_list + [
                 source_path,
                 "%s:%s" % (self.user_host, dest_path)]
+        exec_check_call(cmd_list)
 
-        logging.debug(' '.join(cmd_list))
+    def rsync(self, src, dest, options=None):
+        # type (str, str, List[Str]) -> None
+        """Run rsync
 
-        subprocess.check_call(cmd_list)  # nosec
+        Args:
+            src (str): src file/dir in rsync
+            dest (str): src file/dir in rsync
+            options (List[str], optional): Defaults to None.
+                    List of rsync options.
+        """
+        cmd_prefix = [SshHost.RSYNC_CMD] + SshHost.RSYNC_OPTIONS
+        if self.ssh_user:
+            ssh_cmd = "ssh -l {} {} {}".format(
+                    self.ssh_user,
+                    "" if not self.identity_file else "-i",
+                    "" if not self.identity_file else self.identity_file)
+            cmd_prefix += ["-e", ssh_cmd]
+
+        if options:
+            cmd_prefix += options
+        exec_check_call(cmd_prefix + [src, dest])
 
 
 class UrlHelper(object):
@@ -348,16 +494,21 @@ def mkdir_p(directory, mode=0o755):
 
 
 def version_sort(version_list, reverse=False):
-    """Sort the version
+    """Sort the version from list
 
-    Arguments:
-        version_list {List[str]} -- List of versions
-
-    Keyword Arguments:
-        reverse {bool} -- Whether to reverse sort (default: {False})
+    Args:
+        version_list (List[str]): version str in a list
+        reverse (bool, optional): Defaults to False. Desending sort.
 
     Returns:
         List[str] -- Sorted list of versions
+
+    Examples:
+    >>> version_list = ['1.0.0', '10.0.0', '2.0.0', '1.0.0-rc-1' ]
+    >>> version_sort(version_list)
+    ['1.0.0-rc-1', '1.0.0', '2.0.0', '10.0.0']
+    >>> version_sort(version_list, True)
+    ['10.0.0', '2.0.0', '1.0.0', '1.0.0-rc-1']
     """
     # Add -zfinal to final releases, so it can be sorted after rc
     sorted_dirty_version = sorted(
@@ -384,47 +535,25 @@ def working_directory(directory):
         os.chdir(curr_directory)
 
 
-def _parse():
+def main():
+    """Run as command line program"""
     parser = ZanataArgParser(__file__)
-    parser.add_sub_command(
-            'list-run', None,
-            help='list runable functions')
-    parser.add_sub_command(
-            'run',
-            [
-                    ('func_name', {
-                            'type': str, 'default': '',
-                            'help': 'Function name'}),
-                    ('func_args', {
-                            'type': str,
-                            'nargs': '*',
-                            'help': 'Function arguments'})],
-            help='Run function')
+    parser.add_methods_as_sub_commands(GitHelper)
     parser.add_sub_command(
             'module-help', None,
             help='Show Python Module help')
-    return parser.parse_all()
+    args = parser.parse_all()
 
-
-def _run_as_cli():
-    import inspect
-    args = _parse()
     if args.sub_command == 'module-help':
         help(sys.modules[__name__])
-    elif args.sub_command == 'list-run':
-        cmd_list = inspect.getmembers(GitHelper, predicate=inspect.ismethod)
-        for cmd in cmd_list:
-            if cmd[0][0] == '_':
-                continue
-            print("%s:\n       %s\n" % (cmd[0], cmd[1].__doc__))
-            print(inspect.getargspec(cmd[1]))
-    elif args.sub_command == 'run':
-        if hasattr(GitHelper, args.func_name):
-            g_helper = GitHelper()
-            print(getattr(g_helper, args.func_name)(*args.func_args))
-        else:
-            raise CLIException("No known func name %s" % args.func_name)
+    else:
+        parser.run_sub_command(args)
 
 
 if __name__ == '__main__':
-    _run_as_cli()
+    if os.getenv("PY_DOCTEST", "0") == "1":
+        import doctest
+        test_result = doctest.testmod()
+        print(doctest.testmod(), file=sys.stderr)
+        sys.exit(0 if test_result.failed == 0 else 1)
+    main()

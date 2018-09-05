@@ -22,3 +22,7 @@ enable=
 # Number of spaces of indent required inside a hanging  or continued line.
 indent-after-paren=8
 
+[SIMILARITIES]
+
+# Minimum lines number of a similarity.
+min-similarity-lines=7

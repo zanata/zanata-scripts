@@ -1,0 +1,99 @@
+/**
+ * Jenkinsfile for Release RPM to Zanata_Team (a.k.a) dchen's repo
+ */
+
+@Field
+public static final String ORG_BASE = 'github.com/zanata'
+
+@Library('github.com/zanata/zanata-pipeline-library@v0.3.1')
+import static org.zanata.jenkins.StackTraces.getStackTrace
+
+import groovy.transform.Field
+
+timestamps {
+  ansiColor('xterm') {
+    // We need a node with release label
+    node('release') {
+      currentBuild.displayName = currentBuild.displayName + " {${env.NODE_NAME}}"
+
+      // To override the following variables, configure the pipeline job configuration in Jenkins,
+      // enable "Prepare an environment for the run", then fill in KEY=VALUE in "Properties Content"
+      String REPO_NAME = (env.REPO_NAME) ?: 'zanata-platform'
+      String ZANATA_SCRIPTS_BRANCH = (env.ZANATA_SCRIPTS_BRANCH) ?: 'master'
+      String LOCAL_HOME = sh( returnStdout: true,
+          script: "echo \$HOME").trim()
+      String WORK_ROOT = (env.WORK_ROOT) ?: "${LOCAL_HOME}/zanata-work-root"
+      String WORK_DIR = "${WORK_ROOT}/dnf/zanata"
+      String SPEC_FILE = "zanata-cli-bin.spec"
+      String VERBOSE = "DEBUG"
+
+      def envArray = new ArrayList()
+
+      def projectProperties = [
+        [$class: 'BuildDiscarderProperty',
+          strategy: [$class: 'LogRotator',
+            daysToKeepStr: '', // keep records no more than X days
+            numToKeepStr: '10',        // keep records for at most X builds
+            artifactDaysToKeepStr: '', // keep artifacts no more than X days
+            artifactNumToKeepStr: '', // keep artifacts for at most X builds
+          ]
+        ],
+        [$class: 'ParametersDefinitionProperty',
+          parameterDefinitions: [
+            [$class: 'StringParameterDefinition',
+              defaultValue: 'auto',
+              description: 'Version to release like "4.7.0", or "auto" to release the latest',
+            name: 'RELEASE_VERSION'
+            ],
+            [$class: 'BooleanParameterDefinition',
+              defaultValue: false,
+              description: 'Push to dnf/yum repo',
+              name: 'PUSH_MODE'
+            ],
+          ]
+        ],
+      ]
+
+      properties(projectProperties)
+
+      if (params.PUSH_MODE == false ){
+        currentBuild.displayName = currentBuild.displayName + " [no push]"
+      }
+
+      stage('Checkout') {
+        // This checkout zanata-scripts
+        checkout scm
+
+        envArray.addAll([
+          "WORK_ROOT=${WORK_ROOT}",
+        ])
+      }
+
+      withEnv(envArray) {
+        sshagent (credentials: ['dchen.fedorapeople']) {
+          withCredentials(
+              [sshUserPrivateKey(credentialsId: 'dchen.fedorapeople',
+                  keyFileVariable: 'RPM_REPO_SSH_IDENTITY_FILE',
+                  passphraseVariable: 'RPM_REPO_PASS',
+                  usernameVariable: 'RPM_REPO_SSH_USER')]) {
+            stage("Pull") {
+              sh "$WORKSPACE/ZanataRpmRepo.py pull -v DEBUG"
+            }
+            dir(WORK_DIR) {
+              stage("UpdateRepos") {
+                sh "$WORKSPACE/ZanataRpmRepo.py update_epel_repos -v ${VERBOSE} ${SPEC_FILE} ${params.RELEASE_VERSION}"
+              }
+
+              if (params.PUSH_MODE) {
+                stage("Push") {
+                  sh "$WORKSPACE/ZanataRpmRepo.py push -v ${VERBOSE}"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+

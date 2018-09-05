@@ -15,7 +15,7 @@ import os
 import re
 import sys
 
-from argparse import ArgumentParser, ArgumentError
+from argparse import ArgumentParser, ArgumentError, RawDescriptionHelpFormatter
 # Following are for mypy
 from argparse import Action  # noqa: F401 # pylint: disable=W0611
 from argparse import Namespace  # noqa: F401 # pylint: disable=W0611
@@ -30,16 +30,32 @@ except ImportError:
     sys.stderr.write("python typing module is not installed" + os.linesep)
 
 
+class NoSuchMethodError(Exception):
+    """Method does not exist
+
+    Args:
+        method_name (str): Name of the method
+    """
+    def __init__(self, method_name):
+        super(NoSuchMethodError, self).__init__()
+        self.method_name = method_name
+
+    def __str__(self):
+        return "No such method: %s" % self.method_name
+
+
 class ColoredFormatter(logging.Formatter):
     """Log colored formated
     Inspired from KurtJacobson's colored_log.py"""
-    DEFAULT_COLOR = 37  # white
-    MAPPING = {
-            'DEBUG': DEFAULT_COLOR,
-            'INFO': 36,  # cyan
-            'WARNING': 33,  # yellow
-            'ERROR': 31,  # red
-            'CRITICAL': 41}  # white on red bg
+    # Background ASCII color
+    bg = os.getenv("LOGGING_BG_COLOR", 40)  # Default black background
+
+    COLOR_MAPPING = {
+            'DEBUG': [os.getenv("LOGGING_DEBUG_COLOR", 37), bg],  # white
+            'INFO': [os.getenv("LOGGING_INFO_COLOR", 36), bg],  # cyan
+            'WARNING': [os.getenv("LOGGING_WARNING_COLOR", 33), bg],  # yellow
+            'ERROR': [os.getenv("LOGGING_ERROR_COLOR", 31), bg],  # red
+            'CRITICAL': [37, 41]}  # white on red bg
 
     PREFIX = '\033['
     SUFFIX = '\033[0m'
@@ -48,19 +64,23 @@ class ColoredFormatter(logging.Formatter):
         logging.Formatter.__init__(self, patern)
 
     @staticmethod
-    def _color(color_id, content):
-        return "\033[%dm%s\033[0m" % (color_id, content)
+    def _color(colors, content):
+        if os.getenv("LOGGING_NO_COLOR", ""):
+            return ""
+        return "\033[%d;%dm%s\033[0m" % (colors[0], colors[1], content)
 
     def format(self, record):
-        color_id = ColoredFormatter.MAPPING.get(
-                record.levelname, ColoredFormatter.DEFAULT_COLOR)
-        record.levelname = ColoredFormatter._color(
-                color_id, record.levelname)
-        record.message = ColoredFormatter._color(
-                color_id, record.getMessage())
-        if self.usesTime():
-            record.asctime = ColoredFormatter._color(
-                    color_id, self.formatTime(record, self.datefmt))
+        if not os.getenv('LOGGING_NO_COLOR', ''):
+            # Turn of color with env LOGGING_NO_COLOR=1
+            colors = ColoredFormatter.COLOR_MAPPING.get(
+                    record.levelname, ColoredFormatter.COLOR_MAPPING['DEBUG'])
+            record.levelname = ColoredFormatter._color(
+                    colors, record.levelname)
+            record.message = ColoredFormatter._color(
+                    colors, record.getMessage())
+            if self.usesTime():
+                record.asctime = ColoredFormatter._color(
+                        colors, self.formatTime(record, self.datefmt))
         try:
             s = self._fmt % record.__dict__
         except UnicodeDecodeError as e:
@@ -93,10 +113,30 @@ class ColoredFormatter(logging.Formatter):
 
 
 class ZanataArgParser(ArgumentParser):
-    """Zanata Argument Parser"""
+    """Zanata Argument Parser that support sub-commands and environment
+
+    Examples:
+    >>> import ZanataArgParser
+    >>> parser = ZanataArgParser.ZanataArgParser('my-prog')
+    >>> parser.add_common_argument('-b', '--branch', default='master')
+    >>> parser.add_sub_command('list', None, None)
+    >>> args = parser.parse_all(['list', '-b', 'release'])
+    >>> print(args.sub_command)
+    list
+    >>> print(args.branch)
+    release
+    >>> args2 = parser.parse_all(['list'])
+    >>> print(args2.branch)
+    master
+    """
+
     def __init__(self, *args, **kwargs):
         # type: (Any, Any) -> None
-        super(ZanataArgParser, self).__init__(*args, **kwargs)
+        # Ignore mypy "ArgumentParser" gets multiple values for keyword
+        # argument "formatter_class"
+        # See https://github.com/python/mypy/issues/1028
+        super(ZanataArgParser, self).__init__(
+                *args, formatter_class=RawDescriptionHelpFormatter, **kwargs)
         self.env_def = {}  # type: Dict[str, dict]
         self.parent_parser = ArgumentParser(add_help=False)
         self.add_argument(
@@ -105,7 +145,7 @@ class ZanataArgParser(ArgumentParser):
                 help='Valid values: %s'
                 % 'DEBUG, INFO, WARNING, ERROR, CRITICAL, NONE')
 
-        self.sub_parsers = None
+        self.sub_parsers = None  # type: _SubParsersAction
         self.sub_command_obj_dict = {}  # type: Dict[str, Any]
 
     def add_common_argument(self, *args, **kwargs):
@@ -117,7 +157,7 @@ class ZanataArgParser(ArgumentParser):
         self.parent_parser.add_argument(*args, **kwargs)
 
     def add_sub_command(self, name, arguments, obj=None, **kwargs):
-        # type:  (str, List, Any, Any) -> ArgumentParser
+        # type:  (str, List, Any, Any) -> None
         """Add a sub command
 
         Args:
@@ -125,9 +165,7 @@ class ZanataArgParser(ArgumentParser):
             arguments (dict): argments to be passed to argparse.add_argument()
             obj (Any, optional): Defaults to None. The sub_command is
                 a method of the obj.
-
-        Returns:
-            [type]: [description]
+            kwargs (Any, optional): other arguments for add_parser
         """
         if not self.sub_parsers:
             self.sub_parsers = self.add_subparsers(
@@ -153,7 +191,6 @@ class ZanataArgParser(ArgumentParser):
                 else:
                     anonymous_parser.add_argument(*k.split())
         anonymous_parser.set_defaults(sub_command=name)
-        return anonymous_parser
 
     def add_env(  # pylint: disable=too-many-arguments
             self, env_name,
@@ -181,12 +218,12 @@ class ZanataArgParser(ArgumentParser):
                 'dest': dest,
                 'sub_commands': sub_commands}
 
-    def add_methods_as_subcommands(self, obj, name_pattern='.*'):
+    def add_methods_as_sub_commands(self, obj, name_pattern='.*'):
         # type (Any, str) -> None
         """Add public methods as sub-commands
 
         Args:
-            obj ([type]): Public methods of obj will be used
+            cls ([type]): Public methods of obj will be used
             name_pattern (str, optional): Defaults to '.*'.
                     Method name should match the pattern.
         """
@@ -203,6 +240,11 @@ class ZanataArgParser(ArgumentParser):
                 continue
 
             if not inspect.ismethod(m_obj) and not inspect.isfunction(m_obj):
+                continue
+
+            if name == 'init_from_parsed_args':
+                # init_from_parsed_args initialize from parsed args.
+                # No need to be in sub-commands
                 continue
 
             argspec = inspect.getargspec(m_obj)
@@ -229,7 +271,9 @@ class ZanataArgParser(ArgumentParser):
                     name,
                     sub_args,
                     obj,
-                    help=obj.__doc__)
+                    help=re.sub(
+                            "\n.*$", "", m_obj.__doc__, flags=re.MULTILINE),
+                    description=m_obj.__doc__)
 
     def has_common_argument(self, option_string=None, dest=None):
         # type: (str, str) -> bool
@@ -359,6 +403,13 @@ class ZanataArgParser(ArgumentParser):
                     "sub-command %s is not associated with any object" %
                     args.sub_command)
         obj = self.sub_command_obj_dict[args.sub_command]
+        if inspect.isclass(obj):
+            cls = obj
+            if not hasattr(cls, 'init_from_parsed_args'):
+                raise NoSuchMethodError('init_from_parsed_args')
+            # New an object accordingto args
+            obj = getattr(cls, 'init_from_parsed_args')(args)
+
         sub_cmd_obj = getattr(obj, args.sub_command)
         argspec = inspect.getargspec(sub_cmd_obj)
         arg_values = []
@@ -370,9 +421,15 @@ class ZanataArgParser(ArgumentParser):
 
 
 if __name__ == '__main__':
+    if os.getenv("PY_DOCTEST", "0") == "1":
+        import doctest
+        test_result = doctest.testmod()
+        print(doctest.testmod(), file=sys.stderr)
+        sys.exit(0 if test_result.failed == 0 else 1)
     print("Legend of log levels", file=sys.stderr)
     ZanataArgParser('parser').parse_args(["-v", "DEBUG"])
     logging.debug("debug")
     logging.info("info")
     logging.warning("warning")
     logging.error("error")
+    logging.critical("critical")
